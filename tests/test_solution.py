@@ -46,6 +46,46 @@ def test_ground_point_position_is_independent_of_mobile_coordinates():
     np.testing.assert_allclose(Configuration(mechanism, [9.0, -2.0, 8.0]).position(point), [3.0, 4.0])
 
 
+def test_configuration_keeps_link_layout_after_mechanism_gains_a_link():
+    mechanism = Mechanism()
+    original = mechanism.add_link("a")
+    config = Configuration(mechanism, [1.0, 2.0, 0.3])
+
+    added = mechanism.add_link("b")
+
+    np.testing.assert_allclose(config.pose(original), [1.0, 2.0, 0.3])
+    with pytest.raises(ValueError):
+        config.pose(added)
+
+
+def test_configuration_accepts_new_point_only_on_a_snapshotted_link():
+    mechanism = Mechanism()
+    original = mechanism.add_link("a")
+    config = Configuration(mechanism, [1.0, 2.0, 0.0])
+
+    original_point = original.add_point("P", (1.0, 0.0))
+    added = mechanism.add_link("b")
+    added_point = added.add_point("P", (0.0, 0.0))
+
+    np.testing.assert_allclose(config.position(original_point), [2.0, 2.0])
+    with pytest.raises(ValueError):
+        config.position(added_point)
+
+
+def test_configuration_rejects_new_joint_using_link_outside_snapshot():
+    mechanism = Mechanism()
+    original = mechanism.add_link("a")
+    original_point = original.add_point("P", (0.0, 0.0))
+    config = Configuration(mechanism, [1.0, 2.0, 0.0])
+
+    added = mechanism.add_link("b")
+    added_point = added.add_point("P", (0.0, 0.0))
+    new_joint = mechanism.revolute(original_point, added_point)
+
+    with pytest.raises(ValueError):
+        config.joint_coordinate(new_joint)
+
+
 def test_revolute_coordinate_respects_a_to_b_order_and_is_unwrapped():
     mechanism = Mechanism()
     ground_point = mechanism.ground.add_point("G", (0.0, 0.0))
@@ -112,6 +152,27 @@ def test_solution_sequence_properties_and_negative_indexing():
 
     with pytest.raises(TypeError):
         solution[:2]
+
+
+def test_solution_and_derived_configuration_keep_original_link_layout():
+    mechanism, original, joint = _revolute_mechanism()
+    solution = KinematicSolution(mechanism, joint, [0.5], [[1.0, 2.0, 0.5]])
+
+    added = mechanism.add_link("added")
+    added_point = added.add_point("P", (0.0, 0.0))
+    added_joint = mechanism.revolute(original.points[0], added_point)
+    config = solution[0]
+
+    np.testing.assert_allclose(solution.link_poses(original), [[1.0, 2.0, 0.5]])
+    np.testing.assert_allclose(config.pose(original), [1.0, 2.0, 0.5])
+    with pytest.raises(ValueError):
+        solution.link_poses(added)
+    with pytest.raises(ValueError):
+        solution.point_path(added_point)
+    with pytest.raises(ValueError):
+        solution.joint_coordinates(added_joint)
+    with pytest.raises(ValueError):
+        config.pose(added)
 
 
 def test_point_path_link_poses_and_joint_coordinates_have_expected_values():

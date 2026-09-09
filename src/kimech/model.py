@@ -12,6 +12,7 @@ from ._geometry import as_vector2
 
 if TYPE_CHECKING:
     from .joints import PrismaticJoint, RevoluteJoint
+    from .validation import ValidationReport
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,6 +168,18 @@ class Mechanism:
         self._ensure_joint_belongs_here(joint)
         self._joints.append(joint)
         return joint
+
+    def mobility(self) -> int:
+        """Return the planar lower-pair structural mobility estimate."""
+        from .validation import structural_mobility
+
+        return structural_mobility(self)
+
+    def validate(self) -> ValidationReport:
+        """Return a structural consistency report for the mechanism."""
+        from .validation import validate_mechanism
+
+        return validate_mechanism(self)
 
     def __getitem__(self, name: str) -> Link:
         return self._links_by_name[name]

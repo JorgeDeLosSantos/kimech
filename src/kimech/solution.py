@@ -144,7 +144,42 @@ class KinematicSolution:
         coordinates: Sequence[Sequence[float]] | np.ndarray,
     ) -> None:
         _validate_mechanism(mechanism)
-        links = mechanism.links
+        self._initialize(
+            mechanism,
+            mechanism.links,
+            input_joint,
+            input_values,
+            coordinates,
+        )
+
+    @classmethod
+    def _from_snapshot(
+        cls,
+        mechanism: Mechanism,
+        links: tuple[Link, ...],
+        input_joint: _Joint,
+        input_values: Sequence[float] | np.ndarray,
+        coordinates: Sequence[Sequence[float]] | np.ndarray,
+    ) -> KinematicSolution:
+        solution = cls.__new__(cls)
+        solution._initialize(
+            mechanism,
+            links,
+            input_joint,
+            input_values,
+            coordinates,
+        )
+        return solution
+
+    def _initialize(
+        self,
+        mechanism: Mechanism,
+        links: tuple[Link, ...],
+        input_joint: _Joint,
+        input_values: Sequence[float] | np.ndarray,
+        coordinates: Sequence[Sequence[float]] | np.ndarray,
+    ) -> None:
+        _validate_mechanism(mechanism)
         _validate_joint(mechanism, links, input_joint)
 
         values = _finite_float_array(input_values, name="input_values", ndim=1)

@@ -3,6 +3,7 @@
 from .errors import InvalidModelError, KimechError, KinematicSolveError
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Ground, Link, Mechanism, Point
+from .validation import ValidationReport
 
 __all__ = [
     "Ground",
@@ -14,6 +15,7 @@ __all__ = [
     "Point",
     "PrismaticJoint",
     "RevoluteJoint",
+    "ValidationReport",
 ]
 
 __version__ = "0.1.0.dev0"

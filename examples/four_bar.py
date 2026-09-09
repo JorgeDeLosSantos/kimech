@@ -1,8 +1,10 @@
 """Solve a four-bar linkage through Kimech's public API."""
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from kimech import Mechanism, solve
+from kimech.visualization import plot
 
 
 def build_mechanism():
@@ -65,6 +67,11 @@ def main():
     print(f"Coupler point P: {first_point_position} -> {path[-1]}")
     print(f"First crank pose: {first_crank_pose}")
     print(f"Rocker angle: {rocker_poses[0, 2]:.3f} -> {rocker_poses[-1, 2]:.3f} rad")
+
+    config = solution[len(solution) // 2]
+    fig, ax = plot(config)
+    ax.set_title("Four-bar mechanism")
+    plt.show()
 
 
 if __name__ == "__main__":

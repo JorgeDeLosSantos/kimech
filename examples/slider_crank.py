@@ -1,8 +1,10 @@
 """Solve a slider-crank through Kimech's public API."""
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from kimech import Mechanism, solve
+from kimech.visualization import plot
 
 
 def build_mechanism():
@@ -57,13 +59,13 @@ def main():
     )
     slider_positions = solution.joint_coordinates(prismatic_joint)
 
-    config = solution[0]
-    slider_input = config.joint_coordinate(prismatic_joint)
+    first_config = solution[0]
+    slider_input = first_config.joint_coordinate(prismatic_joint)
     config_from_slider = solve(
         mechanism,
         input=prismatic_joint,
         values=slider_input,
-        initial_guess=config,
+        initial_guess=first_config,
     )
     reconstructed = config_from_slider.joint_coordinate(prismatic_joint)
 
@@ -75,6 +77,11 @@ def main():
         f"{slider_positions.max():.6f}"
     )
     print(f"Prismatic-input reconstruction: {slider_input:.6f} -> {reconstructed:.6f}")
+
+    config = solution[len(solution) // 2]
+    fig, ax = plot(config)
+    ax.set_title("Slider-crank mechanism")
+    plt.show()
 
 
 if __name__ == "__main__":

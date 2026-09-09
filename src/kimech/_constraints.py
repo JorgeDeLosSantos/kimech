@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
 
 from ._geometry import perpendicular, rotation_matrix
@@ -10,6 +12,12 @@ from .model import Ground, Link, Mechanism, Point
 
 _Joint = RevoluteJoint | PrismaticJoint
 _Body = Link | Ground
+
+
+def _relative_axis_angle(axis_a: Sequence[float], axis_b: Sequence[float]) -> float:
+    cross = axis_a[0] * axis_b[1] - axis_a[1] * axis_b[0]
+    dot = axis_a[0] * axis_b[0] + axis_a[1] * axis_b[1]
+    return float(np.arctan2(cross, dot))
 
 
 def joint_residual(
@@ -33,10 +41,9 @@ def joint_residual(
     axis_a = rotation_matrix(theta_a) @ np.asarray(joint.axis_a, dtype=float)
     normal = perpendicular(axis_a)
     displacement = position_b - position_a
-    alpha_a = np.arctan2(joint.axis_a[1], joint.axis_a[0])
-    alpha_b = np.arctan2(joint.axis_b[1], joint.axis_b[0])
+    delta_alpha = _relative_axis_angle(joint.axis_a, joint.axis_b)
     return np.array(
-        [normal @ displacement, theta_b + alpha_b - theta_a - alpha_a],
+        [normal @ displacement, theta_b - theta_a + delta_alpha],
         dtype=float,
     )
 

@@ -144,6 +144,67 @@ def test_prismatic_known_horizontal_and_inclined_mobile_mobile_residuals():
     )
 
 
+def test_prismatic_relative_axis_angle_is_continuous_across_atan2_branch_cut():
+    mechanism = Mechanism()
+    body_a = mechanism.add_link("a")
+    point_a = body_a.add_point("A", (0.4, -0.3))
+    body_b = mechanism.add_link("b")
+    point_b = body_b.add_point("B", (-0.2, 0.6))
+    alpha_a = np.deg2rad(179.0)
+    alpha_b = np.deg2rad(-179.0)
+    axis_a = (np.cos(alpha_a), np.sin(alpha_a))
+    axis_b = (np.cos(alpha_b), np.sin(alpha_b))
+    joint = mechanism.prismatic(
+        point_a, point_b, axis_a=axis_a, axis_b=axis_b
+    )
+
+    position_a = np.array([0.7, -1.1])
+    theta_a = 0.43
+    theta_b = theta_a - np.deg2rad(2.0)
+    global_point_a = position_a + rotation_matrix(theta_a) @ point_a.local
+    global_axis = rotation_matrix(theta_a) @ np.asarray(joint.axis_a)
+    global_point_b = global_point_a + 1.8 * global_axis
+    position_b = global_point_b - rotation_matrix(theta_b) @ point_b.local
+    q = np.r_[position_a, theta_a, position_b, theta_b]
+
+    np.testing.assert_allclose(
+        joint_residual(mechanism, mechanism.links, joint, q),
+        [0.0, 0.0],
+        atol=1e-14,
+    )
+
+
+def test_prismatic_mobile_ground_residual_and_jacobians():
+    mechanism = Mechanism()
+    mobile = mechanism.add_link("mobile")
+    mobile_point = mobile.add_point("M", (0.65, -0.4))
+    ground_point = mechanism.ground.add_point("G", (-0.3, 1.2))
+    joint = mechanism.prismatic(
+        mobile_point,
+        ground_point,
+        axis_a=(0.6, 0.8),
+        axis_b=(-0.45, 0.89),
+    )
+    links = mechanism.links
+    q = np.array([0.75, -1.1, 0.47])
+
+    phi = joint_residual(mechanism, links, joint, q)
+    assert phi.shape == (2,)
+    assert np.all(np.isfinite(phi))
+    assert_jacobian_matches(
+        lambda value: joint_residual(mechanism, links, joint, value),
+        joint_jacobian(mechanism, links, joint, q),
+        q,
+    )
+
+    input_value = -0.28
+    assert_jacobian_matches(
+        lambda value: driver_residual(mechanism, links, joint, value, input_value),
+        driver_jacobian(mechanism, links, joint, q),
+        q,
+    )
+
+
 @pytest.mark.parametrize("kind", ["ground-mobile", "mobile-ground", "mobile-mobile"])
 def test_revolute_joint_jacobian_matches_finite_differences(kind):
     mechanism, joint, q = _revolute_case(kind)

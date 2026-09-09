@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from itertools import cycle
+
 import numpy as np
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, rcParams
 from matplotlib.patches import Polygon
 
 from .._geometry import perpendicular, rotation_matrix
@@ -31,8 +33,9 @@ def plot(config: Configuration, *, ax=None):
 
     _draw_body(config, mechanism.ground, structural[mechanism.ground], "0.4", ax)
 
+    color_cycle = _link_color_cycle()
     for link in mechanism.links:
-        color = ax._get_lines.get_next_color()
+        color = next(color_cycle)
         body_colors[link] = color
         _draw_body(config, link, structural[link], color, ax)
 
@@ -62,6 +65,11 @@ def plot(config: Configuration, *, ax=None):
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     return fig, ax
+
+
+def _link_color_cycle():
+    colors = rcParams["axes.prop_cycle"].by_key().get("color") or ["C0"]
+    return cycle(colors)
 
 
 def _structural_points(config: Configuration) -> dict[_Body, tuple[list[Point], set[int]]]:

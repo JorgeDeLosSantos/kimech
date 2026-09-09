@@ -8,7 +8,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+from cycler import cycler
 from matplotlib.axes import Axes
+from matplotlib.colors import to_rgba
 from matplotlib.figure import Figure
 from matplotlib.patches import Polygon
 
@@ -115,6 +117,39 @@ def test_plot_returns_figure_and_axes_and_reuses_external_axes():
 def test_plot_rejects_non_configuration():
     with pytest.raises(TypeError, match="config must be a Configuration"):
         plot(object())
+
+
+def test_mobile_links_follow_public_matplotlib_color_cycle():
+    mechanism = Mechanism()
+    ground_a = mechanism.ground.add_point("A", (0.0, 0.0))
+    ground_c = mechanism.ground.add_point("C", (2.0, 0.0))
+    first = mechanism.add_link("first")
+    first_a = first.add_point("A", (0.0, 0.0))
+    first_b = first.add_point("B", (1.0, 0.0))
+    first.add_point("auxiliary", (0.5, 0.2))
+    second = mechanism.add_link("second")
+    second_b = second.add_point("B", (0.0, 0.0))
+    second_c = second.add_point("C", (1.0, 0.0))
+    second.add_point("auxiliary", (0.5, -0.2))
+    mechanism.revolute(ground_a, first_a)
+    mechanism.revolute(first_b, second_b)
+    mechanism.revolute(second_c, ground_c)
+    config = Configuration(mechanism, [0.0, 0.0, 0.0, 1.0, 0.0, 0.0])
+
+    with matplotlib.rc_context({"axes.prop_cycle": cycler(color=["red", "green", "blue"])}):
+        fig, ax = plot(config)
+
+    assert _artists_with_gid(ax, "kimech-body:first")[0].get_color() == "red"
+    assert _artists_with_gid(ax, "kimech-body:second")[0].get_color() == "green"
+    np.testing.assert_allclose(
+        _artists_with_gid(ax, "kimech-auxiliary:first")[0].get_facecolors(),
+        [to_rgba("red")],
+    )
+    np.testing.assert_allclose(
+        _artists_with_gid(ax, "kimech-auxiliary:second")[0].get_facecolors(),
+        [to_rgba("green")],
+    )
+    plt.close(fig)
 
 
 def test_four_bar_has_body_skeletons_pivots_and_auxiliary_point():

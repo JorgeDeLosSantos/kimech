@@ -121,6 +121,8 @@ def _prismatic_geometry(
     config: Configuration,
     joint: PrismaticJoint,
     scale: float,
+    *,
+    guide_range: tuple[float, float] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     position_a = config.position(joint.point_a)
     position_b = config.position(joint.point_b)
@@ -128,10 +130,13 @@ def _prismatic_geometry(
     axis = rotation_matrix(theta_a) @ np.asarray(joint.axis_a, dtype=float)
     normal = perpendicular(axis)
 
-    displacement = float(axis @ (position_b - position_a))
+    if guide_range is None:
+        displacement = float(axis @ (position_b - position_a))
+        guide_range = (min(0.0, displacement), max(0.0, displacement))
+    guide_min, guide_max = guide_range
     overhang = 0.06 * scale
-    start = position_a + (min(0.0, displacement) - overhang) * axis
-    end = position_a + (max(0.0, displacement) + overhang) * axis
+    start = position_a + (guide_min - overhang) * axis
+    end = position_a + (guide_max + overhang) * axis
 
     half_length = 0.045 * scale
     half_width = 0.03 * scale
@@ -214,8 +219,15 @@ def _draw_prismatic_joint(
     joint: PrismaticJoint,
     scale: float,
     ax,
+    *,
+    guide_range: tuple[float, float] | None = None,
 ):
-    start, end, vertices = _prismatic_geometry(config, joint, scale)
+    start, end, vertices = _prismatic_geometry(
+        config,
+        joint,
+        scale,
+        guide_range=guide_range,
+    )
     (guide,) = ax.plot(
         [start[0], end[0]],
         [start[1], end[1]],

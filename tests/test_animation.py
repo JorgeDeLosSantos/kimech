@@ -10,10 +10,17 @@ from matplotlib.patches import Polygon
 
 from kimech import KinematicSolution, Mechanism, solve
 from kimech.visualization import animate
+from kimech.visualization.animation import _prismatic_range
 
 
 def _artists_with_gid(ax, gid):
     return [artist for artist in ax.get_children() if artist.get_gid() == gid]
+
+
+def _line_length(line):
+    x = np.asarray(line.get_xdata(), dtype=float)
+    y = np.asarray(line.get_ydata(), dtype=float)
+    return np.hypot(x[1] - x[0], y[1] - y[0])
 
 
 def _finish(animation):
@@ -89,6 +96,22 @@ def _slider_crank_solution():
             slider: (0.30, 0.0, 0.0),
         },
     )
+
+
+def _prismatic_solution(values):
+    mechanism = Mechanism("prismatic")
+    fixed = mechanism.ground.add_point("A", (0.0, 0.0))
+    link = mechanism.add_link("slider")
+    moving = link.add_point("B", (0.0, 0.0))
+    joint = mechanism.prismatic(
+        fixed,
+        moving,
+        axis_a=(1.0, 0.0),
+        axis_b=(1.0, 0.0),
+    )
+    values = np.asarray(values, dtype=float)
+    coordinates = np.column_stack((values, np.zeros((len(values), 2))))
+    return KinematicSolution(mechanism, joint, values, coordinates), joint
 
 
 def test_animate_returns_func_animation_with_uniform_fps_interval():
@@ -176,17 +199,34 @@ def test_slider_crank_updates_existing_glyphs_with_fixed_size_and_orientation():
     assert isinstance(slider, Polygon)
     vertices_before = slider.get_xy().copy()
     side_lengths_before = np.linalg.norm(np.diff(vertices_before[:4], axis=0), axis=1)
+    initial_guide_length = _line_length(guide)
 
-    animation._func(3)
+    for index in range(len(solution)):
+        animation._func(index)
+        assert _artists_with_gid(ax, "kimech-joint:prismatic-guide")[0] is guide
+        assert _line_length(guide) == pytest.approx(initial_guide_length)
 
     vertices_after = slider.get_xy().copy()
     side_lengths_after = np.linalg.norm(np.diff(vertices_after[:4], axis=0), axis=1)
-    assert _artists_with_gid(ax, "kimech-joint:prismatic-guide")[0] is guide
     assert _artists_with_gid(ax, "kimech-joint:prismatic-slider")[0] is slider
     assert not np.allclose(vertices_after, vertices_before)
     np.testing.assert_allclose(side_lengths_after, side_lengths_before)
     np.testing.assert_allclose(guide.get_ydata(), [0.0, 0.0], atol=1e-9)
     _finish(animation)
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        ([1.0, 2.0, 3.0], (0.0, 3.0)),
+        ([-3.0, -2.0, -1.0], (-3.0, 0.0)),
+        ([-2.0, 1.0, 3.0], (-2.0, 3.0)),
+    ],
+)
+def test_prismatic_range_covers_full_solution_and_includes_zero(values, expected):
+    solution, joint = _prismatic_solution(values)
+
+    assert _prismatic_range(solution, joint) == expected
 
 
 def test_updates_keep_artist_counts_and_viewport_fixed():

@@ -32,7 +32,7 @@ class _AnimationArtists:
     bodies: dict[Link, tuple[list[Point], object]]
     auxiliary: dict[Link, tuple[list[Point], object]]
     revolute: dict[RevoluteJoint, object]
-    prismatic: dict[PrismaticJoint, tuple[object, object]]
+    prismatic: dict[PrismaticJoint, tuple[object, object, tuple[float, float]]]
 
 
 def animate(
@@ -54,7 +54,12 @@ def animate(
         fig = ax.figure
 
     scale, bounds = _solution_plot_geometry(solution)
-    artists = _create_artists(solution[0], scale, ax)
+    prismatic_ranges = {
+        joint: _prismatic_range(solution, joint)
+        for joint in solution.mechanism.joints
+        if isinstance(joint, PrismaticJoint)
+    }
+    artists = _create_artists(solution[0], scale, prismatic_ranges, ax)
     ax.set_xlim(bounds[0], bounds[1])
     ax.set_ylim(bounds[2], bounds[3])
     ax.set_aspect("equal", adjustable="box")
@@ -116,7 +121,15 @@ def _solution_plot_geometry(
     return scale, bounds
 
 
-def _create_artists(config, scale: float, ax) -> _AnimationArtists:
+def _prismatic_range(
+    solution: KinematicSolution,
+    joint: PrismaticJoint,
+) -> tuple[float, float]:
+    values = solution.joint_coordinates(joint)
+    return min(0.0, float(values.min())), max(0.0, float(values.max()))
+
+
+def _create_artists(config, scale: float, prismatic_ranges, ax) -> _AnimationArtists:
     mechanism = config.mechanism
     structural = _structural_points(config)
     body_artists = {}
@@ -142,7 +155,15 @@ def _create_artists(config, scale: float, ax) -> _AnimationArtists:
 
     for joint in mechanism.joints:
         if isinstance(joint, PrismaticJoint):
-            prismatic_artists[joint] = _draw_prismatic_joint(config, joint, scale, ax)
+            guide_range = prismatic_ranges[joint]
+            guide, slider = _draw_prismatic_joint(
+                config,
+                joint,
+                scale,
+                ax,
+                guide_range=guide_range,
+            )
+            prismatic_artists[joint] = (guide, slider, guide_range)
     for joint in mechanism.joints:
         if isinstance(joint, RevoluteJoint):
             revolute_artists[joint] = _draw_revolute_joint(config, joint, ax)
@@ -167,8 +188,13 @@ def _update_artists(config, scale: float, artists: _AnimationArtists) -> tuple[o
     for joint, artist in artists.revolute.items():
         artist.set_offsets([_revolute_center(config, joint)])
         modified.append(artist)
-    for joint, (guide, slider) in artists.prismatic.items():
-        start, end, vertices = _prismatic_geometry(config, joint, scale)
+    for joint, (guide, slider, guide_range) in artists.prismatic.items():
+        start, end, vertices = _prismatic_geometry(
+            config,
+            joint,
+            scale,
+            guide_range=guide_range,
+        )
         guide.set_data([start[0], end[0]], [start[1], end[1]])
         slider.set_xy(vertices)
         modified.extend((guide, slider))

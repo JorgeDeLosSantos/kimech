@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from kimech import Mechanism, solve
-from kimech.visualization import plot
+from kimech.visualization import animate
 
 
 def build_mechanism():
@@ -44,7 +44,12 @@ def build_mechanism():
 
 def main():
     mechanism, input_joint, crank, rocker, point_p, initial_guess = build_mechanism()
-    values = np.linspace(0.8, 1.3, 100)
+    values = np.linspace(
+        0.8,
+        0.8 + 2 * np.pi,
+        180,
+        endpoint=False,
+    )
 
     solution = solve(
         mechanism,
@@ -68,8 +73,14 @@ def main():
     print(f"First crank pose: {first_crank_pose}")
     print(f"Rocker angle: {rocker_poses[0, 2]:.3f} -> {rocker_poses[-1, 2]:.3f} rad")
 
-    config = solution[len(solution) // 2]
-    fig, ax = plot(config)
+    fig, ax = plt.subplots()
+
+    animation = animate(
+        solution,
+        fps=30,
+        ax=ax,
+    )
+
     ax.set_title("Four-bar mechanism")
     plt.show()
 

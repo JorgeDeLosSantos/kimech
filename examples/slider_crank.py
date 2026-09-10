@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from kimech import Mechanism, solve
-from kimech.visualization import plot
+from kimech.visualization import animate
 
 
 def build_mechanism():
@@ -49,7 +49,12 @@ def build_mechanism():
 
 def main():
     mechanism, crank_joint, prismatic_joint, initial_guess = build_mechanism()
-    values = np.linspace(0.7, 1.2, 100)
+    values = np.linspace(
+        0.7,
+        0.7 + 2 * np.pi,
+        180,
+        endpoint=False,
+    )
 
     solution = solve(
         mechanism,
@@ -78,8 +83,14 @@ def main():
     )
     print(f"Prismatic-input reconstruction: {slider_input:.6f} -> {reconstructed:.6f}")
 
-    config = solution[len(solution) // 2]
-    fig, ax = plot(config)
+    fig, ax = plt.subplots()
+
+    animation = animate(
+        solution,
+        fps=30,
+        ax=ax,
+    )
+
     ax.set_title("Slider-crank mechanism")
     plt.show()
 

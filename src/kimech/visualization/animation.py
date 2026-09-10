@@ -53,12 +53,12 @@ def animate(
     else:
         fig = ax.figure
 
-    scale, bounds = _solution_plot_geometry(solution)
     prismatic_ranges = {
         joint: _prismatic_range(solution, joint)
         for joint in solution.mechanism.joints
         if isinstance(joint, PrismaticJoint)
     }
+    scale, bounds = _solution_plot_geometry(solution, prismatic_ranges)
     artists = _create_artists(solution[0], scale, prismatic_ranges, ax)
     ax.set_xlim(bounds[0], bounds[1])
     ax.set_ylim(bounds[2], bounds[3])
@@ -94,18 +94,36 @@ def _validate_fps(value: object) -> float:
 
 def _solution_plot_geometry(
     solution: KinematicSolution,
+    prismatic_ranges: dict[PrismaticJoint, tuple[float, float]],
 ) -> tuple[float, tuple[float, float, float, float]]:
-    positions = np.concatenate([_point_positions(solution[index]) for index in range(len(solution))])
-    if len(positions) == 0:
-        xmin = xmax = ymin = ymax = 0.0
+    configurations = [solution[index] for index in range(len(solution))]
+    point_positions = np.concatenate([_point_positions(config) for config in configurations])
+    if len(point_positions) == 0:
         scale = 1.0
     else:
-        xmin, ymin = np.min(positions, axis=0)
-        xmax, ymax = np.max(positions, axis=0)
-        extent = float(max(xmax - xmin, ymax - ymin))
+        point_min = np.min(point_positions, axis=0)
+        point_max = np.max(point_positions, axis=0)
+        extent = float(max(point_max - point_min))
         scale = 1.0 if extent <= np.finfo(float).eps else extent
 
-    # Includes plot's 10% margin plus the prismatic guide/slider dimensions.
+    rendered_geometry = [point_positions]
+    for config in configurations:
+        for joint, guide_range in prismatic_ranges.items():
+            start, end, vertices = _prismatic_geometry(
+                config,
+                joint,
+                scale,
+                guide_range=guide_range,
+            )
+            rendered_geometry.append(np.vstack((start, end, vertices)))
+
+    coordinates = np.concatenate(rendered_geometry)
+    if len(coordinates) == 0:
+        xmin = xmax = ymin = ymax = 0.0
+    else:
+        xmin, ymin = np.min(coordinates, axis=0)
+        xmax, ymax = np.max(coordinates, axis=0)
+
     margin = 0.16 * scale
     minimum_span = scale
     xcenter = 0.5 * (xmin + xmax)

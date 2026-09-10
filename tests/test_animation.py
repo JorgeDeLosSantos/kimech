@@ -114,6 +114,32 @@ def _prismatic_solution(values):
     return KinematicSolution(mechanism, joint, values, coordinates), joint
 
 
+def _mobile_prismatic_solution():
+    mechanism = Mechanism("mobile_prismatic")
+    body_a = mechanism.add_link("guide")
+    point_a = body_a.add_point("A", (0.0, 0.0))
+    body_b = mechanism.add_link("slider")
+    point_b = body_b.add_point("B", (0.0, 0.0))
+    local_axis = (1.0, 0.0)
+    joint = mechanism.prismatic(
+        point_a,
+        point_b,
+        axis_a=local_axis,
+        axis_b=local_axis,
+    )
+
+    guide_positions = np.asarray(((0.0, 0.0), (4.0, 4.0), (8.0, 8.0)))
+    displacements = np.asarray((8.0, 4.0, 1.0))
+    theta = np.pi / 4.0
+    global_axis = np.asarray((np.cos(theta), np.sin(theta)))
+    coordinates = np.empty((len(displacements), 6))
+    coordinates[:, :2] = guide_positions
+    coordinates[:, 2] = theta
+    coordinates[:, 3:5] = guide_positions + displacements[:, np.newaxis] * global_axis
+    coordinates[:, 5] = theta
+    return KinematicSolution(mechanism, joint, displacements, coordinates)
+
+
 def test_animate_returns_func_animation_with_uniform_fps_interval():
     solution, _ = _four_bar_solution()
 
@@ -227,6 +253,35 @@ def test_prismatic_range_covers_full_solution_and_includes_zero(values, expected
     solution, joint = _prismatic_solution(values)
 
     assert _prismatic_range(solution, joint) == expected
+
+
+def test_viewport_contains_mobile_prismatic_guides_and_sliders_in_every_frame():
+    solution = _mobile_prismatic_solution()
+    fig, ax = plt.subplots()
+    animation = animate(solution, ax=ax)
+    guide = _artists_with_gid(ax, "kimech-joint:prismatic-guide")[0]
+    slider = _artists_with_gid(ax, "kimech-joint:prismatic-slider")[0]
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    initial_length = _line_length(guide)
+
+    for index in range(len(solution)):
+        animation._func(index)
+        geometry = np.vstack(
+            (
+                np.column_stack((guide.get_xdata(), guide.get_ydata())),
+                slider.get_xy(),
+            )
+        )
+        assert np.all(geometry[:, 0] >= xlim[0])
+        assert np.all(geometry[:, 0] <= xlim[1])
+        assert np.all(geometry[:, 1] >= ylim[0])
+        assert np.all(geometry[:, 1] <= ylim[1])
+        assert _line_length(guide) == pytest.approx(initial_length)
+        assert ax.get_xlim() == xlim
+        assert ax.get_ylim() == ylim
+
+    _finish(animation)
 
 
 def test_updates_keep_artist_counts_and_viewport_fixed():

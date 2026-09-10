@@ -1,0 +1,175 @@
+"""Animate solved mechanism configurations with Matplotlib."""
+
+from __future__ import annotations
+
+import numbers
+from dataclasses import dataclass
+
+import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib.animation import FuncAnimation
+
+from ..joints import PrismaticJoint, RevoluteJoint
+from ..model import Link, Point
+from ..solution import KinematicSolution
+from .plot import (
+    _auxiliary_points,
+    _body_coordinates,
+    _draw_auxiliary_points,
+    _draw_body,
+    _draw_prismatic_joint,
+    _draw_revolute_joint,
+    _link_color_cycle,
+    _point_positions,
+    _prismatic_geometry,
+    _revolute_center,
+    _structural_points,
+)
+
+
+@dataclass
+class _AnimationArtists:
+    bodies: dict[Link, tuple[list[Point], object]]
+    auxiliary: dict[Link, tuple[list[Point], object]]
+    revolute: dict[RevoluteJoint, object]
+    prismatic: dict[PrismaticJoint, tuple[object, object]]
+
+
+def animate(
+    solution: KinematicSolution,
+    *,
+    fps: float = 30,
+    ax=None,
+) -> FuncAnimation:
+    """Animate a kinematic solution and return Matplotlib's animation object."""
+    if not isinstance(solution, KinematicSolution):
+        raise TypeError("solution must be a KinematicSolution")
+    if len(solution) == 0:
+        raise ValueError("solution must contain at least one configuration")
+    fps_value = _validate_fps(fps)
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
+
+    scale, bounds = _solution_plot_geometry(solution)
+    artists = _create_artists(solution[0], scale, ax)
+    ax.set_xlim(bounds[0], bounds[1])
+    ax.set_ylim(bounds[2], bounds[3])
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+
+    def update(index):
+        return _update_artists(solution[index], scale, artists)
+
+    return FuncAnimation(
+        fig,
+        update,
+        frames=range(len(solution)),
+        interval=1000.0 / fps_value,
+        blit=False,
+        repeat=True,
+    )
+
+
+def _validate_fps(value: object) -> float:
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, numbers.Number):
+        raise TypeError("fps must be a numeric scalar")
+    if isinstance(value, numbers.Complex) and not isinstance(value, numbers.Real):
+        raise TypeError("fps must be a real numeric scalar")
+    result = float(value)
+    if not np.isfinite(result):
+        raise ValueError("fps must be finite")
+    if result <= 0.0:
+        raise ValueError("fps must be greater than zero")
+    return result
+
+
+def _solution_plot_geometry(
+    solution: KinematicSolution,
+) -> tuple[float, tuple[float, float, float, float]]:
+    positions = np.concatenate([_point_positions(solution[index]) for index in range(len(solution))])
+    if len(positions) == 0:
+        xmin = xmax = ymin = ymax = 0.0
+        scale = 1.0
+    else:
+        xmin, ymin = np.min(positions, axis=0)
+        xmax, ymax = np.max(positions, axis=0)
+        extent = float(max(xmax - xmin, ymax - ymin))
+        scale = 1.0 if extent <= np.finfo(float).eps else extent
+
+    # Includes plot's 10% margin plus the prismatic guide/slider dimensions.
+    margin = 0.16 * scale
+    minimum_span = scale
+    xcenter = 0.5 * (xmin + xmax)
+    ycenter = 0.5 * (ymin + ymax)
+    xspan = max(float(xmax - xmin), minimum_span)
+    yspan = max(float(ymax - ymin), minimum_span)
+    bounds = (
+        xcenter - 0.5 * xspan - margin,
+        xcenter + 0.5 * xspan + margin,
+        ycenter - 0.5 * yspan - margin,
+        ycenter + 0.5 * yspan + margin,
+    )
+    return scale, bounds
+
+
+def _create_artists(config, scale: float, ax) -> _AnimationArtists:
+    mechanism = config.mechanism
+    structural = _structural_points(config)
+    body_artists = {}
+    auxiliary_artists = {}
+    revolute_artists = {}
+    prismatic_artists = {}
+
+    _draw_body(config, mechanism.ground, structural[mechanism.ground], "0.4", ax)
+    color_cycle = _link_color_cycle()
+    for link in mechanism.links:
+        color = next(color_cycle)
+        points = structural[link][0]
+        artist = _draw_body(config, link, structural[link], color, ax)
+        if artist is not None:
+            body_artists[link] = (points, artist)
+        auxiliary = _auxiliary_points(link, structural[link])
+        auxiliary_artist = _draw_auxiliary_points(config, link, auxiliary, color, ax)
+        if auxiliary_artist is not None:
+            auxiliary_artists[link] = (auxiliary, auxiliary_artist)
+
+    ground_auxiliary = _auxiliary_points(mechanism.ground, structural[mechanism.ground])
+    _draw_auxiliary_points(config, mechanism.ground, ground_auxiliary, "0.4", ax)
+
+    for joint in mechanism.joints:
+        if isinstance(joint, PrismaticJoint):
+            prismatic_artists[joint] = _draw_prismatic_joint(config, joint, scale, ax)
+    for joint in mechanism.joints:
+        if isinstance(joint, RevoluteJoint):
+            revolute_artists[joint] = _draw_revolute_joint(config, joint, ax)
+
+    return _AnimationArtists(
+        body_artists,
+        auxiliary_artists,
+        revolute_artists,
+        prismatic_artists,
+    )
+
+
+def _update_artists(config, scale: float, artists: _AnimationArtists) -> tuple[object, ...]:
+    modified = []
+    for points, artist in artists.bodies.values():
+        coordinates = _body_coordinates(config, points)
+        artist.set_data(coordinates[:, 0], coordinates[:, 1])
+        modified.append(artist)
+    for points, artist in artists.auxiliary.values():
+        artist.set_offsets([config.position(point) for point in points])
+        modified.append(artist)
+    for joint, artist in artists.revolute.items():
+        artist.set_offsets([_revolute_center(config, joint)])
+        modified.append(artist)
+    for joint, (guide, slider) in artists.prismatic.items():
+        start, end, vertices = _prismatic_geometry(config, joint, scale)
+        guide.set_data([start[0], end[0]], [start[1], end[1]])
+        slider.set_xy(vertices)
+        modified.extend((guide, slider))
+    return tuple(modified)

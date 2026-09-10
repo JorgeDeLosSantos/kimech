@@ -44,17 +44,8 @@ def plot(config: Configuration, *, ax=None):
             _draw_prismatic_joint(config, joint, scale, ax)
 
     for body in (mechanism.ground, *mechanism.links):
-        auxiliary = [point for point in body.points if id(point) not in structural[body][1]]
-        if auxiliary:
-            positions = np.asarray([config.position(point) for point in auxiliary])
-            artist = ax.scatter(
-                positions[:, 0],
-                positions[:, 1],
-                s=22,
-                color=body_colors[body],
-                zorder=4,
-            )
-            artist.set_gid(f"kimech-auxiliary:{body.name}")
+        auxiliary = _auxiliary_points(body, structural[body])
+        _draw_auxiliary_points(config, body, auxiliary, body_colors[body], ax)
 
     for joint in mechanism.joints:
         if isinstance(joint, RevoluteJoint):
@@ -88,74 +79,49 @@ def _structural_points(config: Configuration) -> dict[_Body, tuple[list[Point], 
 
 
 def _plot_scale(config: Configuration) -> float:
+    coordinates = _point_positions(config)
+    if len(coordinates) == 0:
+        return 1.0
+    extent = float(max(np.ptp(coordinates[:, 0]), np.ptp(coordinates[:, 1])))
+    return 1.0 if extent <= np.finfo(float).eps else extent
+
+
+def _point_positions(config: Configuration) -> np.ndarray:
     mechanism = config.mechanism
     positions = [
         config.position(point)
         for body in (mechanism.ground, *mechanism.links)
         for point in body.points
     ]
-    if not positions:
-        return 1.0
-    coordinates = np.asarray(positions, dtype=float)
-    extent = float(max(np.ptp(coordinates[:, 0]), np.ptp(coordinates[:, 1])))
-    return 1.0 if extent <= np.finfo(float).eps else extent
+    return np.asarray(positions, dtype=float).reshape((-1, 2))
 
 
-def _draw_body(
-    config: Configuration,
-    body: _Body,
-    structural: tuple[list[Point], set[int]],
-    color: str,
-    ax,
-) -> None:
-    points, _ = structural
-    if len(points) < 2:
-        return
+def _auxiliary_points(body: _Body, structural: tuple[list[Point], set[int]]) -> list[Point]:
+    _, structural_identities = structural
+    return [point for point in body.points if id(point) not in structural_identities]
 
+
+def _body_coordinates(config: Configuration, points: list[Point]) -> np.ndarray:
     positions = np.asarray([config.position(point) for point in points])
     if len(points) == 2:
-        coordinates = positions
-    else:
-        hub = np.mean(positions, axis=0)
-        coordinates = np.asarray(
-            [coordinate for point in positions for coordinate in (hub, point, (np.nan, np.nan))]
-        )
-
-    is_ground = isinstance(body, Ground)
-    (artist,) = ax.plot(
-        coordinates[:, 0],
-        coordinates[:, 1],
-        color=color,
-        linewidth=3.0 if is_ground else 2.5,
-        solid_capstyle="round",
-        zorder=1 if is_ground else 2,
+        return positions
+    hub = np.mean(positions, axis=0)
+    return np.asarray(
+        [coordinate for point in positions for coordinate in (hub, point, (np.nan, np.nan))]
     )
-    artist.set_gid(f"kimech-body:{body.name}")
 
 
-def _draw_revolute_joint(config: Configuration, joint: RevoluteJoint, ax) -> None:
+def _revolute_center(config: Configuration, joint: RevoluteJoint) -> np.ndarray:
     position_a = config.position(joint.point_a)
     position_b = config.position(joint.point_b)
-    center = 0.5 * (position_a + position_b)
-    artist = ax.scatter(
-        [center[0]],
-        [center[1]],
-        s=58,
-        marker="o",
-        facecolor="white",
-        edgecolor="0.15",
-        linewidth=1.5,
-        zorder=5,
-    )
-    artist.set_gid("kimech-joint:revolute")
+    return 0.5 * (position_a + position_b)
 
 
-def _draw_prismatic_joint(
+def _prismatic_geometry(
     config: Configuration,
     joint: PrismaticJoint,
     scale: float,
-    ax,
-) -> None:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     position_a = config.position(joint.point_a)
     position_b = config.position(joint.point_b)
     theta_a = float(config.pose(joint.point_a.body)[2])
@@ -166,14 +132,6 @@ def _draw_prismatic_joint(
     overhang = 0.06 * scale
     start = position_a + (min(0.0, displacement) - overhang) * axis
     end = position_a + (max(0.0, displacement) + overhang) * axis
-    (guide,) = ax.plot(
-        [start[0], end[0]],
-        [start[1], end[1]],
-        color="0.35",
-        linewidth=2.0,
-        zorder=3,
-    )
-    guide.set_gid("kimech-joint:prismatic-guide")
 
     half_length = 0.045 * scale
     half_width = 0.03 * scale
@@ -185,6 +143,88 @@ def _draw_prismatic_joint(
             position_b - half_length * axis + half_width * normal,
         ]
     )
+    return start, end, vertices
+
+
+def _draw_body(
+    config: Configuration,
+    body: _Body,
+    structural: tuple[list[Point], set[int]],
+    color: str,
+    ax,
+):
+    points, _ = structural
+    if len(points) < 2:
+        return None
+
+    coordinates = _body_coordinates(config, points)
+
+    is_ground = isinstance(body, Ground)
+    (artist,) = ax.plot(
+        coordinates[:, 0],
+        coordinates[:, 1],
+        color=color,
+        linewidth=3.0 if is_ground else 2.5,
+        solid_capstyle="round",
+        zorder=1 if is_ground else 2,
+    )
+    artist.set_gid(f"kimech-body:{body.name}")
+    return artist
+
+
+def _draw_auxiliary_points(
+    config: Configuration,
+    body: _Body,
+    points: list[Point],
+    color: str,
+    ax,
+):
+    if not points:
+        return None
+    positions = np.asarray([config.position(point) for point in points])
+    artist = ax.scatter(
+        positions[:, 0],
+        positions[:, 1],
+        s=22,
+        color=color,
+        zorder=4,
+    )
+    artist.set_gid(f"kimech-auxiliary:{body.name}")
+    return artist
+
+
+def _draw_revolute_joint(config: Configuration, joint: RevoluteJoint, ax):
+    center = _revolute_center(config, joint)
+    artist = ax.scatter(
+        [center[0]],
+        [center[1]],
+        s=58,
+        marker="o",
+        facecolor="white",
+        edgecolor="0.15",
+        linewidth=1.5,
+        zorder=5,
+    )
+    artist.set_gid("kimech-joint:revolute")
+    return artist
+
+
+def _draw_prismatic_joint(
+    config: Configuration,
+    joint: PrismaticJoint,
+    scale: float,
+    ax,
+):
+    start, end, vertices = _prismatic_geometry(config, joint, scale)
+    (guide,) = ax.plot(
+        [start[0], end[0]],
+        [start[1], end[1]],
+        color="0.35",
+        linewidth=2.0,
+        zorder=3,
+    )
+    guide.set_gid("kimech-joint:prismatic-guide")
+
     slider = Polygon(
         vertices,
         closed=True,
@@ -195,3 +235,4 @@ def _draw_prismatic_joint(
     )
     slider.set_gid("kimech-joint:prismatic-slider")
     ax.add_patch(slider)
+    return guide, slider

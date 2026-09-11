@@ -51,6 +51,27 @@ def _wrapped_angle_difference(a, b):
     return np.arctan2(np.sin(a - b), np.cos(a - b))
 
 
+def _assert_pose_history_is_continuous(poses):
+    positions = poses[:, :2]
+    position_steps = np.linalg.norm(np.diff(positions, axis=0), axis=1)
+    angle_steps = np.abs(
+        np.arctan2(
+            np.sin(np.diff(poses[:, 2])),
+            np.cos(np.diff(poses[:, 2])),
+        )
+    )
+
+    assert np.max(angle_steps) < np.deg2rad(30)
+
+    span = np.max(np.ptp(positions, axis=0))
+    position_scale = max(1.0, np.max(np.abs(positions)))
+    small_tolerance = np.sqrt(np.finfo(poses.dtype).eps) * position_scale
+    if span > small_tolerance:
+        assert np.max(position_steps) < 0.5 * span
+    else:
+        assert np.max(position_steps) < small_tolerance
+
+
 def test_four_bar_scalar_solve_satisfies_complete_constraint_system():
     mechanism, input_joint, _, guess = _four_bar()
 
@@ -111,5 +132,6 @@ def test_four_bar_completes_full_revolution_and_returns_to_physical_configuratio
     np.testing.assert_allclose(path[-1], path[0], atol=1e-8)
     for link in mechanism.links:
         poses = solution.link_poses(link)
+        _assert_pose_history_is_continuous(poses)
         np.testing.assert_allclose(poses[-1, :2], poses[0, :2], atol=1e-8)
         assert abs(_wrapped_angle_difference(poses[-1, 2], poses[0, 2])) < 1e-8

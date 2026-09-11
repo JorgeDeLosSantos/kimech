@@ -1,37 +1,44 @@
-# Kimech — Package structure and public API candidate
+# Kimech — Package structure and public API
 
-> Status: candidate API for `0.1.0`.
+> Status: current implemented API for `0.1.0.dev0`.
 >
-> This document refines the conceptual baseline in `docs/design.md` into a concrete package layout and public interface. The API remains provisional until exercised by the first implementation and acceptance tests.
+> Kimech remains in early development and this API may evolve before `0.1.0`. This document describes the implementation as it exists now; [`design.md`](design.md) records the conceptual and architectural baseline.
 
-## 1. Design goal
+## 1. Overview
 
-The package structure should mirror the actual responsibilities already validated by the four-bar and slider-crank walkthroughs, without creating extension points that the MVP does not yet need.
+Kimech models planar rigid-body mechanisms declaratively, solves position configurations with one prescribed joint coordinate, exposes entity-based result queries, and provides optional Matplotlib visualization.
 
-The desired user experience is roughly:
+A typical sweep looks like:
 
 ```python
 import numpy as np
+
 from kimech import Mechanism, solve
 from kimech.visualization import animate
 
-m = Mechanism("four_bar")
-# ... declare links, points and joints ...
+mechanism = Mechanism("four_bar")
+# ... declare links, points, and joints ...
 
-solution = solve(
-    m,
-    input=J1,
-    values=np.linspace(0.5, 0.5 + 2*np.pi, 361),
-    initial_guess=guess,
+values = np.linspace(
+    0.8,
+    0.8 + 2 * np.pi,
+    180,
+    endpoint=False,
 )
+solution = solve(
+    mechanism,
+    input=input_joint,
+    values=values,
+    initial_guess=initial_guess,
+)
+path = solution.point_path(point_p)
 
-path = solution.point_path(P)
-animate(solution)
+animation = animate(solution, fps=30)
 ```
 
-The user should not need to know about coordinate-vector indexing, constraint assembly, SciPy callbacks, or renderer internals.
+The values parameterize configurations; they are not interpreted as physical time.
 
-## 2. Initial source layout
+## 2. Package structure
 
 ```text
 src/
@@ -51,200 +58,67 @@ src/
         └── animation.py
 ```
 
-This is intentionally flat. In particular, `solver/`, `analysis/`, `drivers/`, backend registries, and mechanism-specific packages are not justified yet.
+The package is intentionally flat. Mechanism-specific classes, solver class hierarchies, backend registries, and plugin systems are not part of `0.1.0.dev0`.
 
-Modules should only be split further after real implementation pressure appears.
+### Module responsibilities
 
-## 3. Module responsibilities
+- `model.py` owns `Mechanism`, `Link`, `Ground`, and `Point`, including topology and local point geometry. Models do not store current poses or perform numerical solves.
+- `joints.py` owns immutable `RevoluteJoint` and `PrismaticJoint` domain objects.
+- `_geometry.py` contains private planar numerical helpers.
+- `_constraints.py` assembles private residual and analytic Jacobian contributions. It receives explicit `links: tuple[Link, ...]` and joint snapshots; tuple order defines the layout of the generalized coordinate vector `q`.
+- `solver.py` validates the problem, snapshots `mechanism.links` and `mechanism.joints`, packs poses in link snapshot order, assembles residual/Jacobian callbacks, calls `scipy.optimize.root(..., method="hybr")`, independently verifies the final residual, and warm-starts sweeps.
+- `solution.py` owns solver-independent kinematic state and result queries through `Configuration` and `KinematicSolution`. It does not wrap SciPy result objects or expose diagnostic containers.
+- `validation.py` provides lightweight structural validation and mobility estimation.
+- `errors.py` defines the public Kimech exception hierarchy.
+- `visualization` renders configurations and solutions with Matplotlib without mutating them.
 
-### `model.py`
+Private modules and names beginning with `_` are implementation details, not public API.
 
-Owns the declarative kinematic model:
+## 3. Imports and dependencies
 
-- `Mechanism`
-- `Link`
-- `Ground`
-- `Point`
-
-Responsibilities:
-
-- construct and own the model topology;
-- own local point geometry;
-- maintain deterministic creation order;
-- provide convenient model-building methods;
-- expose read-only/topological queries.
-
-Must not contain:
-
-- numerical solving;
-- current poses;
-- drawing logic;
-- solver tolerances.
-
-### `joints.py`
-
-Owns public joint domain objects:
-
-- `RevoluteJoint`
-- `PrismaticJoint`
-
-Responsibilities:
-
-- store the body-point references defining each joint;
-- store the local axes required by a prismatic joint;
-- expose immutable joint metadata.
-
-The public joint objects do not assemble global residual vectors themselves and do not know coordinate-vector indices.
-
-No public `Joint` inheritance hierarchy is required for `0.1.0`; type unions are sufficient unless implementation evidence later justifies a shared base.
-
-### `_geometry.py`
-
-Small private numerical helpers shared by solver, solution, and constraints, for example:
-
-- planar rotation matrix;
-- rotated local vectors;
-- perpendicular-vector helper;
-- point transformation helper.
-
-This module is private because these functions are implementation details, not a geometry sub-library promised to users.
-
-### `_constraints.py`
-
-Private translation layer from public joint objects to mathematical equations.
-
-Responsibilities:
-
-- revolute residual contribution;
-- revolute Jacobian contribution;
-- prismatic residual contribution;
-- prismatic Jacobian contribution;
-- prescribed-coordinate residual/Jacobian contribution.
-
-It should work with an internal coordinate map supplied by the solver and must not introduce mechanism-specific equations.
-
-### `solver.py`
-
-Owns the position-solution workflow.
-
-Responsibilities:
-
-- validate a requested solve problem;
-- build the deterministic coordinate map;
-- pack a user initial guess into the internal coordinate vector;
-- assemble complete residual and Jacobian callbacks;
-- invoke the initial SciPy root solver;
-- independently verify the final residual;
-- perform warm-start continuation across input values;
-- construct `Configuration` / `KinematicSolution`;
-- raise explicit solve errors.
-
-For `0.1.0`, private helpers such as `_CoordinateMap` should remain inside this module unless they become independently substantial.
-
-### `solution.py`
-
-Owns solver-independent result objects:
-
-- `Configuration`
-- `KinematicSolution`
-- minimal diagnostic data structures if useful.
-
-Responsibilities:
-
-- expose entity-based state queries;
-- transform local points to global positions;
-- expose joint coordinates;
-- derive point paths and link pose histories;
-- provide sequence-like access to configurations.
-
-It must not depend on SciPy solver result types.
-
-### `validation.py`
-
-Owns structural/model validation:
-
-- `ValidationReport`
-- mobility estimate;
-- consistency checks.
-
-The report should remain deliberately lightweight. `0.1.0` does not need a hierarchy of validation-rule objects.
-
-### `errors.py`
-
-Small public exception surface:
-
-- `KimechError`
-- `InvalidModelError`
-- `KinematicSolveError`
-
-The exact payload of `KinematicSolveError` remains provisional, but it should eventually expose useful failure context such as the failed input index/value and residual information.
-
-### `visualization/`
-
-Matplotlib-only visualization for `0.1.0`.
-
-`plot.py`:
-
-- schematic rendering of a `Configuration`;
-- optional trajectory overlays when relevant.
-
-`animation.py`:
-
-- animation of a `KinematicSolution`;
-- GIF export;
-- presentation-oriented playback settings such as FPS.
-
-The visualization layer consumes domain/result objects and does not mutate them.
-
-No backend abstraction or registry is introduced yet.
-
-## 4. Public import surface
-
-The core top-level namespace should remain small:
+The public core surface is available from `kimech`:
 
 ```python
 from kimech import (
-    Mechanism,
-    Link,
-    Ground,
-    Point,
-    RevoluteJoint,
-    PrismaticJoint,
     Configuration,
-    KinematicSolution,
-    ValidationReport,
-    KimechError,
+    Ground,
     InvalidModelError,
+    KimechError,
+    KinematicSolution,
     KinematicSolveError,
+    Link,
+    Mechanism,
+    Point,
+    PrismaticJoint,
+    RevoluteJoint,
+    ValidationReport,
     solve,
 )
 ```
 
-Typical users will normally need only:
+Visualization is imported separately:
 
 ```python
-from kimech import Mechanism, solve
+from kimech.visualization import animate, plot
 ```
 
-The remaining types are public primarily for inspection, type annotations, and advanced use.
+The core dependencies are NumPy and SciPy. Visualization is an optional extra containing Matplotlib and Pillow:
 
-Visualization is intentionally imported separately:
+```bash
+pip install -e ".[viz]"
+```
+
+Top-level `import kimech` does not require Matplotlib.
+
+## 4. Model API
+
+### `Mechanism`
 
 ```python
-from kimech.visualization import plot, animate
+mechanism = Mechanism(name="four_bar")
 ```
 
-This keeps the core namespace focused and preserves a clean dependency boundary between kinematics and rendering.
-
-Private modules beginning with `_` are not part of the compatibility promise.
-
-## 5. `Mechanism` candidate API
-
-```python
-m = Mechanism(name="four_bar")
-```
-
-Candidate interface:
+The implemented interface is:
 
 ```python
 class Mechanism:
@@ -275,140 +149,82 @@ class Mechanism:
         point_a: Point,
         point_b: Point,
         *,
-        axis_a: ArrayLike,
-        axis_b: ArrayLike,
+        axis_a: Sequence[float],
+        axis_b: Sequence[float],
         name: str | None = None,
     ) -> PrismaticJoint: ...
 
     def mobility(self) -> int: ...
 
     def validate(self) -> ValidationReport: ...
+
+    def __getitem__(self, name: str) -> Link: ...
 ```
 
-For `0.1.0`, both `axis_a` and `axis_b` are explicit and required. This is slightly verbose but mathematically unambiguous and does not privilege the local x-axis of either body. Convenience defaults/aliases may be added later only if real usage justifies them.
+`links` and `joints` are tuples in deterministic creation order. Both prismatic axes are explicit and required.
 
-`links` and `joints` should be exposed as read-only sequences rather than mutable implementation lists.
+### `Link`, `Ground`, and `Point`
 
-## 6. `Link`, `Ground`, and `Point`
-
-Candidate use:
+Links and ground own points:
 
 ```python
-crank = m.add_link("crank")
-A = crank.add_point("A", (0.0, 0.0))
-B = crank.add_point("B", (0.08, 0.0))
-
-same_B = crank["B"]
+crank = mechanism.add_link("crank")
+point_a = crank.add_point("A", (0.0, 0.0))
+same_point = crank["A"]
 ```
 
-Candidate `Link` interface:
+`Link` exposes `mechanism`, `name`, `points`, `add_point()`, and name-based `__getitem__()`. `Ground` exposes the same point-owning operations plus `mechanism`, `name`, and `points`; its name is `"ground"`.
+
+A `Point` exposes `name`, `body`, and `local`. `local` returns a safe NumPy copy with shape `(2,)`.
+
+### Joints
+
+`RevoluteJoint` stores `point_a`, `point_b`, and optional `name`.
+
+`PrismaticJoint` stores `point_a`, `point_b`, optional `name`, and the two local axes. `axis_a` and `axis_b` are normalized during construction and stored as immutable two-component values. Safe NumPy copies are available through:
 
 ```python
-class Link:
-    @property
-    def name(self) -> str: ...
-
-    @property
-    def points(self) -> tuple[Point, ...]: ...
-
-    def add_point(self, name: str, coordinates: ArrayLike) -> Point: ...
-
-    def __getitem__(self, name: str) -> Point: ...
+joint.axis_a_array
+joint.axis_b_array
 ```
 
-`Ground` should offer the same point-owning user interface:
+Joint objects are immutable metadata. They do not assemble residuals or expose coordinate-vector indices.
+
+## 5. Solving positions
 
 ```python
-ground.add_point(...)
-ground["A"]
-```
-
-The exact internal code-sharing strategy between `Link` and `Ground` is deliberately not specified yet. A public `RigidBody` base class should not be introduced merely to eliminate a few lines of duplication.
-
-Candidate `Point` interface:
-
-```python
-class Point:
-    @property
-    def name(self) -> str: ...
-
-    @property
-    def body(self) -> Link | Ground: ...
-
-    @property
-    def local(self) -> np.ndarray: ...  # shape (2,)
-```
-
-Point local coordinates should behave as immutable model geometry after construction.
-
-## 7. Joint candidate API
-
-Joint objects are normally created through `Mechanism`, not instantiated directly by beginner-facing examples.
-
-Candidate public state:
-
-```python
-class RevoluteJoint:
-    @property
-    def name(self) -> str | None: ...
-
-    @property
-    def point_a(self) -> Point: ...
-
-    @property
-    def point_b(self) -> Point: ...
-
-
-class PrismaticJoint:
-    @property
-    def name(self) -> str | None: ...
-
-    @property
-    def point_a(self) -> Point: ...
-
-    @property
-    def point_b(self) -> Point: ...
-
-    @property
-    def axis_a(self) -> np.ndarray: ...
-
-    @property
-    def axis_b(self) -> np.ndarray: ...
-```
-
-Axes are normalized when the joint is constructed. Zero-length axes are rejected.
-
-Joint coordinate evaluation should normally happen through a `Configuration` or `KinematicSolution`, rather than requiring the joint to know global state.
-
-## 8. `solve()` candidate API
-
-The high-level position solver remains a function:
-
-```python
-def solve(
-    mechanism: Mechanism,
+solve(
+    mechanism,
     *,
-    input: RevoluteJoint | PrismaticJoint,
-    values: float | ArrayLike,
-    initial_guess: Mapping[Link, ArrayLike] | Configuration,
-) -> Configuration | KinematicSolution:
-    ...
+    input,
+    values,
+    initial_guess,
+)
 ```
 
-Semantics:
+`input` must be a revolute or prismatic joint belonging to the mechanism. `values` determines the return type:
 
-- scalar `values` → `Configuration`;
-- one-dimensional sequence `values` → `KinematicSolution`;
-- `initial_guess` mapping must contain every mobile link;
-- mapping poses are `(x, y, theta)`;
-- a `Configuration` guess must belong to the same mechanism;
-- sequence order is preserved exactly;
-- continuation uses the previous accepted configuration as the next guess;
-- the first failure aborts the sweep and raises `KinematicSolveError`.
+- a scalar returns a `Configuration`;
+- a one-dimensional, non-empty sequence returns a `KinematicSolution`.
 
-Solver-specific SciPy options are intentionally not exposed in this first public signature. We should add public tolerances/options only when implementation or acceptance tests demonstrate a real need.
+Input values are finite configuration parameters, not physical timestamps. For a sweep, user order is preserved and each accepted configuration becomes the initial guess for the next value. The first failure aborts the sweep.
 
-## 9. `Configuration` candidate API
+`initial_guess` may be either:
+
+- a mapping containing exactly every mobile link, with each value an `(x, y, theta)` pose; or
+- a compatible `Configuration` from the same mechanism whose saved link layout contains all links in the solve snapshot.
+
+Partial mapping guesses and raw packed coordinate vectors are not accepted. The initial guess selects the assembly branch but need not already satisfy the prescribed coordinate.
+
+The solver currently supports a single prescribed input and requires the resulting position system to be square (structural mobility one for the current R/P model). No public SciPy methods, options, or tolerances are exposed.
+
+### Solve errors
+
+`InvalidModelError` reports structurally invalid models or solve problems. `KinematicSolveError` is a lightweight exception raised when a numerical configuration is not accepted. Its message includes useful available context: the input index for a sweep, input value, independently recomputed residual infinity norm, and SciPy solver message. It has no documented structured payload.
+
+## 6. Result API
+
+### `Configuration`
 
 ```python
 class Configuration:
@@ -416,12 +232,15 @@ class Configuration:
     def mechanism(self) -> Mechanism: ...
 
     @property
-    def input_value(self) -> float: ...
+    def input_joint(self) -> RevoluteJoint | PrismaticJoint | None: ...
+
+    @property
+    def input_value(self) -> float | None: ...
 
     @property
     def coordinates(self) -> np.ndarray: ...
 
-    def pose(self, link: Link | Ground) -> np.ndarray: ...
+    def pose(self, body: Link | Ground) -> np.ndarray: ...
 
     def position(self, point: Point) -> np.ndarray: ...
 
@@ -431,17 +250,17 @@ class Configuration:
     ) -> float: ...
 ```
 
-Shapes:
+`input_joint` and `input_value` identify the prescribed coordinate for solver-created configurations. Both may be `None` when a `Configuration` is constructed directly.
 
-- `pose(link)` → `(3,)` containing `(x, y, theta)`;
-- `position(point)` → `(2,)`;
-- `coordinates` → `(3*n,)` for mobile links only.
+Shapes and behavior:
 
-`Ground` pose is always `(0, 0, 0)`.
+- `coordinates` has shape `(3*n,)` for mobile links and returns a copy;
+- `pose(body)` returns a safe `(x, y, theta)` array;
+- `pose(mechanism.ground)` returns `np.zeros(3)`;
+- `position(point)` returns a derived global `(2,)` array;
+- `joint_coordinate(joint)` returns the natural unwrapped revolute angle or signed prismatic displacement.
 
-The returned raw coordinates should not permit accidental mutation of the accepted internal state; implementation may return a read-only view or copy.
-
-## 10. `KinematicSolution` candidate API
+### `KinematicSolution`
 
 ```python
 class KinematicSolution:
@@ -463,7 +282,7 @@ class KinematicSolution:
 
     def point_path(self, point: Point) -> np.ndarray: ...
 
-    def link_poses(self, link: Link | Ground) -> np.ndarray: ...
+    def link_poses(self, body: Link | Ground) -> np.ndarray: ...
 
     def joint_coordinates(
         self,
@@ -471,114 +290,114 @@ class KinematicSolution:
     ) -> np.ndarray: ...
 ```
 
-Expected shapes:
+`solution[index]` returns a `Configuration` carrying the same mechanism, input joint, and corresponding input value. Integer indexing is supported; slicing is not.
 
-- `input_values` → `(N,)`;
-- `coordinates` → `(N, 3*n)`;
-- `point_path(point)` → `(N, 2)`;
-- `link_poses(link)` → `(N, 3)`;
-- `joint_coordinates(joint)` → `(N,)`.
+Expected shapes are:
 
-No pandas dependency is introduced. NumPy arrays are the natural numerical interchange format.
+- `input_values`: `(N,)`;
+- `coordinates`: `(N, 3*n)`;
+- `point_path(point)`: `(N, 2)`;
+- `link_poses(body)`: `(N, 3)`;
+- `joint_coordinates(joint)`: `(N,)`.
 
-## 11. Validation candidate API
+Array properties return copies, and query arrays are safe derived values. No pandas dependency or diagnostic wrapper object is used.
 
-```python
-report = m.validate()
-```
+### Result snapshot semantics
 
-Minimal report:
+Result objects retain the link layout captured when they are constructed or solved. This keeps each link's association with its three coordinates stable for the lifetime of the result, even if the mechanism is later extended. Queries still require entities compatible with that retained layout.
 
-```python
-class ValidationReport:
-    @property
-    def is_valid(self) -> bool: ...
-
-    @property
-    def mobility(self) -> int: ...
-
-    @property
-    def errors(self) -> tuple[str, ...]: ...
-
-    @property
-    def warnings(self) -> tuple[str, ...]: ...
-```
-
-No `ValidationRule`, severity enum, issue-code registry, or visitor framework is justified for the MVP.
-
-`solve()` should refuse to solve a structurally invalid model and raise `InvalidModelError` with or from the report.
-
-## 12. Visualization candidate API
-
-Keep it functional and small:
+## 7. Validation
 
 ```python
-from kimech.visualization import plot, animate
-
-fig, ax = plot(config)
-animation = animate(solution, fps=30)
+report = mechanism.validate()
 ```
 
-Candidate behavior:
+`ValidationReport` is a lightweight immutable value with:
+
+```python
+report.mobility
+report.errors
+report.warnings
+report.is_valid
+```
+
+`mobility` is the planar lower-pair structural estimate. `errors` and `warnings` are tuples of messages; `is_valid` is true when there are no errors. Validation does not promise complete detection of redundant constraints, singularities, or special geometric degeneracies.
+
+## 8. Visualization
+
+Visualization requires the optional `[viz]` dependencies and is intentionally Matplotlib-only.
+
+### Static plotting
 
 ```python
 plot(
     config,
     *,
-    traces=None,
     ax=None,
 )
 ```
+
+`plot()` accepts only a `Configuration` and returns `(fig, ax)`. If `ax` is supplied, Kimech draws into it and returns its figure and the same axes. Auxiliary model points are included in the schematic; trajectory overlays are not part of this API.
+
+Static SVG output uses the returned Matplotlib figure:
+
+```python
+fig, ax = plot(config)
+fig.savefig("mechanism.svg")
+```
+
+### Animation
 
 ```python
 animate(
     solution,
     *,
-    traces=None,
     fps=30,
+    ax=None,
 )
 ```
 
-Export should initially reuse the objects returned by Matplotlib where practical rather than introducing a dedicated export service. Convenience wrappers may be added only if they materially improve common presentation workflows.
+`animate()` accepts only a `KinematicSolution` and returns `matplotlib.animation.FuncAnimation`. One configuration corresponds to one frame. Frames are uniformly spaced for presentation, `fps` controls playback speed, and `input_values` do not represent physical time. Playback repeats.
 
-## 13. What is deliberately absent
+The viewport remains fixed over the full rendered motion. Schematic artists are created once and updated rather than recreated on each frame; the prismatic guide length remains constant over a solution.
 
-There is no initial public:
+Kimech constructs the schematic. Matplotlib remains responsible for display and file output. Kimech does not call `plt.show()` automatically:
 
-- `Driver` class;
-- `JointCoordinate` class;
-- `PositionSolver` class;
-- `SolverOptions` hierarchy;
-- `Constraint` class hierarchy;
-- `Backend` interface;
-- `Renderer` factory;
-- `Analysis` object;
-- `FourBar` class;
-- `SliderCrank` class;
-- mutable current-pose state on a mechanism or link.
+```python
+import matplotlib.pyplot as plt
 
-These omissions are intentional.
+animation = animate(solution)
+plt.show()
+```
 
-## 14. Tests should mirror public responsibilities
+Keep a reference to the returned animation until display or saving is complete. GIF output uses Matplotlib's animation object and Pillow from `[viz]`:
 
-Candidate initial test layout:
+```python
+animation = animate(solution, fps=30)
+animation.save("mechanism.gif", writer="pillow")
+```
+
+Kimech has no dedicated SVG or GIF exporter and no renderer/backend abstraction.
+
+## 9. Tests and examples
+
+The current test layout mirrors public and internal responsibilities:
 
 ```text
 tests/
-├── test_model.py
-├── test_joints.py
-├── test_validation.py
-├── test_solution.py
+├── test_animation.py
+├── test_constraints.py
 ├── test_four_bar.py
+├── test_joints.py
+├── test_model.py
 ├── test_slider_crank.py
+├── test_solution.py
+├── test_solver.py
+├── test_validation.py
 └── test_visualization.py
 ```
 
-The four-bar and slider-crank tests are integration/acceptance tests of the generic infrastructure, not tests of mechanism-specific implementations.
-
-## 15. Examples
-
-Keep examples separate from the core:
+The four-bar and slider-crank tests exercise the generic infrastructure; there are no mechanism-specific implementations. Complete generic API examples live in:
 
 ```text
 examples/
@@ -586,34 +405,17 @@ examples/
 └── slider_crank.py
 ```
 
-These examples should build mechanisms entirely through the generic public API. They are also useful as informal API usability tests.
+## 10. Deliberately absent API
 
-## 16. New implementation decisions
+There is no public `Driver`, `JointCoordinate`, `PositionSolver`, `SolverOptions`, `Constraint`, `Backend`, `Renderer`, `Analysis`, `FourBar`, or `SliderCrank` class. Mechanisms and links do not carry mutable current-pose state. These omissions keep the current API aligned with the position-kinematics scope.
 
-The following decisions refine `docs/design.md` for the initial implementation:
+## 11. Resolved implementation decisions
 
-- **D55.** Start with a flat core package; do not create solver/analysis/backend subpackages before they are needed.
-- **D56.** `model.py` owns `Mechanism`, `Link`, `Ground`, and `Point`; `joints.py` owns revolute/prismatic domain objects.
-- **D57.** Constraint equations live in private `_constraints.py`; shared planar transform helpers live in private `_geometry.py`.
-- **D58.** No public common `Joint` or `RigidBody` base class is required for `0.1.0`.
-- **D59.** `solve()` remains the single high-level solver entry point; no public `PositionSolver` abstraction is introduced initially.
-- **D60.** `axis_a` and `axis_b` are explicit required arguments of the initial prismatic API; convenience defaults are deferred.
-- **D61.** The top-level `kimech` namespace exposes core model/result/error types and `solve`, while plotting and animation remain under `kimech.visualization`.
-- **D62.** Structural validation returns one lightweight `ValidationReport`; no rule-object hierarchy is introduced.
-- **D63.** Raw numerical interchange uses NumPy arrays; pandas is not a dependency.
-- **D64.** Solver-specific SciPy options are not exposed in the first public `solve()` signature unless implementation evidence shows they are necessary.
-- **D65.** The first implementation keeps coordinate-map helpers private inside `solver.py`; extract them only if they acquire an independent responsibility.
-- **D66.** Initial examples are generic API clients, not special mechanism types.
-
-## 17. Remaining API questions
-
-The following should be resolved during the first implementation rather than by more abstract planning:
-
-1. whether raw array properties return copies or read-only views;
-2. exact diagnostic payload of `Configuration`, `KinematicSolution`, and `KinematicSolveError`;
-3. whether plotting functions return `(fig, ax)` or only the primary Matplotlib object;
-4. whether visualization dependencies are normal package dependencies or an optional `viz` extra;
-5. whether a characteristic-length override needs to be public in `0.1.0`;
-6. whether scalar/sequence-dependent return types from `solve()` remain pleasant once typed and tested.
-
-These are implementation-level questions and should not trigger new architectural layers unless actual code demonstrates the need.
+- Raw array properties return copies, and result-query arrays are safe derived values.
+- `plot()` returns `(fig, ax)`.
+- `animate()` returns Matplotlib `FuncAnimation`.
+- Matplotlib and Pillow are supplied through the optional `[viz]` extra.
+- No public characteristic-length override or internal characteristic-length scaling is present.
+- Scalar and one-dimensional sequence inputs retain their distinct `Configuration` / `KinematicSolution` return behavior.
+- Kinematic results do not contain diagnostic wrapper objects.
+- Examples use the generic model and solver API rather than special mechanism classes.

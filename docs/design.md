@@ -1,8 +1,8 @@
 # Kimech — Design baseline
 
-> Status: planning baseline for the initial MVP (`0.1.0`).
+> Status: design baseline for the initial MVP (`0.1.0`).
 >
-> This document records the current conceptual design of Kimech. It is intentionally narrower than a general multibody package and should be treated as the source of truth for early implementation decisions.
+> This document records the conceptual design and architectural decisions of Kimech. Concrete interfaces implemented in `0.1.0.dev0` are documented in [`api.md`](api.md), which is the source of truth for the current public API.
 
 ## 1. Purpose
 
@@ -317,7 +317,7 @@ A revolute joint references one local point on each body and imposes coincidence
 
 This contributes two scalar constraints.
 
-Candidate API:
+Implemented API:
 
 ```python
 J = m.revolute(body_a["A"], body_b["A"], name="input")
@@ -451,7 +451,7 @@ For `n` mobile links,
 \in\mathbb R^{3n}.
 \]
 
-A deterministic internal map associates each link with its three entries. The simplest MVP rule is to use link creation order.
+The implementation snapshots the ordered tuple of links and associates each link with three entries in that tuple order.
 
 The layout is private infrastructure. Public code should query entities instead:
 
@@ -559,15 +559,7 @@ and verify the final residual against Kimech's acceptance tolerances before prod
 
 The solver mixes linear coordinates and angles, and the library deliberately does not impose physical units.
 
-An internal characteristic length `L_ref` should therefore be considered to normalize linear coordinates/residuals:
-
-\[
-\hat x=x/L_{ref},\qquad
-\hat y=y/L_{ref},\qquad
-\hat\theta=\theta.
-\]
-
-This should remain lightweight internal infrastructure rather than becoming a unit/scaling subsystem.
+`0.1.0.dev0` does not apply internal characteristic-length scaling and introduces no unit/scaling subsystem. Users must choose consistent linear units. Characteristic-length scaling may be revisited if real mechanisms show unacceptable sensitivity to consistent unit choice.
 
 ## 13. Initial guesses and branch selection
 
@@ -629,8 +621,7 @@ Conceptually it contains:
 
 - a reference to the mechanism;
 - the solved coordinate vector;
-- the associated input value;
-- optional solver diagnostics.
+- the associated input joint and value, when applicable.
 
 It should be conceptually immutable.
 
@@ -663,8 +654,7 @@ KinematicSolution
 ├── mechanism
 ├── input_joint
 ├── input_values
-├── coordinates Q
-└── diagnostics
+└── coordinates Q
 ```
 
 Internally the main state can be stored efficiently as
@@ -675,7 +665,7 @@ Q\in\mathbb R^{N\times3n}.
 
 Individual `Configuration` objects may be lightweight views rather than thousands of permanently allocated Python objects.
 
-Candidate queries:
+Implemented queries include:
 
 ```python
 config = solution[i]
@@ -694,25 +684,16 @@ Future versions may extend the same solution object with velocity and accelerati
 
 A failed nonlinear iterate should not be presented as a valid `Configuration`.
 
-For a sweep, the default behavior is to stop at the first failed configuration and produce a useful diagnostic containing at least:
+For a sweep, the behavior is to stop at the first failed configuration. `KinematicSolveError` currently communicates useful failure context in its message:
 
 - failed input index;
 - failed input value;
 - residual information;
 - solver message.
 
-A future exception type may additionally expose the last valid configuration or partial solution.
-
 Silent NaN insertion should not be the default behavior.
 
-Minimal solve diagnostics may include:
-
-- success;
-- residual norm/measure;
-- iteration or evaluation count;
-- underlying solver message.
-
-These diagnostics remain separate conceptually from the kinematic state.
+Structured solve diagnostics, success flags, evaluation counts, and partial-solution payloads are deferred. `Configuration` and `KinematicSolution` contain kinematic state rather than diagnostic wrappers.
 
 ## 18. Mobility and validation
 
@@ -755,17 +736,23 @@ The renderer may use conventional glyphs, for example:
 - revolute joint → circular pivot marker;
 - prismatic joint → slider/guide glyph;
 - links → schematic segments connecting structural joint points where possible;
-- auxiliary points → optional markers/traces.
+- auxiliary points → optional markers.
 
 The renderer should not pretend to infer the physical CAD shape of a link.
 
-The initial backend should be Matplotlib only. No backend registry or plugin architecture is needed.
+Matplotlib is the only visualization backend. `plot()` returns Matplotlib `Figure` and `Axes` objects, while `animate()` returns `FuncAnimation`. No backend registry, renderer abstraction, or plugin architecture is introduced.
 
-Static export should support SVG through Matplotlib. Animation export should initially support GIF, likely through Pillow. MP4/WebM and additional rendering backends are deferred.
+Kimech constructs the schematic while Matplotlib remains responsible for display and file output. SVG uses `Figure.savefig(...)`; GIF uses `FuncAnimation.save(..., writer="pillow")`, with Pillow supplied by the optional `[viz]` dependency group. Kimech has no dedicated exporter. MP4/WebM and additional rendering backends are deferred.
+
+Trajectory overlays remain deferred. This does not affect `solution.point_path(point)`, which is an implemented analysis query rather than a rendering feature.
+
+### 19.1 Animation implementation decisions
+
+Animation consumes a `KinematicSolution`. One configuration corresponds to one uniformly timed frame, and FPS controls presentation only rather than assigning physical time to `input_values`. Artists are created once and updated in place. The viewport is fixed from bounds covering the complete rendered motion, and each prismatic guide keeps a constant displayed length over the solution. No separate renderer/backend abstraction is used.
 
 ## 20. Four-bar acceptance case
 
-A candidate declarative model is:
+A representative declarative model is:
 
 ```python
 m = Mechanism("four_bar")
@@ -797,20 +784,22 @@ There are three mobile links and therefore nine generalized coordinates.
 
 Four revolute joints contribute eight scalar constraints. One prescribed joint coordinate adds the ninth equation.
 
-Acceptance checks should include:
+The generic continuation implementation has exercised a complete crank revolution for this example. Acceptance checks include:
 
 - structural mobility `M = 1`;
 - residuals within tolerance;
 - constant rigid-link distances;
 - coincidence of all revolute joint point pairs;
-- continuous branch tracking over a full admissible crank revolution;
+- continuous branch tracking over a complete sampled crank revolution;
 - continuous coupler-point path;
-- physical equivalence of the first and final configuration after one full revolution, accounting for unwrapped angles;
+- closure of the periodic motion over a full revolution, accounting for unwrapped angles and endpoint-excluded sampling;
 - no mechanism-specific equations or solver classes.
+
+These checks provide acceptance evidence for the example; they do not guarantee robustness for every singular or toggle configuration.
 
 ## 21. Slider-crank acceptance case
 
-A candidate model is:
+A representative model is:
 
 ```python
 m = Mechanism("slider_crank")
@@ -844,7 +833,7 @@ There are again nine generalized coordinates.
 
 Three revolute joints contribute six constraints and the prismatic joint contributes two. One prescribed coordinate closes the square system.
 
-Acceptance checks should include:
+The generic continuation implementation has also exercised a complete crank revolution for this example. Acceptance checks include:
 
 - structural mobility `M = 1`;
 - slider reference point remains on the guide;
@@ -857,7 +846,9 @@ Acceptance checks should include:
 - the prismatically driven inverse case can use the same model;
 - no slider-crank-specific solver exists.
 
-## 22. Confirmed design decisions (D1–D54)
+These checks likewise do not guarantee robustness for every singular or toggle configuration.
+
+## 22. Confirmed design decisions (D1–D72)
 
 ### Core model
 
@@ -879,7 +870,7 @@ Acceptance checks should include:
 - **D13.** Revolute and prismatic joints expose a natural scalar coordinate conceptually.
 - **D14.** A prescribed coordinate contributes `c_J(q) - u = 0`.
 - **D15.** Joint type determines angular vs linear semantics; separate rotational/translational driver classes are unnecessary initially.
-- **D16.** The high-level candidate API is `solve(mechanism, input=joint, values=...)`.
+- **D16.** The high-level API is `solve(mechanism, input=joint, values=...)`.
 - **D17.** Public `0.1.0` needs one prescribed input only; the internal design should not preclude multiple inputs later.
 - **D18.** Internal angular variables remain unwrapped.
 - **D19.** MVP input values parameterize configurations and do not inherently represent time.
@@ -901,7 +892,7 @@ Acceptance checks should include:
 - **D32.** `KinematicSolution` is independent of the specific nonlinear algorithm that produced it.
 - **D33.** The same result model may later grow to contain `q`, `q̇`, and `q̈`; `0.1.0` contains position only.
 - **D34.** `input_values` does not imply physical time.
-- **D35.** Provisional high-level behavior: scalar `values` may return `Configuration`; a sequence may return `KinematicSolution`.
+- **D35.** Scalar `values` return `Configuration`; one-dimensional sequences return `KinematicSolution`.
 
 ### Solver
 
@@ -913,20 +904,46 @@ Acceptance checks should include:
 - **D41.** Analytic Jacobians are part of the `0.1.0` design.
 - **D42.** The initial nonlinear implementation uses one SciPy root method; no multiple-solver abstraction is introduced yet.
 - **D43.** Kimech independently verifies final residuals before accepting a configuration.
-- **D44.** Lightweight internal length scaling should reduce sensitivity to the user's consistent choice of linear units without introducing a unit system.
+- **D44.** Characteristic-length scaling is deferred until implementation evidence demonstrates a need; no unit/scaling subsystem is introduced.
 - **D45.** Public initial guesses map links to poses rather than exposing raw `q` indexing.
 - **D46.** The first solve requires a pose estimate for every mobile link.
 - **D47.** A compatible `Configuration` can serve as a new initial guess.
 - **D48.** MVP branch tracking uses the previous solved configuration as the next initial guess.
 - **D49.** User input order is preserved and determines traversal direction.
 - **D50.** Adaptive continuation and automatic branch enumeration are deferred.
-- **D51.** A failed sweep stops with explicit diagnostics rather than being hidden.
+- **D51.** A failed sweep stops with an explicit error carrying failure context in its message rather than being hidden.
 
 ### Joint/visualization clarifications from acceptance walkthroughs
 
 - **D52.** A `Point` may be referenced by multiple joints.
 - **D53.** Prismatic reference points define joint geometry and need not be physical contact/pivot locations.
 - **D54.** `0.1.0` schematic visualization is derived from topology, points, joint types, and solved poses; `Link` does not gain graphical shape data.
+
+### Implementation decisions (D55–D72)
+
+The following package and API decisions were confirmed during implementation. Their concrete interfaces are documented in [`api.md`](api.md):
+
+- **D55.** The core uses a flat package rather than premature solver, analysis, or backend subpackages.
+- **D56.** `model.py` owns the mechanism/body/point model; `joints.py` owns revolute and prismatic joint objects.
+- **D57.** Constraint equations and shared planar geometry helpers remain in private modules.
+- **D58.** No public common `Joint` or `RigidBody` base class is required for `0.1.0`.
+- **D59.** `solve()` is the single high-level solver entry point; there is no public `PositionSolver` abstraction.
+- **D60.** `axis_a` and `axis_b` are explicit required arguments for prismatic joints.
+- **D61.** Core types and `solve()` are exported from `kimech`; visualization remains under `kimech.visualization`.
+- **D62.** Structural validation uses one lightweight `ValidationReport` rather than a rule-object hierarchy.
+- **D63.** NumPy arrays are the numerical interchange format; pandas is not a dependency.
+- **D64.** Solver-specific SciPy options and tolerances are not exposed in the public `solve()` signature.
+- **D65.** Link tuple order directly defines the private coordinate layout; no coordinate-map abstraction is introduced.
+- **D66.** The four-bar and slider-crank examples are generic API clients, not special mechanism types.
+
+The following visualization decisions complete the implemented baseline:
+
+- **D67.** Matplotlib is the only visualization backend; no renderer/backend abstraction is introduced.
+- **D68.** `plot()` returns Matplotlib `Figure` and `Axes`; `animate()` returns `FuncAnimation`.
+- **D69.** SVG and GIF output use Matplotlib's returned objects rather than Kimech exporter APIs.
+- **D70.** Animation consumes `KinematicSolution`, maps one configuration to one uniformly timed frame, and treats FPS as presentation-only.
+- **D71.** Animation artists are created once and updated in place within a viewport covering the complete rendered motion.
+- **D72.** Prismatic guide length remains constant over a solution.
 
 ## 23. Overarchitecture guardrails
 
@@ -958,7 +975,7 @@ Convenience factory functions for common mechanisms may be considered later, but
 - revolute and prismatic joints;
 - one prescribed joint coordinate;
 - structural validation and mobility estimate;
-- coordinate map and constraint assembly;
+- deterministic coordinate layout and constraint assembly;
 - analytic position Jacobian;
 - SciPy root-based position solver;
 - explicit full-link initial guess;
@@ -968,7 +985,7 @@ Convenience factory functions for common mechanisms may be considered later, but
 - point paths and link/joint queries;
 - Matplotlib schematic plotting;
 - animation;
-- SVG and GIF export;
+- SVG and GIF output through Matplotlib objects;
 - four-bar and slider-crank acceptance examples/tests.
 
 ### `0.2.0` — differential kinematics
@@ -1005,12 +1022,10 @@ Only after demonstrated need:
 
 The following are not blockers for implementation and should remain open until coding or real usage provides evidence:
 
-- exact public parameter names for prismatic axes;
-- whether scalar `solve(..., values=x)` returning `Configuration` is preferable to always returning a solution container;
-- exact shape/content of diagnostic objects and exceptions;
-- algorithm used to estimate a characteristic length;
 - convenience helpers for generating initial assembly guesses;
 - explicit visual-style objects beyond the default schematic renderer;
 - future multiple-driver syntax.
+
+Structured diagnostic objects and characteristic-length scaling are deferred unless implementation evidence establishes a need; their absence is not an unresolved `0.1.0` API question.
 
 These questions should not delay implementation of the validated core.

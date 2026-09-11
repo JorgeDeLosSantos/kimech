@@ -1,6 +1,8 @@
 """Explore a Theo Jansen leg with Kimech's public API.
 
 The geometry uses the canonical Strandbeest "holy numbers" proportions.
+A uniform scale is applied internally so the absolute solver tolerance is not
+needlessly sensitive to the conventional numerical size of those proportions.
 """
 
 import matplotlib.pyplot as plt
@@ -10,20 +12,23 @@ from kimech import Mechanism, solve
 from kimech.visualization import animate
 
 
-# Theo Jansen's canonical "holy numbers".
-A = 38.0
-B = 41.5
-C = 39.3
-D = 40.1
-E = 55.8
-F = 39.4
-G = 36.7
-H = 65.7
-I = 49.0
-J = 50.0
-K = 61.9
-L = 7.8
-M = 15.0
+# Theo Jansen's canonical "holy numbers". Their absolute scale is arbitrary;
+# only the proportions matter. Keeping the model near unit scale makes the
+# solver's absolute residual tolerance comparable to the other playground cases.
+SCALE = 0.01
+A = 38.0 * SCALE
+B = 41.5 * SCALE
+C = 39.3 * SCALE
+D = 40.1 * SCALE
+E = 55.8 * SCALE
+F = 39.4 * SCALE
+G = 36.7 * SCALE
+H = 65.7 * SCALE
+I = 49.0 * SCALE
+J = 50.0 * SCALE
+K = 61.9 * SCALE
+L = 7.8 * SCALE
+M = 15.0 * SCALE
 
 GROUND_O2 = np.array((0.0, 0.0))
 GROUND_O4 = np.array((A, L))
@@ -356,8 +361,14 @@ def main():
     )
     stance_span = np.ptp(solved_foot[stance_mask], axis=0)
 
+    # Convert geometric spans back to the conventional holy-number scale for
+    # easier comparison with published Jansen dimensions.
+    reported_foot_span = foot_span / SCALE
+    reported_stance_span = stance_span / SCALE
+
     print("Theo Jansen linkage")
     print("Reference geometry: canonical Strandbeest holy numbers")
+    print(f"Internal geometry scale: {SCALE:g}")
     print(f"Valid model: {report.is_valid}")
     print(f"Mobility: {report.mobility}")
     print(f"Mobile links: {len(mechanism.links)}")
@@ -369,12 +380,14 @@ def main():
     print(f"Maximum connector-joint error: {connector_error:.3e}")
     print(f"Maximum foot-path error: {foot_error:.3e}")
     print(
-        "Foot-path span: "
-        f"dx={foot_span[0]:.3f}, dy={foot_span[1]:.3f}"
+        "Foot-path span (holy-number units): "
+        f"dx={reported_foot_span[0]:.3f}, "
+        f"dy={reported_foot_span[1]:.3f}"
     )
     print(
-        "Approx. stance span (lowest 15% of foot height): "
-        f"dx={stance_span[0]:.3f}, dy={stance_span[1]:.3f}"
+        "Approx. stance span (lowest 15% of foot height, holy-number units): "
+        f"dx={reported_stance_span[0]:.3f}, "
+        f"dy={reported_stance_span[1]:.3f}"
     )
 
     fig, ax = plt.subplots()

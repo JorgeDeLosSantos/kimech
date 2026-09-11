@@ -32,14 +32,14 @@ def build_mechanism():
     bar_b = bar.add_point("B", (BAR_LENGTH, 0.0))
     tracer = bar.add_point("P", (TRACER_DISTANCE, 0.0))
 
-    mechanism.prismatic(
+    horizontal_joint = mechanism.prismatic(
         horizontal_guide,
         horizontal_g,
         axis_a=(1.0, 0.0),
         axis_b=(1.0, 0.0),
         name="horizontal_guide",
     )
-    mechanism.prismatic(
+    vertical_joint = mechanism.prismatic(
         vertical_guide,
         vertical_g,
         axis_a=(0.0, 1.0),
@@ -60,11 +60,30 @@ def build_mechanism():
         bar: (-BAR_LENGTH * np.cos(theta0), 0.0, theta0),
     }
 
-    return mechanism, input_joint, tracer, initial_guess, theta0
+    return (
+        mechanism,
+        input_joint,
+        horizontal_joint,
+        vertical_joint,
+        tracer,
+        initial_guess,
+        theta0,
+    )
 
 
 def main():
-    mechanism, input_joint, tracer, initial_guess, theta0 = build_mechanism()
+    (
+        mechanism,
+        input_joint,
+        horizontal_joint,
+        vertical_joint,
+        tracer,
+        initial_guess,
+        theta0,
+    ) = build_mechanism()
+
+    report = mechanism.validate()
+
     values = np.linspace(
         theta0,
         theta0 + 2 * np.pi,
@@ -79,19 +98,50 @@ def main():
         initial_guess=initial_guess,
     )
 
+    theta = solution.input_values
     path = solution.point_path(tracer)
+    horizontal_positions = solution.joint_coordinates(horizontal_joint)
+    vertical_positions = solution.joint_coordinates(vertical_joint)
 
     expected_a = BAR_LENGTH - TRACER_DISTANCE
     expected_b = TRACER_DISTANCE
-    ellipse_residual = (path[:, 0] / expected_a) ** 2 + (path[:, 1] / expected_b) ** 2 - 1.0
+    analytical_path = np.column_stack(
+        (
+            -expected_a * np.cos(theta),
+            expected_b * np.sin(theta),
+        )
+    )
+    analytical_horizontal = -BAR_LENGTH * np.cos(theta)
+    analytical_vertical = BAR_LENGTH * np.sin(theta)
+
+    tracer_error = np.linalg.norm(path - analytical_path, axis=1)
+    horizontal_error = np.abs(horizontal_positions - analytical_horizontal)
+    vertical_error = np.abs(vertical_positions - analytical_vertical)
 
     print("Archimedes trammel")
+    print(f"Valid model: {report.is_valid}")
+    print(f"Mobility: {report.mobility}")
     print(f"Solved {len(solution)} configurations")
     print(f"Expected ellipse semiaxes: a={expected_a:.3f}, b={expected_b:.3f}")
-    print(f"Maximum ellipse residual: {np.max(np.abs(ellipse_residual)):.3e}")
+    print(f"Maximum tracer-path error: {tracer_error.max():.3e}")
+    print(f"Maximum horizontal-slider error: {horizontal_error.max():.3e}")
+    print(f"Maximum vertical-slider error: {vertical_error.max():.3e}")
 
     fig, ax = plt.subplots()
-    ax.plot(path[:, 0], path[:, 1], "--", linewidth=1.0, label="Tracer path")
+    ax.plot(
+        analytical_path[:, 0],
+        analytical_path[:, 1],
+        ":",
+        linewidth=2.0,
+        label="Analytical ellipse",
+    )
+    ax.plot(
+        path[:, 0],
+        path[:, 1],
+        "--",
+        linewidth=1.0,
+        label="Kimech tracer path",
+    )
 
     animation = animate(
         solution,

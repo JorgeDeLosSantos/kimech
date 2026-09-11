@@ -1,4 +1,4 @@
-"""Explore a Watt six-bar linkage with Kimech's public API."""
+"""Explore a Watt II six-bar linkage with Kimech's public API."""
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -102,8 +102,8 @@ def analytical_geometry(values):
 
 
 def build_mechanism():
-    """Build a Watt six-bar linkage and a suitable initial pose estimate."""
-    mechanism = Mechanism("watt_six_bar")
+    """Build a Watt II six-bar linkage and a suitable initial pose estimate."""
+    mechanism = Mechanism("watt_ii_six_bar")
     ground = mechanism.ground
 
     ground_o2 = ground.add_point("O2", (0.0, 0.0))
@@ -230,7 +230,7 @@ def main():
     output_angles = np.unwrap(solution.link_poses(output_rocker)[:, 2])
     output_swing = np.degrees(output_angles.max() - output_angles.min())
 
-    print("Watt six-bar linkage")
+    print("Watt II six-bar linkage")
     print(f"Valid model: {report.is_valid}")
     print(f"Mobility: {report.mobility}")
     print(f"Mobile links: {len(mechanism.links)}")
@@ -257,7 +257,7 @@ def main():
         ax=ax,
     )
 
-    ax.set_title("Watt six-bar linkage")
+    ax.set_title("Watt II six-bar linkage")
     ax.legend()
     plt.show()
 

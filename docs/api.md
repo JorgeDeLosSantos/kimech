@@ -1,8 +1,8 @@
 # Kimech — Package structure and public API
 
-> Status: current implemented API for `0.1.0.dev0`.
+> Status: public API for `0.1.0`.
 >
-> Kimech remains in early development and this API may evolve before `0.1.0`. This document describes the implementation as it exists now; [`design.md`](design.md) records the conceptual and architectural baseline.
+> Kimech remains a young project, and this API may evolve in future versions. This document describes the implementation as it exists now; [`design.md`](design.md) records the conceptual and architectural baseline.
 
 ## 1. Overview
 
@@ -58,7 +58,7 @@ src/
         └── animation.py
 ```
 
-The package is intentionally flat. Mechanism-specific classes, solver class hierarchies, backend registries, and plugin systems are not part of `0.1.0.dev0`.
+The package is intentionally flat. Mechanism-specific classes, solver class hierarchies, backend registries, and plugin systems are not part of `0.1.0`.
 
 ### Module responsibilities
 

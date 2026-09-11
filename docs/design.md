@@ -2,7 +2,7 @@
 
 > Status: design baseline for the initial MVP (`0.1.0`).
 >
-> This document records the conceptual design and architectural decisions of Kimech. Concrete interfaces implemented in `0.1.0.dev0` are documented in [`api.md`](api.md), which is the source of truth for the current public API.
+> This document records the conceptual design and architectural decisions of Kimech. Concrete interfaces implemented in `0.1.0` are documented in [`api.md`](api.md), which is the source of truth for the current public API.
 
 ## 1. Purpose
 
@@ -559,7 +559,7 @@ and verify the final residual against Kimech's acceptance tolerances before prod
 
 The solver mixes linear coordinates and angles, and the library deliberately does not impose physical units.
 
-`0.1.0.dev0` does not apply internal characteristic-length scaling and introduces no unit/scaling subsystem. Users must choose consistent linear units. Characteristic-length scaling may be revisited if real mechanisms show unacceptable sensitivity to consistent unit choice.
+`0.1.0` does not apply internal characteristic-length scaling and introduces no unit/scaling subsystem. Users must choose consistent linear units. Characteristic-length scaling may be revisited if real mechanisms show unacceptable sensitivity to consistent unit choice.
 
 ## 13. Initial guesses and branch selection
 

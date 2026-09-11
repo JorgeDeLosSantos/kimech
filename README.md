@@ -4,7 +4,7 @@ Kimech is a small Python library for modeling and solving the kinematics of plan
 
 It provides declarative rigid-body models with revolute and prismatic joints, position solving with warm-start continuation, result queries, and schematic plotting and animation.
 
-Kimech is currently in early development toward `0.1.0`; the current package version is `0.1.0.dev0`. The conceptual design baseline lives in [`docs/design.md`](docs/design.md), while [`docs/api.md`](docs/api.md) documents the current implemented public API.
+Kimech `0.1.0` is the initial position-kinematics MVP. The project remains young, and its API may evolve in future versions. The conceptual design baseline lives in [`docs/design.md`](docs/design.md), while [`docs/api.md`](docs/api.md) documents the current implemented public API.
 
 ## Installation
 

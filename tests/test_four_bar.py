@@ -16,6 +16,7 @@ def _four_bar():
     coupler = mechanism.add_link("coupler")
     coupler_b = coupler.add_point("B", (0.0, 0.0))
     coupler_c = coupler.add_point("C", (0.22, 0.0))
+    point_p = coupler.add_point("P", (0.10, 0.05))
     rocker = mechanism.add_link("rocker")
     rocker_c = rocker.add_point("C", (0.0, 0.0))
     rocker_d = rocker.add_point("D", (0.18, 0.0))
@@ -29,7 +30,7 @@ def _four_bar():
         coupler: (0.05, 0.06, 0.2),
         rocker: (0.30, 0.0, 2.2),
     }
-    return mechanism, input_joint, guess
+    return mechanism, input_joint, point_p, guess
 
 
 def _residual_inf(mechanism, input_joint, config, value):
@@ -46,8 +47,12 @@ def _residual_inf(mechanism, input_joint, config, value):
     )
 
 
+def _wrapped_angle_difference(a, b):
+    return np.arctan2(np.sin(a - b), np.cos(a - b))
+
+
 def test_four_bar_scalar_solve_satisfies_complete_constraint_system():
-    mechanism, input_joint, guess = _four_bar()
+    mechanism, input_joint, _, guess = _four_bar()
 
     config = solve(mechanism, input=input_joint, values=0.8, initial_guess=guess)
 
@@ -57,7 +62,7 @@ def test_four_bar_scalar_solve_satisfies_complete_constraint_system():
 
 
 def test_four_bar_sweep_uses_continuation_and_preserves_values():
-    mechanism, input_joint, guess = _four_bar()
+    mechanism, input_joint, _, guess = _four_bar()
     values = np.linspace(0.8, 1.3, 40)
 
     solution = solve(mechanism, input=input_joint, values=values, initial_guess=guess)
@@ -73,7 +78,7 @@ def test_four_bar_sweep_uses_continuation_and_preserves_values():
 
 
 def test_four_bar_reverse_sweep_preserves_user_direction():
-    mechanism, input_joint, guess = _four_bar()
+    mechanism, input_joint, _, guess = _four_bar()
     endpoint = solve(mechanism, input=input_joint, values=1.3, initial_guess=guess)
     values = np.linspace(0.8, 1.3, 40)[::-1]
 
@@ -81,3 +86,30 @@ def test_four_bar_reverse_sweep_preserves_user_direction():
 
     np.testing.assert_array_equal(solution.input_values, values)
     np.testing.assert_allclose(solution.joint_coordinates(input_joint), values, atol=1e-10)
+
+
+def test_four_bar_completes_full_revolution_and_returns_to_physical_configuration():
+    mechanism, input_joint, point_p, guess = _four_bar()
+    values = np.linspace(0.8, 0.8 + 2 * np.pi, 73)
+
+    solution = solve(
+        mechanism,
+        input=input_joint,
+        values=values,
+        initial_guess=guess,
+    )
+
+    assert len(solution) == len(values)
+    assert values[-1] - values[0] == pytest.approx(2 * np.pi)
+    np.testing.assert_allclose(solution.joint_coordinates(input_joint), values, atol=1e-10)
+    assert all(
+        _residual_inf(mechanism, input_joint, config, value) <= 1e-9
+        for config, value in zip((solution[i] for i in range(len(solution))), values)
+    )
+
+    path = solution.point_path(point_p)
+    np.testing.assert_allclose(path[-1], path[0], atol=1e-8)
+    for link in mechanism.links:
+        poses = solution.link_poses(link)
+        np.testing.assert_allclose(poses[-1, :2], poses[0, :2], atol=1e-8)
+        assert abs(_wrapped_angle_difference(poses[-1, 2], poses[0, 2])) < 1e-8

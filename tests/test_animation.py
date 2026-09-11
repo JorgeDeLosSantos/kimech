@@ -150,6 +150,20 @@ def test_animate_returns_func_animation_with_uniform_fps_interval():
     _finish(animation)
 
 
+def test_animation_can_be_saved_as_nonempty_gif_with_pillow(tmp_path):
+    solution, _ = _four_bar_solution()
+    animation = animate(solution, fps=10)
+    path = tmp_path / "mechanism.gif"
+
+    try:
+        animation.save(path, writer="pillow")
+
+        assert path.exists()
+        assert path.stat().st_size > 0
+    finally:
+        plt.close(animation._fig)
+
+
 def test_animate_uses_external_axes_without_clearing_existing_content():
     solution, _ = _four_bar_solution()
     fig, ax = plt.subplots()

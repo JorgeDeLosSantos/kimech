@@ -52,6 +52,10 @@ def _residual_inf(mechanism, input_joint, config, value):
     )
 
 
+def _wrapped_angle_difference(a, b):
+    return np.arctan2(np.sin(a - b), np.cos(a - b))
+
+
 def test_slider_crank_revolute_input_scalar_and_sweep():
     mechanism, crank_joint, _, guess = _slider_crank()
 
@@ -69,6 +73,34 @@ def test_slider_crank_revolute_input_scalar_and_sweep():
         _residual_inf(mechanism, crank_joint, solution[index], value) <= 1e-9
         for index, value in enumerate(values)
     )
+
+
+def test_slider_crank_completes_full_revolution_and_returns_to_physical_configuration():
+    mechanism, crank_joint, prismatic_joint, guess = _slider_crank()
+    values = np.linspace(0.7, 0.7 + 2 * np.pi, 73)
+
+    solution = solve(
+        mechanism,
+        input=crank_joint,
+        values=values,
+        initial_guess=guess,
+    )
+
+    assert len(solution) == len(values)
+    assert values[-1] - values[0] == pytest.approx(2 * np.pi)
+    np.testing.assert_allclose(solution.joint_coordinates(crank_joint), values, atol=1e-10)
+    assert all(
+        _residual_inf(mechanism, crank_joint, solution[index], value) <= 1e-9
+        for index, value in enumerate(values)
+    )
+
+    slider_positions = solution.joint_coordinates(prismatic_joint)
+    assert np.ptp(slider_positions) > 0.0
+    assert slider_positions[-1] == pytest.approx(slider_positions[0], abs=1e-8)
+    for link in mechanism.links:
+        poses = solution.link_poses(link)
+        np.testing.assert_allclose(poses[-1, :2], poses[0, :2], atol=1e-8)
+        assert abs(_wrapped_angle_difference(poses[-1, 2], poses[0, 2])) < 1e-8
 
 
 def test_slider_crank_prismatic_input_accepts_solver_configuration_as_guess():

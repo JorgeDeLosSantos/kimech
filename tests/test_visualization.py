@@ -114,6 +114,21 @@ def test_plot_returns_figure_and_axes_and_reuses_external_axes():
     plt.close(existing_fig)
 
 
+def test_plot_can_be_saved_as_nonempty_svg(tmp_path):
+    mechanism, input_joint, _, guess = _four_bar()
+    config = solve(mechanism, input=input_joint, values=0.8, initial_guess=guess)
+    fig, _ = plot(config)
+    path = tmp_path / "mechanism.svg"
+
+    try:
+        fig.savefig(path)
+
+        assert path.exists()
+        assert path.stat().st_size > 0
+    finally:
+        plt.close(fig)
+
+
 def test_plot_rejects_non_configuration():
     with pytest.raises(TypeError, match="config must be a Configuration"):
         plot(object())

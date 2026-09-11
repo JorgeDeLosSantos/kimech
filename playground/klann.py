@@ -19,6 +19,7 @@ CRANK_CENTER = np.array((1.599, 0.750))  # point 15
 ELBOW_0 = np.array((0.741, 0.750))  # point 27X
 CRANK_PIN_0 = np.array((1.331, 0.750))  # point 29x
 FOOT_0 = np.array((0.000, 0.000))  # point 33x
+FOOT_HALF_TURN = np.array((1.000, 0.000))  # point 33y
 KNEE_0 = np.array((0.232, 0.866))  # point 35x
 HIP_0 = np.array((0.866, 1.500))  # point 37x
 
@@ -251,7 +252,15 @@ def main():
         np.linalg.norm(solved_foot - expected_foot, axis=1)
     )
 
+    half_turn_index = len(values) // 2
+    half_turn_foot = solved_foot[half_turn_index]
+    stride_endpoint_error = np.linalg.norm(
+        half_turn_foot - FOOT_HALF_TURN
+    )
+
     foot_span = np.ptp(solved_foot, axis=0)
+    foot_min = solved_foot.min(axis=0)
+    foot_max = solved_foot.max(axis=0)
 
     print("Klann linkage")
     print("Reference geometry: US Patent 6,260,862, Table 1")
@@ -264,6 +273,19 @@ def main():
     print(f"Maximum knee error: {knee_error:.3e}")
     print(f"Maximum hip error: {hip_error:.3e}")
     print(f"Maximum foot-path error: {foot_error:.3e}")
+    print(
+        "Half-turn foot position: "
+        f"({half_turn_foot[0]:.6f}, {half_turn_foot[1]:.6f})"
+    )
+    print(
+        "Half-turn error vs Table 1 point 33y=(1, 0): "
+        f"{stride_endpoint_error:.3e}"
+    )
+    print(
+        "Foot-path bounds: "
+        f"x=[{foot_min[0]:.3f}, {foot_max[0]:.3f}], "
+        f"y=[{foot_min[1]:.3f}, {foot_max[1]:.3f}]"
+    )
     print(
         "Foot-path span: "
         f"dx={foot_span[0]:.3f}, dy={foot_span[1]:.3f}"

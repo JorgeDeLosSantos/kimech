@@ -20,7 +20,7 @@ def build_mechanism():
 
     crank_center = ground.add_point("O", (0.0, 0.0))
     lever_pivot = ground.add_point("A", (PIVOT_DISTANCE, 0.0))
-    ram_guide = ground.add_point("G", (0.0, 0.0))
+    ram_guide = ground.add_point("G", (PIVOT_DISTANCE, 0.0))
 
     crank = mechanism.add_link("crank")
     crank_o = crank.add_point("O", (0.0, 0.0))
@@ -58,8 +58,8 @@ def build_mechanism():
     ram_joint = mechanism.prismatic(
         ram_guide,
         ram_g,
-        axis_a=(1.0, 0.0),
-        axis_b=(1.0, 0.0),
+        axis_a=(0.0, 1.0),
+        axis_b=(0.0, 1.0),
         name="ram_guide",
     )
 
@@ -82,21 +82,43 @@ def build_mechanism():
         ]
     )
 
-    horizontal_reach = np.sqrt(
-        CONNECTING_ROD_LENGTH**2 - lever_tip[1] ** 2
+    horizontal_offset = PIVOT_DISTANCE - lever_tip[0]
+    vertical_reach = np.sqrt(
+        CONNECTING_ROD_LENGTH**2 - horizontal_offset**2
     )
-    ram_x = lever_tip[0] + horizontal_reach
-    rod_angle = np.arctan2(-lever_tip[1], horizontal_reach)
+    ram_y = lever_tip[1] + vertical_reach
+    rod_angle = np.arctan2(
+        ram_y - lever_tip[1],
+        PIVOT_DISTANCE - lever_tip[0],
+    )
 
     initial_guess = {
         crank: (0.0, 0.0, theta0),
         block: (crank_pin[0], crank_pin[1], lever_angle),
         lever: (PIVOT_DISTANCE, 0.0, lever_angle),
         connecting_rod: (lever_tip[0], lever_tip[1], rod_angle),
-        ram: (ram_x, 0.0, 0.0),
+        ram: (PIVOT_DISTANCE, ram_y, 0.0),
     }
 
     return mechanism, input_joint, slot_joint, ram_joint, initial_guess, theta0
+
+
+def analytical_ram_positions(values):
+    """Return the ram displacement for the selected assembly branch."""
+    crank_x = CRANK_RADIUS * np.cos(values)
+    crank_y = CRANK_RADIUS * np.sin(values)
+    lever_angle = np.arctan2(
+        crank_y,
+        crank_x - PIVOT_DISTANCE,
+    )
+
+    lever_tip_x = PIVOT_DISTANCE - LEVER_ARM * np.cos(lever_angle)
+    lever_tip_y = -LEVER_ARM * np.sin(lever_angle)
+    horizontal_offset = PIVOT_DISTANCE - lever_tip_x
+    vertical_reach = np.sqrt(
+        CONNECTING_ROD_LENGTH**2 - horizontal_offset**2
+    )
+    return lever_tip_y + vertical_reach
 
 
 def quick_return_spans(values, positions):
@@ -145,16 +167,25 @@ def main():
     slot_error = np.max(np.abs(slot_positions - expected_slot_positions))
 
     ram_positions = solution.joint_coordinates(ram_joint)
+    expected_ram_positions = analytical_ram_positions(values)
+    ram_error = np.max(np.abs(ram_positions - expected_ram_positions))
+
     span_a, span_b = quick_return_spans(values, ram_positions)
     long_span = max(span_a, span_b)
     short_span = min(span_a, span_b)
     quick_return_ratio = long_span / short_span
+
+    half_swing = np.arcsin(CRANK_RADIUS / PIVOT_DISTANCE)
+    expected_long_span = np.pi + 2.0 * half_swing
+    expected_short_span = np.pi - 2.0 * half_swing
+    expected_ratio = expected_long_span / expected_short_span
 
     print("Whitworth quick-return mechanism")
     print(f"Valid model: {report.is_valid}")
     print(f"Mobility: {report.mobility}")
     print(f"Solved {len(solution)} configurations")
     print(f"Maximum moving-slot error: {slot_error:.3e}")
+    print(f"Maximum ram-position error: {ram_error:.3e}")
     print(
         "Ram stroke: "
         f"{ram_positions.min():.6f} -> {ram_positions.max():.6f}"
@@ -163,7 +194,13 @@ def main():
         "Crank-angle spans between stroke endpoints: "
         f"{np.degrees(long_span):.1f} deg / {np.degrees(short_span):.1f} deg"
     )
+    print(
+        "Expected spans from tangent geometry: "
+        f"{np.degrees(expected_long_span):.1f} deg / "
+        f"{np.degrees(expected_short_span):.1f} deg"
+    )
     print(f"Quick-return ratio: {quick_return_ratio:.3f}")
+    print(f"Expected quick-return ratio: {expected_ratio:.3f}")
 
     fig, ax = plt.subplots()
     animation = animate(

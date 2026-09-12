@@ -1,4 +1,4 @@
-"""Solve a slider-crank through Kimech's public API."""
+"""Solve and animate a slider-crank through Kimech's public API."""
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -54,39 +54,17 @@ def main():
         mechanism,
         input=crank_joint,
         values=values,
-        input_velocity=1.2,
-        input_acceleration=-0.25,
         initial_guess=initial_guess,
     )
 
     slider_positions = solution.joint_coordinates(prismatic_joint)
-    slider_velocities = solution.joint_velocities(prismatic_joint)
-    slider_accelerations = solution.joint_accelerations(prismatic_joint)
 
-    first_config = solution[0]
-    config_from_slider = solve(
-        mechanism,
-        input=prismatic_joint,
-        values=slider_positions[0],
-        input_velocity=slider_velocities[0],
-        input_acceleration=slider_accelerations[0],
-        initial_guess=first_config,
-    )
-
-    print("Slider-crank")
+    print("Slider-crank motion")
     print(f"Solved {len(solution)} configurations")
     print(f"Crank input: {solution.input_values[0]:.3f} -> {solution.input_values[-1]:.3f} rad")
     print(
         f"Slider displacement: {slider_positions.min():.6f} -> "
         f"{slider_positions.max():.6f}"
-    )
-    print(f"First slider velocity: {slider_velocities[0]:.6f}")
-    print(f"First slider acceleration: {slider_accelerations[0]:.6f}")
-    print(
-        "Prismatic-input reconstruction: "
-        f"s={config_from_slider.joint_coordinate(prismatic_joint):.6f}, "
-        f"sdot={config_from_slider.joint_velocity(prismatic_joint):.6f}, "
-        f"sddot={config_from_slider.joint_acceleration(prismatic_joint):.6f}"
     )
 
     fig, ax = plt.subplots()

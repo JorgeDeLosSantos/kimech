@@ -38,7 +38,6 @@ def build_mechanism():
         name="slider_guide",
     )
 
-    # Each entry estimates a link pose as (x, y, theta).
     initial_guess = {
         crank: (0.0, 0.0, 0.7),
         connecting_rod: (0.06, 0.05, -0.2),
@@ -49,30 +48,30 @@ def build_mechanism():
 
 def main():
     mechanism, crank_joint, prismatic_joint, initial_guess = build_mechanism()
-    values = np.linspace(
-        0.7,
-        0.7 + 2 * np.pi,
-        180,
-        endpoint=False,
-    )
+    values = np.linspace(0.7, 0.7 + 2 * np.pi, 180, endpoint=False)
 
     solution = solve(
         mechanism,
         input=crank_joint,
         values=values,
+        input_velocity=1.2,
+        input_acceleration=-0.25,
         initial_guess=initial_guess,
     )
+
     slider_positions = solution.joint_coordinates(prismatic_joint)
+    slider_velocities = solution.joint_velocities(prismatic_joint)
+    slider_accelerations = solution.joint_accelerations(prismatic_joint)
 
     first_config = solution[0]
-    slider_input = first_config.joint_coordinate(prismatic_joint)
     config_from_slider = solve(
         mechanism,
         input=prismatic_joint,
-        values=slider_input,
+        values=slider_positions[0],
+        input_velocity=slider_velocities[0],
+        input_acceleration=slider_accelerations[0],
         initial_guess=first_config,
     )
-    reconstructed = config_from_slider.joint_coordinate(prismatic_joint)
 
     print("Slider-crank")
     print(f"Solved {len(solution)} configurations")
@@ -81,16 +80,17 @@ def main():
         f"Slider displacement: {slider_positions.min():.6f} -> "
         f"{slider_positions.max():.6f}"
     )
-    print(f"Prismatic-input reconstruction: {slider_input:.6f} -> {reconstructed:.6f}")
-
-    fig, ax = plt.subplots()
-
-    animation = animate(
-        solution,
-        fps=30,
-        ax=ax,
+    print(f"First slider velocity: {slider_velocities[0]:.6f}")
+    print(f"First slider acceleration: {slider_accelerations[0]:.6f}")
+    print(
+        "Prismatic-input reconstruction: "
+        f"s={config_from_slider.joint_coordinate(prismatic_joint):.6f}, "
+        f"sdot={config_from_slider.joint_velocity(prismatic_joint):.6f}, "
+        f"sddot={config_from_slider.joint_acceleration(prismatic_joint):.6f}"
     )
 
+    fig, ax = plt.subplots()
+    animation = animate(solution, fps=30, ax=ax)
     ax.set_title("Slider-crank mechanism")
     plt.show()
 

@@ -33,7 +33,6 @@ def build_mechanism():
     mechanism.revolute(coupler_c, rocker_c)
     mechanism.revolute(rocker_d, ground_d)
 
-    # Each entry estimates a link pose as (x, y, theta).
     initial_guess = {
         crank: (0.0, 0.0, 0.8),
         coupler: (0.05, 0.06, 0.2),
@@ -44,21 +43,20 @@ def build_mechanism():
 
 def main():
     mechanism, input_joint, crank, rocker, point_p, initial_guess = build_mechanism()
-    values = np.linspace(
-        0.8,
-        0.8 + 2 * np.pi,
-        180,
-        endpoint=False,
-    )
+    values = np.linspace(0.8, 0.8 + 2 * np.pi, 180, endpoint=False)
 
     solution = solve(
         mechanism,
         input=input_joint,
         values=values,
+        input_velocity=1.5,
+        input_acceleration=0.0,
         initial_guess=initial_guess,
     )
 
     path = solution.point_path(point_p)
+    point_velocities = solution.point_velocities(point_p)
+    point_accelerations = solution.point_accelerations(point_p)
     rocker_poses = solution.body_poses(rocker)
     input_coordinates = solution.joint_coordinates(input_joint)
 
@@ -71,16 +69,12 @@ def main():
     print(f"Input: {input_coordinates[0]:.3f} -> {input_coordinates[-1]:.3f} rad")
     print(f"Coupler point P: {first_point_position} -> {path[-1]}")
     print(f"First crank pose: {first_crank_pose}")
+    print(f"First P velocity: {point_velocities[0]}")
+    print(f"First P acceleration: {point_accelerations[0]}")
     print(f"Rocker angle: {rocker_poses[0, 2]:.3f} -> {rocker_poses[-1, 2]:.3f} rad")
 
     fig, ax = plt.subplots()
-
-    animation = animate(
-        solution,
-        fps=30,
-        ax=ax,
-    )
-
+    animation = animate(solution, fps=30, ax=ax)
     ax.set_title("Four-bar mechanism")
     plt.show()
 

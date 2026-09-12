@@ -131,60 +131,49 @@ class Configuration:
 
     @property
     def mechanism(self) -> Mechanism:
-        """Return the mechanism represented by this configuration."""
         return self._mechanism
 
     @property
     def input_joint(self) -> _Joint | None:
-        """Return the prescribed joint associated with this configuration, if any."""
         return self._input_joint
 
     @property
     def input_value(self) -> float | None:
-        """Return the prescribed joint value associated with this configuration."""
         return self._input_value
 
     @property
     def input_velocity(self) -> float | None:
-        """Return the prescribed joint velocity metadata, if available."""
         return self._input_velocity
 
     @property
     def input_acceleration(self) -> float | None:
-        """Return the prescribed joint acceleration metadata, if available."""
         return self._input_acceleration
 
     @property
     def coordinates(self) -> np.ndarray:
-        """Return a safe copy of the generalized coordinate vector."""
         return self._coordinates.copy()
 
     @property
     def coordinate_velocities(self) -> np.ndarray:
-        """Return a safe copy of the generalized velocity vector."""
         if self._coordinate_velocities is None:
             raise ValueError("velocity data is not available in this configuration")
         return self._coordinate_velocities.copy()
 
     @property
     def coordinate_accelerations(self) -> np.ndarray:
-        """Return a safe copy of the generalized acceleration vector."""
         if self._coordinate_accelerations is None:
             raise ValueError("acceleration data is not available in this configuration")
         return self._coordinate_accelerations.copy()
 
     @property
     def has_velocity(self) -> bool:
-        """Return whether generalized velocity state is available."""
         return self._coordinate_velocities is not None
 
     @property
     def has_acceleration(self) -> bool:
-        """Return whether generalized acceleration state is available."""
         return self._coordinate_accelerations is not None
 
     def body_pose(self, body: _Body) -> np.ndarray:
-        """Return ``(x, y, theta)`` for a mobile link or the identity for ground."""
         index = _body_index(self._mechanism, self._links, body)
         if index is None:
             return np.zeros(3, dtype=float)
@@ -192,7 +181,6 @@ class Configuration:
         return self._coordinates[start : start + 3].copy()
 
     def body_velocity(self, body: _Body) -> np.ndarray:
-        """Return ``(vx, vy, omega)`` for a body."""
         index = _body_index(self._mechanism, self._links, body)
         velocities = self._require_velocity()
         if index is None:
@@ -201,7 +189,6 @@ class Configuration:
         return velocities[start : start + 3].copy()
 
     def body_acceleration(self, body: _Body) -> np.ndarray:
-        """Return ``(ax, ay, alpha)`` for a body."""
         index = _body_index(self._mechanism, self._links, body)
         accelerations = self._require_acceleration()
         if index is None:
@@ -210,33 +197,27 @@ class Configuration:
         return accelerations[start : start + 3].copy()
 
     def position(self, point: Point) -> np.ndarray:
-        """Return the global position of a point attached to a mechanism body."""
         _validate_point(self._mechanism, self._links, point)
         if point.body is self._mechanism.ground:
             return point.local
-
         x, y, theta = self.body_pose(point.body)
         return np.array([x, y], dtype=float) + rotation_matrix(theta) @ point.local
 
     def velocity(self, point: Point) -> np.ndarray:
-        """Return the global velocity of a point attached to a mechanism body."""
         _validate_point(self._mechanism, self._links, point)
         body_velocity = self.body_velocity(point.body)
         if point.body is self._mechanism.ground:
             return np.zeros(2, dtype=float)
-
         theta = self.body_pose(point.body)[2]
         rotational = rotation_matrix(theta) @ perpendicular(point.local)
         return body_velocity[:2] + body_velocity[2] * rotational
 
     def acceleration(self, point: Point) -> np.ndarray:
-        """Return the global acceleration of a point attached to a mechanism body."""
         _validate_point(self._mechanism, self._links, point)
         body_acceleration = self.body_acceleration(point.body)
         body_velocity = self.body_velocity(point.body)
         if point.body is self._mechanism.ground:
             return np.zeros(2, dtype=float)
-
         theta = self.body_pose(point.body)[2]
         rotation = rotation_matrix(theta)
         local = np.asarray(point.local, dtype=float)
@@ -249,47 +230,36 @@ class Configuration:
         )
 
     def joint_coordinate(self, joint: _Joint) -> float:
-        """Return the natural, unwrapped coordinate of a mechanism joint."""
         _validate_joint(self._mechanism, self._links, joint)
-
         if isinstance(joint, RevoluteJoint):
             theta_a = self.body_pose(joint.point_a.body)[2]
             theta_b = self.body_pose(joint.point_b.body)[2]
             return float(theta_b - theta_a)
-
         pose_a = self.body_pose(joint.point_a.body)
         axis_a = rotation_matrix(pose_a[2]) @ np.asarray(joint.axis_a, dtype=float)
         displacement = self.position(joint.point_b) - self.position(joint.point_a)
         return float(axis_a @ displacement)
 
     def joint_velocity(self, joint: _Joint) -> float:
-        """Return the time derivative of a joint's natural coordinate."""
         _validate_joint(self._mechanism, self._links, joint)
-
         if isinstance(joint, RevoluteJoint):
             omega_a = self.body_velocity(joint.point_a.body)[2]
             omega_b = self.body_velocity(joint.point_b.body)[2]
             return float(omega_b - omega_a)
-
         pose_a = self.body_pose(joint.point_a.body)
         axis_a = rotation_matrix(pose_a[2]) @ np.asarray(joint.axis_a, dtype=float)
         relative_velocity = self.velocity(joint.point_b) - self.velocity(joint.point_a)
         return float(axis_a @ relative_velocity)
 
     def joint_acceleration(self, joint: _Joint) -> float:
-        """Return the second time derivative of a joint's natural coordinate."""
         _validate_joint(self._mechanism, self._links, joint)
-
         if isinstance(joint, RevoluteJoint):
             alpha_a = self.body_acceleration(joint.point_a.body)[2]
             alpha_b = self.body_acceleration(joint.point_b.body)[2]
             return float(alpha_b - alpha_a)
-
         pose_a = self.body_pose(joint.point_a.body)
         axis_a = rotation_matrix(pose_a[2]) @ np.asarray(joint.axis_a, dtype=float)
-        relative_acceleration = (
-            self.acceleration(joint.point_b) - self.acceleration(joint.point_a)
-        )
+        relative_acceleration = self.acceleration(joint.point_b) - self.acceleration(joint.point_a)
         coordinate = self.joint_coordinate(joint)
         omega_a = self.body_velocity(joint.point_a.body)[2]
         return float(axis_a @ relative_acceleration + coordinate * omega_a**2)
@@ -308,7 +278,17 @@ class Configuration:
 class KinematicSolution:
     """An ordered sequence of accepted mechanism configurations."""
 
-    __slots__ = ("_coordinates", "_input_joint", "_input_values", "_links", "_mechanism")
+    __slots__ = (
+        "_coordinate_accelerations",
+        "_coordinate_velocities",
+        "_coordinates",
+        "_input_accelerations",
+        "_input_joint",
+        "_input_values",
+        "_input_velocities",
+        "_links",
+        "_mechanism",
+    )
 
     def __init__(
         self,
@@ -316,6 +296,11 @@ class KinematicSolution:
         input_joint: _Joint,
         input_values: Sequence[float] | np.ndarray,
         coordinates: Sequence[Sequence[float]] | np.ndarray,
+        *,
+        coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None = None,
+        coordinate_accelerations: Sequence[Sequence[float]] | np.ndarray | None = None,
+        input_velocities: Sequence[float] | np.ndarray | None = None,
+        input_accelerations: Sequence[float] | np.ndarray | None = None,
     ) -> None:
         _validate_mechanism(mechanism)
         self._initialize(
@@ -324,6 +309,10 @@ class KinematicSolution:
             input_joint,
             input_values,
             coordinates,
+            coordinate_velocities=coordinate_velocities,
+            coordinate_accelerations=coordinate_accelerations,
+            input_velocities=input_velocities,
+            input_accelerations=input_accelerations,
         )
 
     @classmethod
@@ -334,6 +323,11 @@ class KinematicSolution:
         input_joint: _Joint,
         input_values: Sequence[float] | np.ndarray,
         coordinates: Sequence[Sequence[float]] | np.ndarray,
+        *,
+        coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None = None,
+        coordinate_accelerations: Sequence[Sequence[float]] | np.ndarray | None = None,
+        input_velocities: Sequence[float] | np.ndarray | None = None,
+        input_accelerations: Sequence[float] | np.ndarray | None = None,
     ) -> KinematicSolution:
         solution = cls.__new__(cls)
         solution._initialize(
@@ -342,6 +336,10 @@ class KinematicSolution:
             input_joint,
             input_values,
             coordinates,
+            coordinate_velocities=coordinate_velocities,
+            coordinate_accelerations=coordinate_accelerations,
+            input_velocities=input_velocities,
+            input_accelerations=input_accelerations,
         )
         return solution
 
@@ -352,41 +350,105 @@ class KinematicSolution:
         input_joint: _Joint,
         input_values: Sequence[float] | np.ndarray,
         coordinates: Sequence[Sequence[float]] | np.ndarray,
+        *,
+        coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None,
+        coordinate_accelerations: Sequence[Sequence[float]] | np.ndarray | None,
+        input_velocities: Sequence[float] | np.ndarray | None,
+        input_accelerations: Sequence[float] | np.ndarray | None,
     ) -> None:
         _validate_mechanism(mechanism)
         _validate_joint(mechanism, links, input_joint)
+        if coordinate_accelerations is not None and coordinate_velocities is None:
+            raise ValueError("coordinate_accelerations requires coordinate_velocities")
+        if input_accelerations is not None and input_velocities is None:
+            raise ValueError("input_accelerations requires input_velocities")
 
         values = _finite_float_array(input_values, name="input_values", ndim=1)
-        coordinate_array = _finite_float_array(coordinates, name="coordinates", ndim=2)
-        expected_shape = (len(values), 3 * len(links))
-        if coordinate_array.shape != expected_shape:
-            raise ValueError(f"coordinates must have shape {expected_shape}")
+        state_shape = (len(values), 3 * len(links))
+        coordinate_array = _finite_float_array(
+            coordinates,
+            name="coordinates",
+            shape=state_shape,
+        )
+        velocity_array = _optional_finite_float_array(
+            coordinate_velocities,
+            name="coordinate_velocities",
+            shape=state_shape,
+        )
+        acceleration_array = _optional_finite_float_array(
+            coordinate_accelerations,
+            name="coordinate_accelerations",
+            shape=state_shape,
+        )
+        input_shape = (len(values),)
+        input_velocity_array = _optional_finite_float_array(
+            input_velocities,
+            name="input_velocities",
+            shape=input_shape,
+        )
+        input_acceleration_array = _optional_finite_float_array(
+            input_accelerations,
+            name="input_accelerations",
+            shape=input_shape,
+        )
 
         self._mechanism = mechanism
         self._links = links
         self._input_joint = input_joint
         self._input_values = values
+        self._input_velocities = input_velocity_array
+        self._input_accelerations = input_acceleration_array
         self._coordinates = coordinate_array
+        self._coordinate_velocities = velocity_array
+        self._coordinate_accelerations = acceleration_array
 
     @property
     def mechanism(self) -> Mechanism:
-        """Return the mechanism represented by this solution."""
         return self._mechanism
 
     @property
     def input_joint(self) -> _Joint:
-        """Return the joint whose coordinate parameterizes the solution."""
         return self._input_joint
 
     @property
     def input_values(self) -> np.ndarray:
-        """Return a safe copy of the ordered prescribed values."""
         return self._input_values.copy()
 
     @property
+    def input_velocities(self) -> np.ndarray | None:
+        if self._input_velocities is None:
+            return None
+        return self._input_velocities.copy()
+
+    @property
+    def input_accelerations(self) -> np.ndarray | None:
+        if self._input_accelerations is None:
+            return None
+        return self._input_accelerations.copy()
+
+    @property
     def coordinates(self) -> np.ndarray:
-        """Return a safe copy of the generalized coordinate matrix."""
         return self._coordinates.copy()
+
+    @property
+    def coordinate_velocities(self) -> np.ndarray:
+        if self._coordinate_velocities is None:
+            raise ValueError("velocity data is not available in this solution")
+        return self._coordinate_velocities.copy()
+
+    @property
+    def coordinate_accelerations(self) -> np.ndarray:
+        if self._coordinate_accelerations is None:
+            raise ValueError("acceleration data is not available in this solution")
+        return self._coordinate_accelerations.copy()
+
+    @property
+    def has_velocity(self) -> bool:
+        return self._coordinate_velocities is not None
+
+    @property
+    def has_acceleration(self) -> bool:
+        return self._coordinate_accelerations is not None
 
     def __len__(self) -> int:
         return len(self._input_values)
@@ -399,33 +461,104 @@ class KinematicSolution:
             self._mechanism,
             self._links,
             self._coordinates[item],
+            coordinate_velocities=(
+                None if self._coordinate_velocities is None else self._coordinate_velocities[item]
+            ),
+            coordinate_accelerations=(
+                None
+                if self._coordinate_accelerations is None
+                else self._coordinate_accelerations[item]
+            ),
             input_joint=self._input_joint,
             input_value=self._input_values[item],
+            input_velocity=(
+                None if self._input_velocities is None else self._input_velocities[item]
+            ),
+            input_acceleration=(
+                None
+                if self._input_accelerations is None
+                else self._input_accelerations[item]
+            ),
         )
 
     def point_path(self, point: Point) -> np.ndarray:
-        """Return the global point positions for all configurations."""
         _validate_point(self._mechanism, self._links, point)
         path = np.empty((len(self), 2), dtype=float)
         for index in range(len(self)):
             path[index] = self[index].position(point)
         return path
 
+    def point_velocities(self, point: Point) -> np.ndarray:
+        _validate_point(self._mechanism, self._links, point)
+        self._require_velocity()
+        values = np.empty((len(self), 2), dtype=float)
+        for index in range(len(self)):
+            values[index] = self[index].velocity(point)
+        return values
+
+    def point_accelerations(self, point: Point) -> np.ndarray:
+        _validate_point(self._mechanism, self._links, point)
+        self._require_acceleration()
+        values = np.empty((len(self), 2), dtype=float)
+        for index in range(len(self)):
+            values[index] = self[index].acceleration(point)
+        return values
+
     def body_poses(self, body: _Body) -> np.ndarray:
-        """Return the pose history of a mobile link or ground."""
         index = _body_index(self._mechanism, self._links, body)
         if index is None:
             return np.zeros((len(self), 3), dtype=float)
         start = 3 * index
         return self._coordinates[:, start : start + 3].copy()
 
+    def body_velocities(self, body: _Body) -> np.ndarray:
+        index = _body_index(self._mechanism, self._links, body)
+        velocities = self._require_velocity()
+        if index is None:
+            return np.zeros((len(self), 3), dtype=float)
+        start = 3 * index
+        return velocities[:, start : start + 3].copy()
+
+    def body_accelerations(self, body: _Body) -> np.ndarray:
+        index = _body_index(self._mechanism, self._links, body)
+        accelerations = self._require_acceleration()
+        if index is None:
+            return np.zeros((len(self), 3), dtype=float)
+        start = 3 * index
+        return accelerations[:, start : start + 3].copy()
+
     def joint_coordinates(self, joint: _Joint) -> np.ndarray:
-        """Return the natural joint coordinate for all configurations."""
         _validate_joint(self._mechanism, self._links, joint)
         values = np.empty(len(self), dtype=float)
         for index in range(len(self)):
             values[index] = self[index].joint_coordinate(joint)
         return values
+
+    def joint_velocities(self, joint: _Joint) -> np.ndarray:
+        _validate_joint(self._mechanism, self._links, joint)
+        self._require_velocity()
+        values = np.empty(len(self), dtype=float)
+        for index in range(len(self)):
+            values[index] = self[index].joint_velocity(joint)
+        return values
+
+    def joint_accelerations(self, joint: _Joint) -> np.ndarray:
+        _validate_joint(self._mechanism, self._links, joint)
+        self._require_acceleration()
+        values = np.empty(len(self), dtype=float)
+        for index in range(len(self)):
+            values[index] = self[index].joint_acceleration(joint)
+        return values
+
+    def _require_velocity(self) -> np.ndarray:
+        if self._coordinate_velocities is None:
+            raise ValueError("velocity data is not available in this solution")
+        return self._coordinate_velocities
+
+    def _require_acceleration(self) -> np.ndarray:
+        if self._coordinate_accelerations is None:
+            raise ValueError("acceleration data is not available in this solution")
+        return self._coordinate_accelerations
 
 
 def _validate_mechanism(mechanism: object) -> None:

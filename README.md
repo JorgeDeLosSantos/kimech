@@ -2,9 +2,9 @@
 
 Kimech is a small Python library for modeling and solving the kinematics of planar rigid-body mechanisms.
 
-It provides declarative rigid-body models with revolute and prismatic joints, position solving with warm-start continuation, result queries, and schematic plotting and animation.
+It provides declarative rigid-body models with revolute and prismatic joints, position solving with warm-start continuation, analytic velocity and acceleration kinematics, result queries, and schematic plotting and animation.
 
-Kimech `0.1.0` is the initial position-kinematics MVP. The project remains young, and its API may evolve in future versions. The conceptual design baseline lives in [`docs/design.md`](docs/design.md), while [`docs/api.md`](docs/api.md) documents the current implemented public API.
+Kimech `0.2.0` supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms with one prescribed joint coordinate. The `0.1.0` position-kinematics baseline is recorded in [`docs/design.md`](docs/design.md), the `0.2.0` design baseline in [`docs/design-0.2.0.md`](docs/design-0.2.0.md), and [`docs/api.md`](docs/api.md) documents the current implemented public API.
 
 ## Installation
 
@@ -29,14 +29,12 @@ pytest
 
 ## Quick start
 
-The following builds and animates a four-bar linkage through the generic API:
+The following builds a four-bar linkage and solves a differential kinematic sweep through the generic API:
 
 ```python
-import matplotlib.pyplot as plt
 import numpy as np
 
 from kimech import Mechanism, solve
-from kimech.visualization import animate
 
 mechanism = Mechanism("four_bar")
 ground = mechanism.ground
@@ -51,6 +49,7 @@ crank_b = crank.add_point("B", (0.08, 0.0))
 coupler = mechanism.add_link("coupler")
 coupler_b = coupler.add_point("B", (0.0, 0.0))
 coupler_c = coupler.add_point("C", (0.22, 0.0))
+point_p = coupler.add_point("P", (0.10, 0.05))
 
 rocker = mechanism.add_link("rocker")
 rocker_c = rocker.add_point("C", (0.0, 0.0))
@@ -66,21 +65,40 @@ initial_guess = {
     coupler: (0.05, 0.06, 0.2),
     rocker: (0.30, 0.0, 2.2),
 }
-values = np.linspace(0.8, 0.8 + 2 * np.pi, 180, endpoint=False)
+values = np.linspace(0.8, 1.3, 60)
 
 solution = solve(
     mechanism,
     input=input_joint,
     values=values,
+    input_velocity=1.5,
+    input_acceleration=0.0,
     initial_guess=initial_guess,
 )
+
+positions = solution.point_path(point_p)
+velocities = solution.point_velocities(point_p)
+accelerations = solution.point_accelerations(point_p)
+```
+
+`values` are configuration parameters, not timestamps. `input_velocity` and `input_acceleration` are physical derivatives with respect to a common external time variable. Scalar differential inputs are broadcast across a sweep.
+
+Position-only solving remains valid by omitting the differential inputs.
+
+## Visualization
+
+Visualization remains presentation-only and does not define physical time:
+
+```python
+import matplotlib.pyplot as plt
+from kimech.visualization import animate
 
 animation = animate(solution, fps=30)
 plt.show()
 ```
 
-Keep a reference to the returned animation until display or saving is complete, as shown above.
-
 ## Examples
 
 [`examples/four_bar.py`](examples/four_bar.py) and [`examples/slider_crank.py`](examples/slider_crank.py) are complete examples built with the generic public API.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for release changes and intentional breaking renames.

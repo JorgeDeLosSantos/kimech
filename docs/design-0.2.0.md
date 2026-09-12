@@ -1,6 +1,6 @@
 # Kimech — Design baseline for `0.2.0`
 
-> Status: planning draft for `0.2.0`.
+> Status: reviewed planning baseline for `0.2.0`.
 >
 > This document defines the intended scope and design direction for Kimech `0.2.0`. It extends the `0.1.0` position-kinematics baseline recorded in [`design.md`](design.md). Until `0.2.0` is implemented and released, [`api.md`](api.md) remains the source of truth for the current public API.
 
@@ -8,7 +8,7 @@
 
 Kimech `0.2.0` extends the library from position kinematics to **differential kinematics** for the same class of planar rigid-body mechanisms already supported by `0.1.0`.
 
-The version should add first- and second-order kinematic state without broadening the mechanism model itself.
+The version adds first- and second-order kinematic state without broadening the mechanism model itself.
 
 Conceptually, the supported state grows from
 
@@ -33,7 +33,7 @@ The intended identity of the release is:
 - all `0.1.0` planar rigid-body models;
 - revolute and prismatic joints;
 - one prescribed natural joint coordinate;
-- position-only solves exactly as in `0.1.0`;
+- the existing position-solve semantics from `0.1.0`;
 - prescribed input velocity;
 - prescribed input acceleration;
 - generalized coordinate velocities and accelerations;
@@ -56,7 +56,7 @@ The following remain outside `0.2.0`:
 - additional public joint types;
 - explicit time arrays;
 - motion-law objects such as `u(t)`;
-- numerical differentiation of sampled trajectories as the core method;
+- numerical differentiation of sampled trajectories as the production method;
 - numerical time integration;
 - dynamics;
 - forces and torques;
@@ -91,7 +91,7 @@ solve(
 )
 ```
 
-The meaning of the arguments is:
+The arguments mean:
 
 - `input` identifies the prescribed revolute or prismatic joint;
 - `values` contains the prescribed natural joint coordinate `u`;
@@ -114,19 +114,7 @@ values + input_velocity + input_acceleration
 
 `input_acceleration` without `input_velocity` is invalid.
 
-A numeric zero is a physical value, not absence of data. Therefore:
-
-```python
-input_velocity=0.0
-```
-
-requests velocity kinematics with zero prescribed input velocity, whereas:
-
-```python
-input_velocity=None
-```
-
-means that velocity kinematics is not requested.
+A numeric zero is a physical value, not absence of data. Therefore `input_velocity=0.0` requests velocity kinematics with zero prescribed input velocity, whereas `input_velocity=None` means that velocity kinematics is not requested.
 
 ## 5. Input shape and broadcasting rules
 
@@ -140,6 +128,8 @@ If `values` is scalar:
 - `input_acceleration`, when supplied, must also be scalar;
 - the result is a `Configuration`.
 
+Zero-dimensional NumPy numeric arrays follow the same scalar semantics already used for `values`.
+
 ### 5.2 Sweep problem
 
 If `values` is one-dimensional with shape `(N,)`:
@@ -150,31 +140,23 @@ If `values` is one-dimensional with shape `(N,)`:
 - non-scalar inputs must have exactly shape `(N,)`;
 - the result is a `KinematicSolution`.
 
-General NumPy broadcasting is not part of the public contract. For example, an array with shape `(1,)` is not treated as a scalar broadcast value.
+General NumPy broadcasting is not part of the public contract. In particular, an array with shape `(1,)` is not treated as a scalar broadcast value.
 
-All prescribed values must be numeric and finite.
+All prescribed values must be numeric and finite. The complete input specification is validated and normalized before any position solve begins.
 
-The complete input specification is validated and normalized before any position solve begins.
+## 6. Time semantics
 
-## 6. Input values still do not imply time
+The `0.1.0` distinction remains in force: `values` parameterizes configurations and is not itself interpreted as a time array.
 
-The `0.1.0` semantic distinction remains in force:
-
-```python
-values = ...
-```
-
-parameterizes configurations and does not itself represent physical time.
-
-`0.2.0` adds the ability to associate each prescribed coordinate value with independently supplied
+The dot notation in `0.2.0` nevertheless has its ordinary physical meaning. The quantities
 
 \[
-u,\qquad \dot u,\qquad \ddot u,
+\dot u,\quad \ddot u,\quad \dot{\mathbf q},\quad \ddot{\mathbf q}
 \]
 
-but Kimech does not need to know how those values were generated.
+are derivatives with respect to a **single common external physical time variable**. Kimech receives the derivative values but does not need to receive or store the corresponding time samples.
 
-A user may externally sample a motion law using a time array and pass the resulting `u`, `u_dot`, and `u_ddot` arrays to Kimech, but time remains outside the core model and result semantics.
+A user may externally sample a motion law using a time array and pass the resulting `u`, `u_dot`, and `u_ddot` arrays to Kimech. All supplied differential quantities for a sample are understood to refer to the same instant and the same external time variable.
 
 Animation FPS remains a presentation parameter and does not become a physical time step.
 
@@ -197,10 +179,7 @@ J(\mathbf q)=\frac{\partial \Phi}{\partial \mathbf q}.
 Differentiating the constraint equations gives
 
 \[
-J(\mathbf q)\dot{\mathbf q}
-+
-\Phi_u\dot u
-=0.
+J(\mathbf q)\dot{\mathbf q}+\Phi_u\dot u=0.
 \]
 
 Because the prescribed-coordinate equation has the form
@@ -212,14 +191,10 @@ c_J(\mathbf q)-u=0,
 while the geometric joint constraints do not depend explicitly on `u`, the velocity system can be written as
 
 \[
-\boxed{
-J(\mathbf q)\dot{\mathbf q}
-=
-\mathbf b_v(\dot u)
-}
+\boxed{J(\mathbf q)\dot{\mathbf q}=\mathbf b_v(\dot u)}.
 \]
 
-where `b_v` is zero for the geometric constraints and contains the prescribed input velocity in the driver row.
+`b_v` is zero for the geometric constraints and contains the prescribed input velocity in the driver row.
 
 Velocity is solved directly from the differentiated constraints. It is not estimated from differences between neighboring configurations.
 
@@ -228,18 +203,12 @@ Velocity is solved directly from the differentiated constraints. It is not estim
 Differentiating again gives a linear system in the unknown generalized accelerations:
 
 \[
-\boxed{
-J(\mathbf q)\ddot{\mathbf q}
-=
-\mathbf b_a(\mathbf q,\dot{\mathbf q},\ddot u)
-}
+\boxed{J(\mathbf q)\ddot{\mathbf q}=\mathbf b_a(\mathbf q,\dot{\mathbf q},\ddot u)}.
 \]
 
-The implementation should reuse the same position Jacobian and compute only the known second-order terms required on the right-hand side.
+The implementation reuses the same position Jacobian and computes only the known second-order terms required on the right-hand side.
 
-Kimech should not construct explicit Hessian tensors or store an explicit `J_dot` matrix merely to obtain the contraction needed by the acceleration equations.
-
-Instead, each internal constraint contribution should provide its analytic acceleration bias terms directly.
+Kimech should not construct explicit Hessian tensors or store an explicit `J_dot` matrix merely to obtain the contraction needed by the acceleration equations. Instead, each internal constraint contribution should provide its analytic acceleration bias terms directly.
 
 Finite differences may be used in tests as an independent numerical oracle, but not as the production differential-kinematics method.
 
@@ -248,36 +217,24 @@ Finite differences may be used in tests as an independent numerical oracle, but 
 For a point with local coordinates `s` rigidly attached to a mobile link,
 
 \[
-\mathbf r
-=
-\mathbf p + R(\theta)\mathbf s.
+\mathbf r=\mathbf p+R(\theta)\mathbf s.
 \]
 
 Its velocity is
 
 \[
-\mathbf v
-=
-\dot{\mathbf p}
-+
-\omega R(\theta)E\mathbf s,
+\mathbf v=\dot{\mathbf p}+\omega R(\theta)E\mathbf s,
 \]
 
 and its acceleration is
 
 \[
-\mathbf a
-=
-\ddot{\mathbf p}
-+
-\alpha R(\theta)E\mathbf s
--
-\omega^2R(\theta)\mathbf s.
+\mathbf a=\ddot{\mathbf p}+\alpha R(\theta)E\mathbf s-\omega^2R(\theta)\mathbf s.
 \]
 
-Point velocity and acceleration queries should be derived from the solved generalized state rather than stored redundantly.
+Point velocity and acceleration queries are derived from the solved generalized state rather than stored redundantly.
 
-Ground points have zero velocity and zero acceleration.
+For ground points the physical velocity and acceleration are zero. However, differential queries still require the corresponding result capability: a position-only result does not answer velocity queries merely because the requested entity happens to be fixed.
 
 ## 9. Joint differential coordinates
 
@@ -295,54 +252,44 @@ Kimech defines
 
 \[
 \dot\phi_J=\omega_B-\omega_A,
-\]
-
-and
-
-\[
+\qquad
 \ddot\phi_J=\alpha_B-\alpha_A.
 \]
 
 ### 9.2 Prismatic joint
 
+To avoid conflating axis vectors with accelerations, denote the unit axis carried by side A as
+
+\[
+\hat{\mathbf e}_A=R(\theta_A)\mathbf a_A^L.
+\]
+
 For
 
 \[
-s_J
-=
-\mathbf a_A^T(\mathbf r_B-\mathbf r_A),
-\]
-
-with
-
-\[
-\mathbf a_A=R(\theta_A)\mathbf a_A^L,
+s_J=\hat{\mathbf e}_A^T(\mathbf r_{P_B}-\mathbf r_{P_A}),
 \]
 
 its velocity on a valid prismatic configuration is
 
 \[
-\dot s_J
-=
-\mathbf a_A^T(\mathbf v_B-\mathbf v_A).
+\dot s_J=\hat{\mathbf e}_A^T(\mathbf v_{P_B}-\mathbf v_{P_A}).
 \]
 
-Its acceleration is the second derivative of the same signed coordinate. If
+Let
 
 \[
-\mathbf d=\mathbf r_B-\mathbf r_A=s_J\mathbf a_A,
+\mathbf d=\mathbf r_{P_B}-\mathbf r_{P_A}=s_J\hat{\mathbf e}_A.
 \]
 
-then projection along the moving axis gives
+Projection of the relative point acceleration along the moving axis gives
 
 \[
+\boxed{
 \ddot s_J
-=
-\mathbf a_A^T(\mathbf a_B-\mathbf a_A^{P})
-+s_J\omega_A^2,
+=\hat{\mathbf e}_A^T(\mathbf a_{P_B}-\mathbf a_{P_A})+s_J\omega_A^2
+}.
 \]
-
-where the accelerations refer to the two prismatic reference points.
 
 The existing `axis_a` orientation continues to define the positive direction of
 
@@ -350,7 +297,7 @@ The existing `axis_a` orientation continues to define the positive direction of
 s_J,\qquad \dot s_J,\qquad \ddot s_J.
 \]
 
-Joint argument order therefore remains semantically meaningful.
+`axis_b` continues to define the orientation relation enforced by the prismatic joint; it does not redefine the sign of the natural coordinate. Joint argument order therefore remains semantically meaningful.
 
 ## 10. Result model
 
@@ -375,14 +322,21 @@ input_velocity          optional
 input_acceleration      optional
 ```
 
-The following invariants hold:
+The core state invariant is
 
-- `q_ddot` cannot exist without `q_dot`;
-- `input_acceleration` cannot exist without `input_velocity`;
-- public arrays remain safe copies;
-- the object remains conceptually immutable.
+\[
+\ddot{\mathbf q}\ \Rightarrow\ \dot{\mathbf q}.
+\]
 
-A user may construct a `Configuration` directly with valid differential state; differential information is not restricted to solver-created objects.
+For prescribed-input metadata,
+
+\[
+\ddot u\ \Rightarrow\ \dot u.
+\]
+
+Solver-created differential results always contain the matching prescribed differential input metadata. Directly constructed result objects may contain differential state without prescribed-input provenance.
+
+Public arrays remain safe copies and the object remains conceptually immutable.
 
 ### 10.2 `KinematicSolution`
 
@@ -400,58 +354,36 @@ and, when available,
 \ddot Q\in\mathbb R^{N\times3n}.
 \]
 
-Scalar differential input values supplied by the user are normalized internally to full `(N,)` histories.
+Scalar differential input values supplied through `solve()` are normalized internally to full `(N,)` histories.
 
 Derived body, point, and joint quantities are computed from the stored generalized state rather than duplicated eagerly.
 
 ### 10.3 Indexing
 
-`solution[i]` returns a `Configuration` containing all kinematic state available at sample `i`:
-
-\[
-q_i,
-\]
-
-optionally
-
-\[
-\dot q_i,
-\]
-
-optionally
-
-\[
-\ddot q_i,
-\]
-
-and the corresponding prescribed-input metadata
-
-\[
-u_i,\qquad \dot u_i,\qquad \ddot u_i.
-\]
+`solution[i]` returns a `Configuration` containing all kinematic state available at sample `i`, together with the corresponding prescribed-input metadata when that metadata is available.
 
 Indexing must not discard differential information.
 
-## 11. Result capability checks
+## 11. Result capability checks and unavailable data
 
-Both result types should expose:
+Both result types expose:
 
 ```python
 has_velocity
 has_acceleration
 ```
 
-These are boolean capability indicators.
+These are boolean indicators of **generalized kinematic state availability**, not merely of prescribed-input metadata.
 
-Requesting unavailable differential data should fail explicitly rather than return `None`.
+The following rules apply:
 
-For example, a position-only result should raise a clear error for a velocity query such as:
+- `has_velocity` is true exactly when generalized velocity state is present;
+- `has_acceleration` is true exactly when generalized acceleration state is present;
+- acceleration state implies velocity state;
+- body, point, joint, and generalized-state differential queries require the corresponding capability;
+- unavailable kinematic state raises a clear error rather than returning `None`.
 
-```python
-config.velocity(point)
-```
-
-and a position-plus-velocity result should raise a clear error for an acceleration query.
+Prescribed-input fields are provenance/problem metadata and may be absent on directly constructed solver-independent result objects. This is distinct from absence of generalized kinematic state.
 
 ## 12. Public result API direction
 
@@ -469,6 +401,8 @@ solution.coordinate_velocities
 solution.coordinate_accelerations
 ```
 
+Shapes are `(3*n,)` for a `Configuration` and `(N, 3*n)` for a `KinematicSolution`. For each mobile body, the three entries are respectively translational x/y state and angular state.
+
 ### 12.2 Prescribed input metadata
 
 ```python
@@ -483,6 +417,8 @@ solution.input_velocities
 solution.input_accelerations
 ```
 
+For solver-created sweep results, differential input metadata is stored as normalized `(N,)` histories when requested.
+
 ### 12.3 Bodies
 
 ```python
@@ -495,7 +431,19 @@ solution.body_velocities(body)
 solution.body_accelerations(body)
 ```
 
-`body` means `Link | Ground`. Ground returns zero pose velocity and zero pose acceleration.
+`body` means `Link | Ground`.
+
+For a mobile link these return, respectively,
+
+\[
+[x,\ y,\ \theta],\qquad
+[\dot x,\ \dot y,\ \omega],\qquad
+[\ddot x,\ \ddot y,\ \alpha]
+\]
+
+for the link's local-frame origin and orientation. Configuration-level shapes are `(3,)`; history shapes are `(N, 3)`.
+
+For ground, `body_pose()` is the zero-coordinate identity pose and differential body state is zero when the corresponding differential capability exists.
 
 ### 12.4 Points
 
@@ -509,6 +457,8 @@ solution.point_velocities(point)
 solution.point_accelerations(point)
 ```
 
+Configuration-level point quantities have shape `(2,)`; history quantities have shape `(N, 2)`.
+
 ### 12.5 Joints
 
 ```python
@@ -521,13 +471,55 @@ solution.joint_velocities(joint)
 solution.joint_accelerations(joint)
 ```
 
+Configuration-level joint quantities are scalars; history quantities have shape `(N,)`.
+
 No public `q`, `q_dot`, or `q_ddot` aliases are required.
 
-## 13. Planned `0.2.0` naming cleanup
+## 13. Direct result construction
 
-Because Kimech remains pre-`1.0` and the result API is expanding around a body/point/joint taxonomy, `0.2.0` should standardize the existing body pose names.
+Result objects remain solver-independent and may be constructed with externally obtained kinematic state.
 
-The planned breaking changes are:
+The intended constructor direction is:
+
+```python
+Configuration(
+    mechanism,
+    coordinates,
+    *,
+    coordinate_velocities=None,
+    coordinate_accelerations=None,
+    input_joint=None,
+    input_value=None,
+    input_velocity=None,
+    input_acceleration=None,
+)
+```
+
+and conceptually:
+
+```python
+KinematicSolution(
+    mechanism,
+    input_joint,
+    input_values,
+    coordinates,
+    *,
+    coordinate_velocities=None,
+    coordinate_accelerations=None,
+    input_velocities=None,
+    input_accelerations=None,
+)
+```
+
+Direct `KinematicSolution` construction uses already normalized histories: optional differential arrays must have the exact required shapes and are not subject to the scalar broadcasting convenience of `solve()`.
+
+The constructor must reject generalized acceleration state without generalized velocity state. Prescribed acceleration metadata requires prescribed velocity metadata. Exact consistency checks for optional provenance metadata should remain lightweight; result constructors are not replacements for solving or constraint validation.
+
+## 14. Planned `0.2.0` naming cleanup
+
+Because Kimech remains pre-`1.0` and the result API is expanding around a body/point/joint taxonomy, `0.2.0` standardizes the existing body pose names.
+
+The intentional breaking changes are:
 
 ```text
 Configuration.pose()
@@ -537,21 +529,15 @@ KinematicSolution.link_poses()
     -> KinematicSolution.body_poses()
 ```
 
-No deprecated aliases are planned for this early release. Documentation, examples, and tests should be updated together.
+No deprecated aliases are planned for this early release.
 
-The resulting body family is intentionally symmetric:
+This rename is a repository-wide migration. In the same implementation block, internal callers, solver initial-guess handling, visualization, tests, examples, and playground clients must be updated so the branch remains internally consistent and CI remains green.
 
-```text
-body_pose
-body_velocity
-body_acceleration
-```
+The `0.1.0` design document remains historical and is not rewritten to use the new names.
 
-with plural history methods on `KinematicSolution`.
+## 15. Solve phases
 
-## 14. Solve phases
-
-Although the public API remains a single `solve()` call, the implementation should use distinct internal phases.
+Although the public API remains a single `solve()` call, the implementation uses distinct internal phases.
 
 For a sweep:
 
@@ -575,7 +561,7 @@ Therefore, for identical `values` and `initial_guess`, adding `input_velocity` o
 
 Each differential sample is local once its configuration is known. Velocity and acceleration do not require continuation from the preceding differential sample.
 
-## 15. Internal package direction
+## 16. Internal package direction
 
 The public package remains small and flat. A private differential module may be introduced if it keeps responsibilities clear:
 
@@ -599,43 +585,41 @@ A reasonable responsibility split is:
 - `solver.py` validates the public problem, performs position continuation, invokes differential phases when requested, and constructs result objects;
 - `solution.py` stores solver-independent kinematic state and exposes derived queries.
 
-No public `VelocitySolver`, `AccelerationSolver`, or solver-class hierarchy is introduced.
+No public `VelocitySolver`, `AccelerationSolver`, or solver-class hierarchy is introduced. The exact private helper names remain implementation details.
 
-The exact private helper names remain implementation details.
-
-## 16. Differential solve verification
+## 17. Differential solve verification
 
 The linear algebra routine alone does not determine whether a differential state is accepted.
 
-After solving velocity, Kimech should independently verify
+A candidate velocity must:
+
+- have the expected shape;
+- contain only finite values;
+- satisfy
 
 \[
-\mathbf r_v
-=
-J\dot{\mathbf q}-\mathbf b_v
+\mathbf r_v=J\dot{\mathbf q}-\mathbf b_v
 \]
 
-and require an appropriate residual criterion.
+under an appropriate private residual criterion.
 
-Likewise, acceleration should verify
+A candidate acceleration is checked analogously using
 
 \[
-\mathbf r_a
-=
-J\ddot{\mathbf q}-\mathbf b_a.
+\mathbf r_a=J\ddot{\mathbf q}-\mathbf b_a.
 \]
 
-The exact private tolerances should be selected and tested during implementation. They are not exposed in the public `solve()` signature in `0.2.0`.
+The exact private acceptance tolerances are selected and tested during implementation. They are not exposed in the public `solve()` signature in `0.2.0`.
 
 No condition-number rejection threshold is introduced. A large but finite differential response near a critical configuration may be physically meaningful and should not be rejected merely because its magnitude is large.
 
-## 17. Failure semantics
+## 18. Failure semantics
 
 `KinematicSolveError` remains the public exception for numerical failures in all kinematic solve phases.
 
 No separate public exceptions such as `VelocitySolveError`, `AccelerationSolveError`, or `SingularityError` are introduced in `0.2.0`.
 
-Differential solve failures should translate lower-level linear algebra failures into `KinematicSolveError` rather than leaking implementation-specific exceptions such as `numpy.linalg.LinAlgError`.
+Differential solve failures translate lower-level linear algebra failures into `KinematicSolveError` rather than leaking implementation-specific exceptions such as `numpy.linalg.LinAlgError`.
 
 Error messages should identify available context including:
 
@@ -660,17 +644,15 @@ requested position + velocity + acceleration
     -> valid Q, Q_dot, and Q_ddot required
 ```
 
-If velocity or acceleration fails, `solve()` does not silently downgrade the returned result to a lower kinematic level.
+If velocity or acceleration fails, `solve()` does not silently downgrade the returned result to a lower kinematic level. Partial-solution payloads are not part of the `0.2.0` public error API.
 
-Partial-solution payloads are not part of the `0.2.0` public error API.
+## 19. Acceptance mechanisms
 
-## 18. Acceptance mechanisms
+The generic infrastructure continues to be validated against ordinary `Mechanism` models rather than mechanism-specific solver classes.
 
-The generic infrastructure should continue to be validated against ordinary `Mechanism` models rather than mechanism-specific solver classes.
+### 19.1 Four-bar linkage
 
-### 18.1 Four-bar linkage
-
-A four-bar mechanism should support a valid prescribed crank sweep with:
+A four-bar mechanism should support a regular prescribed crank sweep with:
 
 - position state;
 - prescribed crank velocity;
@@ -680,13 +662,13 @@ A four-bar mechanism should support a valid prescribed crank sweep with:
 - coupler-point velocity and acceleration;
 - revolute joint velocity and acceleration.
 
-The position path must be identical to the position-only solve for the same prescribed coordinate sequence and initial branch guess.
+The position path must be unchanged from the position-only solve for the same prescribed coordinate sequence and initial branch guess.
 
-### 18.2 Slider-crank mechanism
+### 19.2 Slider-crank mechanism
 
 The slider-crank should exercise both revolute and prismatic differential semantics.
 
-Acceptance should include comparison against independent analytical relations where practical for:
+Acceptance should include comparison against independent analytical relations where practical for
 
 \[
 x(\theta),\qquad \dot x,\qquad \ddot x.
@@ -694,29 +676,29 @@ x(\theta),\qquad \dot x,\qquad \ddot x.
 
 The fixed-guide case should verify that the prismatic joint coordinate, velocity, and acceleration have the expected signed behavior.
 
-The existing inverse case with a prismatically driven mechanism should also be exercised so that `s`, `s_dot`, and `s_ddot` are validated as prescribed inputs rather than only as output queries.
+The existing inverse case with a prismatically driven mechanism should also be exercised on a regular admissible interval so that `s`, `s_dot`, and `s_ddot` are validated as prescribed inputs rather than only as output queries.
 
-## 19. Test strategy
+## 20. Test strategy
 
 Testing should include several complementary levels.
 
-### 19.1 Regression
+### 20.1 Regression
 
-All existing `0.1.0` position behavior should remain valid apart from the intentional body-pose method rename.
+All existing `0.1.0` position behavior should remain valid apart from the intentional body-pose method rename. Position-only `solve()` must not require differential data.
 
-Position-only `solve()` must not require differential data.
-
-### 19.2 Analytic identities
+### 20.2 Analytic identities
 
 Useful invariants include:
 
-- doubling prescribed input velocity at a fixed configuration doubles generalized velocity;
-- zero prescribed input velocity produces the corresponding zero first-order response for a regular one-DOF configuration;
+- doubling prescribed input velocity at a fixed regular configuration doubles generalized velocity;
+- zero prescribed input velocity produces zero first-order response at a regular one-DOF configuration;
+- with zero prescribed input acceleration, scaling input velocity by a factor `k` scales the velocity-dependent generalized acceleration contribution by `k**2`;
+- with zero prescribed input velocity, scaling prescribed input acceleration scales generalized acceleration linearly;
 - body and point differential queries agree with rigid-body formulas;
 - revolute joint derivatives agree with relative angular derivatives;
 - prismatic joint derivatives agree with derivatives of the existing natural coordinate.
 
-### 19.3 Numerical differentiation as test oracle
+### 20.3 Numerical differentiation as test oracle
 
 Finite differences may independently check analytic implementation details, including:
 
@@ -728,41 +710,26 @@ Finite differences may independently check analytic implementation details, incl
 
 Finite-difference tolerances belong only to tests and must not define the production algorithm.
 
-### 19.4 End-to-end acceptance
+### 20.4 End-to-end acceptance
 
 Four-bar and slider-crank tests should exercise complete `solve()` calls with position, velocity, and acceleration requested together.
 
-## 20. Definition of done
+## 21. Definition of done
 
-Kimech `0.2.0` is considered functionally complete when the same generic mechanism model and solver infrastructure can reliably produce:
-
-```text
-position
-velocity
-acceleration
-```
-
-for the accepted one-DOF planar R/P mechanisms, and when users can query the resulting state consistently at three entity levels:
-
-```text
-body
-point
-joint
-```
-
-without mechanism-specific equations or mechanism-specific solver classes.
+Kimech `0.2.0` is considered functionally complete when the same generic mechanism model and solver infrastructure can reliably produce position, velocity, and acceleration for the accepted one-DOF planar R/P mechanisms, and when users can query the resulting state consistently at body, point, and joint levels without mechanism-specific equations or mechanism-specific solver classes.
 
 The release should preserve the small-library design principles established in `0.1.0`: declarative models, solver-independent result objects, analytic kinematics, minimal public abstraction, and explicit failure rather than silent degradation.
 
-## 21. Proposed implementation blocks
+## 22. Proposed implementation blocks
 
 A likely implementation sequence is:
 
-1. **Result-model and naming update**
-   - rename body pose queries;
+1. **Result model and repository-wide naming update**
+   - rename body pose queries and migrate every repository caller in the same block;
    - extend `Configuration` and `KinematicSolution` with optional differential state;
-   - add capability flags and input differential metadata;
-   - add body/point/joint differential queries.
+   - add capability flags and differential input metadata;
+   - add body/point/joint differential queries operating on supplied state;
+   - add focused result-model tests while keeping the existing suite green.
 
 2. **Velocity infrastructure**
    - add input normalization for `input_velocity`;
@@ -785,20 +752,22 @@ A likely implementation sequence is:
 
 5. **Documentation and release cleanup**
    - update `api.md` for the implemented `0.2.0` API;
-   - update examples and README;
+   - update README and user-facing examples where additional differential demonstrations are useful;
    - update version metadata;
    - document intentional breaking renames and release scope.
 
+The repository-wide rename itself is completed in block 1; block 5 is for final user-facing documentation and release presentation, not for repairing stale code clients.
+
 These blocks are planning units, not public architecture. They may be split into smaller feature branches or pull requests during implementation.
 
-## 22. Open implementation details
+## 23. Open implementation details
 
 The following details are intentionally left to implementation evidence and do not block the version design:
 
 - exact private helper/function names;
 - whether all differential helpers live in `_differential.py` or some remain in `_constraints.py`;
 - exact private residual tolerances for velocity and acceleration acceptance;
-- the exact wording of unavailable-data and differential-solve error messages;
-- whether direct `Configuration` construction uses optional keyword names identical to its public properties or a slightly different constructor organization.
+- exact wording and exception subclass choice, if any, for unavailable-state access that is not a solve failure;
+- lightweight consistency rules for optional prescribed-input provenance on directly constructed result objects.
 
-These should be resolved while preserving the public semantics and invariants recorded above.
+These details should be resolved while preserving the public semantics and invariants recorded above.

@@ -227,7 +227,7 @@ def main():
         np.linalg.norm(solved_tracer - expected_tracer, axis=1)
     )
 
-    output_angles = np.unwrap(solution.link_poses(output_rocker)[:, 2])
+    output_angles = np.unwrap(solution.body_poses(output_rocker)[:, 2])
     output_swing = np.degrees(output_angles.max() - output_angles.min())
 
     print("Watt II six-bar linkage")

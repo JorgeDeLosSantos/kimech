@@ -131,7 +131,7 @@ def test_four_bar_completes_full_revolution_and_returns_to_physical_configuratio
     path = solution.point_path(point_p)
     np.testing.assert_allclose(path[-1], path[0], atol=1e-8)
     for link in mechanism.links:
-        poses = solution.link_poses(link)
+        poses = solution.body_poses(link)
         _assert_pose_history_is_continuous(poses)
         np.testing.assert_allclose(poses[-1, :2], poses[0, :2], atol=1e-8)
         assert abs(_wrapped_angle_difference(poses[-1, 2], poses[0, 2])) < 1e-8

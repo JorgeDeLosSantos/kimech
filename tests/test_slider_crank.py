@@ -119,7 +119,7 @@ def test_slider_crank_completes_full_revolution_and_returns_to_physical_configur
     assert np.ptp(slider_positions) > 0.0
     assert slider_positions[-1] == pytest.approx(slider_positions[0], abs=1e-8)
     for link in mechanism.links:
-        poses = solution.link_poses(link)
+        poses = solution.body_poses(link)
         _assert_pose_history_is_continuous(poses)
         np.testing.assert_allclose(poses[-1, :2], poses[0, :2], atol=1e-8)
         assert abs(_wrapped_angle_difference(poses[-1, 2], poses[0, 2])) < 1e-8

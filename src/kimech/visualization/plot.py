@@ -126,7 +126,7 @@ def _prismatic_geometry(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     position_a = config.position(joint.point_a)
     position_b = config.position(joint.point_b)
-    theta_a = float(config.pose(joint.point_a.body)[2])
+    theta_a = float(config.body_pose(joint.point_a.body)[2])
     axis = rotation_matrix(theta_a) @ np.asarray(joint.axis_a, dtype=float)
     normal = perpendicular(axis)
 

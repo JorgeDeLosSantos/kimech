@@ -122,7 +122,7 @@ def _pack_initial_guess(
         poses: list[object] = []
         for link in links:
             try:
-                poses.append(initial_guess.pose(link))
+                poses.append(initial_guess.body_pose(link))
             except ValueError as error:
                 raise ValueError(
                     "initial_guess Configuration is incompatible with the links snapshot"

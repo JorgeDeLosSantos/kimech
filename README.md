@@ -99,18 +99,20 @@ plt.show()
 
 ## Examples
 
-The example set separates **motion/geometry** from **kinematic analysis**:
+The example set separates **motion/geometry** from **kinematic analysis** and validation:
 
 ```text
 examples/
 ├── four_bar.py
 ├── four_bar_analysis.py
 ├── slider_crank.py
-└── slider_crank_analysis.py
+├── slider_crank_analysis.py
+└── slider_crank_analysis_comparison.py
 ```
 
 - [`examples/four_bar.py`](examples/four_bar.py) and [`examples/slider_crank.py`](examples/slider_crank.py) focus on position solving and animation.
 - [`examples/four_bar_analysis.py`](examples/four_bar_analysis.py) plots rocker angle, angular velocity, angular acceleration, and coupler-point speed/acceleration magnitude versus the prescribed crank angle.
 - [`examples/slider_crank_analysis.py`](examples/slider_crank_analysis.py) plots slider displacement, velocity, and acceleration versus crank angle and demonstrates reconstruction of the same state with the prismatic coordinate prescribed instead.
+- [`examples/slider_crank_analysis_comparison.py`](examples/slider_crank_analysis_comparison.py) compares Kimech's slider displacement, velocity, and acceleration with the independent closed-form slider-crank solution and reports the maximum absolute errors.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for release changes and intentional breaking renames.

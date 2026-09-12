@@ -1,4 +1,4 @@
-"""High-level position solver for planar mechanisms."""
+"""High-level kinematic solver for planar mechanisms."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import numpy as np
 from scipy import optimize
 
 from ._constraints import jacobian, residual
+from ._differential import solve_velocity
 from .errors import InvalidModelError, KinematicSolveError
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Link, Mechanism
@@ -23,8 +24,9 @@ def solve(
     input: RevoluteJoint | PrismaticJoint,
     values,
     initial_guess,
+    input_velocity=None,
 ) -> Configuration | KinematicSolution:
-    """Solve one or more positions for a mechanism with one prescribed joint."""
+    """Solve position and, when requested, velocity kinematics."""
     if not isinstance(mechanism, Mechanism):
         raise TypeError("mechanism must be a Mechanism")
 
@@ -50,6 +52,11 @@ def solve(
         raise InvalidModelError("input joint does not belong to the mechanism snapshot")
 
     input_values, scalar = _coerce_input_values(values)
+    input_velocities = _coerce_input_velocity(
+        input_velocity,
+        scalar=scalar,
+        count=len(input_values),
+    )
     initial_q = _pack_initial_guess(mechanism, links, initial_guess)
 
     if scalar:
@@ -62,12 +69,27 @@ def solve(
             input_value,
             initial_q,
         )
+        coordinate_velocities = None
+        prescribed_velocity = None
+        if input_velocities is not None:
+            prescribed_velocity = float(input_velocities[0])
+            coordinate_velocities = solve_velocity(
+                mechanism,
+                links,
+                joints,
+                input,
+                coordinates,
+                input_value,
+                prescribed_velocity,
+            )
         return Configuration._from_snapshot(
             mechanism,
             links,
             coordinates,
+            coordinate_velocities=coordinate_velocities,
             input_joint=input,
             input_value=input_value,
+            input_velocity=prescribed_velocity,
         )
 
     coordinates = np.empty((len(input_values), coordinate_count), dtype=float)
@@ -85,12 +107,31 @@ def solve(
         coordinates[index] = accepted
         current_guess = accepted
 
+    coordinate_velocities = None
+    if input_velocities is not None:
+        coordinate_velocities = np.empty_like(coordinates)
+        for index, (input_value, prescribed_velocity) in enumerate(
+            zip(input_values, input_velocities)
+        ):
+            coordinate_velocities[index] = solve_velocity(
+                mechanism,
+                links,
+                joints,
+                input,
+                coordinates[index],
+                float(input_value),
+                float(prescribed_velocity),
+                input_index=index,
+            )
+
     return KinematicSolution._from_snapshot(
         mechanism,
         links,
         input,
         input_values,
         coordinates,
+        coordinate_velocities=coordinate_velocities,
+        input_velocities=input_velocities,
     )
 
 
@@ -109,6 +150,41 @@ def _coerce_input_values(values: object) -> tuple[np.ndarray, bool]:
         raise ValueError("values must contain only finite values")
 
     return np.atleast_1d(array).astype(float, copy=True), scalar
+
+
+def _coerce_input_velocity(
+    value: object,
+    *,
+    scalar: bool,
+    count: int,
+) -> np.ndarray | None:
+    if value is None:
+        return None
+    try:
+        array = np.asarray(value, dtype=float)
+    except (TypeError, ValueError) as error:
+        raise TypeError("input_velocity must be numeric") from error
+
+    if scalar:
+        if array.ndim != 0:
+            raise ValueError("input_velocity must be a scalar when values is scalar")
+        if not np.isfinite(float(array)):
+            raise ValueError("input_velocity must be finite")
+        return np.array([float(array)], dtype=float)
+
+    if array.ndim == 0:
+        scalar_value = float(array)
+        if not np.isfinite(scalar_value):
+            raise ValueError("input_velocity must be finite")
+        return np.full(count, scalar_value, dtype=float)
+
+    if array.ndim != 1:
+        raise ValueError("input_velocity must be a scalar or a 1-dimensional sequence")
+    if array.shape != (count,):
+        raise ValueError(f"input_velocity must have shape ({count},)")
+    if not np.all(np.isfinite(array)):
+        raise ValueError("input_velocity must contain only finite values")
+    return array.astype(float, copy=True)
 
 
 def _pack_initial_guess(

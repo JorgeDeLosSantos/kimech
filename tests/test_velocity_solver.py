@@ -200,3 +200,49 @@ def test_linear_algebra_failure_is_translated_to_kinematic_solve_error(monkeypat
             input_velocity=1.0,
             initial_guess=guess,
         )
+
+
+def test_inaccurate_linear_solution_is_rejected_by_independent_residual(monkeypatch):
+    mechanism, _, joint, guess = _single_revolute()
+
+    def false_solution(matrix, rhs):
+        return np.zeros(matrix.shape[1])
+
+    monkeypatch.setattr("kimech._differential.np.linalg.solve", false_solution)
+
+    with pytest.raises(
+        KinematicSolveError,
+        match=r"failed to solve velocity.*residual_inf=1",
+    ):
+        solve(
+            mechanism,
+            input=joint,
+            values=0.5,
+            input_velocity=1.0,
+            initial_guess=guess,
+        )
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    [np.zeros(2), np.array([0.0, np.nan, 1.0])],
+)
+def test_malformed_or_nonfinite_linear_candidates_are_rejected(monkeypatch, candidate):
+    mechanism, _, joint, guess = _single_revolute()
+
+    def malformed_solution(matrix, rhs):
+        return candidate
+
+    monkeypatch.setattr("kimech._differential.np.linalg.solve", malformed_solution)
+
+    with pytest.raises(
+        KinematicSolveError,
+        match="failed to solve velocity.*residual_inf=unavailable",
+    ):
+        solve(
+            mechanism,
+            input=joint,
+            values=0.5,
+            input_velocity=1.0,
+            initial_guess=guess,
+        )

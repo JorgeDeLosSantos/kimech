@@ -1,4 +1,4 @@
-"""Private position-constraint equations and analytical Jacobians."""
+"""Private constraint equations and analytical differential contributions."""
 
 from __future__ import annotations
 
@@ -86,6 +86,40 @@ def joint_jacobian(
     return result
 
 
+def joint_acceleration_bias(
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    joint: _Joint,
+    q: np.ndarray,
+    q_dot: np.ndarray,
+) -> np.ndarray:
+    """Return known second-order joint terms in ``J q_ddot + bias = 0``."""
+    coordinates = _validate_context(mechanism, links, joint, q)
+    velocities = _finite_state(q_dot, len(links), name="q_dot")
+    state_a = _point_differential_state(
+        mechanism, links, joint.point_a, coordinates, velocities
+    )
+    state_b = _point_differential_state(
+        mechanism, links, joint.point_b, coordinates, velocities
+    )
+
+    if isinstance(joint, RevoluteJoint):
+        return state_a.acceleration_bias - state_b.acceleration_bias
+
+    axis = rotation_matrix(state_a.theta) @ np.asarray(joint.axis_a, dtype=float)
+    normal = perpendicular(axis)
+    displacement = state_b.position - state_a.position
+    relative_velocity = state_b.velocity - state_a.velocity
+    relative_bias = state_b.acceleration_bias - state_a.acceleration_bias
+    omega_a = state_a.omega
+    normal_bias = (
+        -(omega_a**2) * (normal @ displacement)
+        - 2.0 * omega_a * (axis @ relative_velocity)
+        + normal @ relative_bias
+    )
+    return np.array([normal_bias, 0.0], dtype=float)
+
+
 def driver_residual(
     mechanism: Mechanism,
     links: tuple[Link, ...],
@@ -148,6 +182,38 @@ def driver_jacobian(
     return result
 
 
+def driver_acceleration_bias(
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    joint: _Joint,
+    q: np.ndarray,
+    q_dot: np.ndarray,
+) -> float:
+    """Return the known second-order bias of a joint's natural coordinate."""
+    coordinates = _validate_context(mechanism, links, joint, q)
+    velocities = _finite_state(q_dot, len(links), name="q_dot")
+    if isinstance(joint, RevoluteJoint):
+        return 0.0
+
+    state_a = _point_differential_state(
+        mechanism, links, joint.point_a, coordinates, velocities
+    )
+    state_b = _point_differential_state(
+        mechanism, links, joint.point_b, coordinates, velocities
+    )
+    axis = rotation_matrix(state_a.theta) @ np.asarray(joint.axis_a, dtype=float)
+    normal = perpendicular(axis)
+    displacement = state_b.position - state_a.position
+    relative_velocity = state_b.velocity - state_a.velocity
+    relative_bias = state_b.acceleration_bias - state_a.acceleration_bias
+    omega_a = state_a.omega
+    return float(
+        -(omega_a**2) * (axis @ displacement)
+        + 2.0 * omega_a * (normal @ relative_velocity)
+        + axis @ relative_bias
+    )
+
+
 def residual(
     mechanism: Mechanism,
     links: tuple[Link, ...],
@@ -187,6 +253,37 @@ def jacobian(
             mechanism, links, joint, coordinates
         )
     result[-1:] = driver_jacobian(mechanism, links, input_joint, coordinates)
+    return result
+
+
+def acceleration_rhs(
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    joints: tuple[_Joint, ...],
+    input_joint: _Joint,
+    q: np.ndarray,
+    q_dot: np.ndarray,
+    input_value: float,
+    input_acceleration: float,
+) -> np.ndarray:
+    """Assemble the right-hand side of ``J q_ddot = b_a``."""
+    coordinates, _ = _validate_system(
+        mechanism, links, joints, input_joint, q, input_value
+    )
+    velocities = _finite_state(q_dot, len(links), name="q_dot")
+    prescribed_acceleration = _finite_scalar(
+        input_acceleration, name="input_acceleration"
+    )
+    result = np.empty(2 * len(joints) + 1, dtype=float)
+    for index, joint in enumerate(joints):
+        bias = joint_acceleration_bias(
+            mechanism, links, joint, coordinates, velocities
+        )
+        result[2 * index : 2 * index + 2] = -bias
+    driver_bias = driver_acceleration_bias(
+        mechanism, links, input_joint, coordinates, velocities
+    )
+    result[-1] = prescribed_acceleration - driver_bias
     return result
 
 
@@ -261,16 +358,20 @@ def _validate_joint_bodies(
 
 
 def _finite_coordinates(value: object, link_count: int) -> np.ndarray:
+    return _finite_state(value, link_count, name="q")
+
+
+def _finite_state(value: object, link_count: int, *, name: str) -> np.ndarray:
     try:
-        coordinates = np.asarray(value, dtype=float)
+        state = np.asarray(value, dtype=float)
     except (TypeError, ValueError) as error:
-        raise TypeError("q must be numeric") from error
+        raise TypeError(f"{name} must be numeric") from error
     expected_shape = (3 * link_count,)
-    if coordinates.shape != expected_shape:
-        raise ValueError(f"q must have shape {expected_shape}")
-    if not np.all(np.isfinite(coordinates)):
-        raise ValueError("q must contain only finite values")
-    return coordinates
+    if state.shape != expected_shape:
+        raise ValueError(f"{name} must have shape {expected_shape}")
+    if not np.all(np.isfinite(state)):
+        raise ValueError(f"{name} must contain only finite values")
+    return state
 
 
 def _finite_scalar(value: object, *, name: str) -> float:
@@ -312,6 +413,58 @@ def _point_kinematics(
     rotation = rotation_matrix(theta)
     local = point.local
     return translation + rotation @ local, index, theta, rotation @ perpendicular(local)
+
+
+class _PointDifferentialState:
+    __slots__ = ("acceleration_bias", "omega", "position", "theta", "velocity")
+
+    def __init__(
+        self,
+        *,
+        position: np.ndarray,
+        theta: float,
+        velocity: np.ndarray,
+        omega: float,
+        acceleration_bias: np.ndarray,
+    ) -> None:
+        self.position = position
+        self.theta = theta
+        self.velocity = velocity
+        self.omega = omega
+        self.acceleration_bias = acceleration_bias
+
+
+def _point_differential_state(
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    point: Point,
+    q: np.ndarray,
+    q_dot: np.ndarray,
+) -> _PointDifferentialState:
+    position, index, theta, angular = _point_kinematics(
+        mechanism, links, point, q
+    )
+    if index is None:
+        return _PointDifferentialState(
+            position=position,
+            theta=0.0,
+            velocity=np.zeros(2, dtype=float),
+            omega=0.0,
+            acceleration_bias=np.zeros(2, dtype=float),
+        )
+
+    start = 3 * index
+    omega = float(q_dot[start + 2])
+    velocity = q_dot[start : start + 2] + omega * angular
+    radial = rotation_matrix(theta) @ np.asarray(point.local, dtype=float)
+    acceleration_bias = -(omega**2) * radial
+    return _PointDifferentialState(
+        position=position,
+        theta=theta,
+        velocity=velocity,
+        omega=omega,
+        acceleration_bias=acceleration_bias,
+    )
 
 
 def _add_point_block(

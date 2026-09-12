@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ._constraints import jacobian
+from ._constraints import acceleration_rhs, jacobian
 from .errors import KinematicSolveError
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Link, Mechanism
@@ -29,12 +29,66 @@ def solve_velocity(
     matrix = jacobian(mechanism, links, joints, input_joint, q, input_value)
     rhs = np.zeros(matrix.shape[0], dtype=float)
     rhs[-1] = velocity
+    return _solve_linear_state(
+        matrix,
+        rhs,
+        link_count=len(links),
+        stage="velocity",
+        input_value=input_value,
+        input_index=input_index,
+    )
 
+
+def solve_acceleration(
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    joints: tuple[_Joint, ...],
+    input_joint: _Joint,
+    q: np.ndarray,
+    q_dot: np.ndarray,
+    input_value: float,
+    input_acceleration: float,
+    *,
+    input_index: int | None = None,
+) -> np.ndarray:
+    """Solve one generalized acceleration state from second-order constraints."""
+    prescribed = _finite_scalar(input_acceleration, name="input_acceleration")
+    matrix = jacobian(mechanism, links, joints, input_joint, q, input_value)
+    rhs = acceleration_rhs(
+        mechanism,
+        links,
+        joints,
+        input_joint,
+        q,
+        q_dot,
+        input_value,
+        prescribed,
+    )
+    return _solve_linear_state(
+        matrix,
+        rhs,
+        link_count=len(links),
+        stage="acceleration",
+        input_value=input_value,
+        input_index=input_index,
+    )
+
+
+def _solve_linear_state(
+    matrix: np.ndarray,
+    rhs: np.ndarray,
+    *,
+    link_count: int,
+    stage: str,
+    input_value: float,
+    input_index: int | None,
+) -> np.ndarray:
     try:
         candidate = np.asarray(np.linalg.solve(matrix, rhs), dtype=float)
     except np.linalg.LinAlgError as error:
         raise KinematicSolveError(
             _failure_message(
+                stage,
                 input_value,
                 input_index=input_index,
                 residual_norm=float("nan"),
@@ -42,7 +96,7 @@ def solve_velocity(
             )
         ) from error
 
-    expected_shape = (3 * len(links),)
+    expected_shape = (3 * link_count,)
     candidate_valid = candidate.shape == expected_shape and np.all(np.isfinite(candidate))
     residual_norm = float("nan")
     if candidate_valid:
@@ -58,6 +112,7 @@ def solve_velocity(
 
     raise KinematicSolveError(
         _failure_message(
+            stage,
             input_value,
             input_index=input_index,
             residual_norm=residual_norm,
@@ -67,6 +122,7 @@ def solve_velocity(
 
 
 def _failure_message(
+    stage: str,
     input_value: float,
     *,
     input_index: int | None,
@@ -80,7 +136,7 @@ def _failure_message(
     )
     norm_text = f"{residual_norm:.12g}" if np.isfinite(residual_norm) else "unavailable"
     return (
-        f"failed to solve velocity at {location}: residual_inf={norm_text}; "
+        f"failed to solve {stage} at {location}: residual_inf={norm_text}; "
         f"reason={reason}"
     )
 

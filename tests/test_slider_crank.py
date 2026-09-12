@@ -145,3 +145,43 @@ def test_slider_crank_prismatic_input_accepts_solver_configuration_as_guess():
     assert _residual_inf(
         mechanism, prismatic_joint, slider_config, slider_position
     ) <= 1e-9
+
+
+def test_slider_crank_velocity_and_acceleration_match_closed_form_slider_motion():
+    mechanism, crank_joint, prismatic_joint, guess = _slider_crank()
+    theta = 0.82
+    omega = 1.7
+    alpha = -0.45
+    crank_length = 0.08
+    rod_length = 0.24
+
+    config = solve(
+        mechanism,
+        input=crank_joint,
+        values=theta,
+        input_velocity=omega,
+        input_acceleration=alpha,
+        initial_guess=guess,
+    )
+
+    sin_theta = np.sin(theta)
+    cos_theta = np.cos(theta)
+    root = np.sqrt(rod_length**2 - crank_length**2 * sin_theta**2)
+    first = (
+        -crank_length * sin_theta
+        - crank_length**2 * sin_theta * cos_theta / root
+    )
+    second = (
+        -crank_length * cos_theta
+        - crank_length**2 * (cos_theta**2 - sin_theta**2) / root
+        - crank_length**4 * sin_theta**2 * cos_theta**2 / root**3
+    )
+    expected_velocity = first * omega
+    expected_acceleration = second * omega**2 + first * alpha
+
+    assert config.joint_velocity(prismatic_joint) == pytest.approx(
+        expected_velocity, rel=1e-9, abs=1e-10
+    )
+    assert config.joint_acceleration(prismatic_joint) == pytest.approx(
+        expected_acceleration, rel=1e-8, abs=1e-9
+    )

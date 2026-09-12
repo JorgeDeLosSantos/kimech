@@ -99,7 +99,7 @@ class Configuration:
         """Return a safe copy of the generalized coordinate vector."""
         return self._coordinates.copy()
 
-    def pose(self, body: _Body) -> np.ndarray:
+    def body_pose(self, body: _Body) -> np.ndarray:
         """Return ``(x, y, theta)`` for a mobile link or the identity for ground."""
         index = _body_index(self._mechanism, self._links, body)
         if index is None:
@@ -113,7 +113,7 @@ class Configuration:
         if point.body is self._mechanism.ground:
             return point.local
 
-        x, y, theta = self.pose(point.body)
+        x, y, theta = self.body_pose(point.body)
         return np.array([x, y], dtype=float) + rotation_matrix(theta) @ point.local
 
     def joint_coordinate(self, joint: _Joint) -> float:
@@ -121,11 +121,11 @@ class Configuration:
         _validate_joint(self._mechanism, self._links, joint)
 
         if isinstance(joint, RevoluteJoint):
-            theta_a = self.pose(joint.point_a.body)[2]
-            theta_b = self.pose(joint.point_b.body)[2]
+            theta_a = self.body_pose(joint.point_a.body)[2]
+            theta_b = self.body_pose(joint.point_b.body)[2]
             return float(theta_b - theta_a)
 
-        pose_a = self.pose(joint.point_a.body)
+        pose_a = self.body_pose(joint.point_a.body)
         axis_a = rotation_matrix(pose_a[2]) @ np.asarray(joint.axis_a, dtype=float)
         displacement = self.position(joint.point_b) - self.position(joint.point_a)
         return float(axis_a @ displacement)
@@ -237,7 +237,7 @@ class KinematicSolution:
             path[index] = self[index].position(point)
         return path
 
-    def link_poses(self, body: _Body) -> np.ndarray:
+    def body_poses(self, body: _Body) -> np.ndarray:
         """Return the pose history of a mobile link or ground."""
         index = _body_index(self._mechanism, self._links, body)
         if index is None:

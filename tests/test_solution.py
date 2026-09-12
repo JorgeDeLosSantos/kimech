@@ -13,15 +13,15 @@ def _revolute_mechanism():
     return mechanism, link, joint
 
 
-def test_configuration_poses_follow_link_creation_order_and_ground_is_fixed():
+def test_configuration_body_poses_follow_link_creation_order_and_ground_is_fixed():
     mechanism = Mechanism()
     first = mechanism.add_link("first")
     second = mechanism.add_link("second")
     config = Configuration(mechanism, [1.0, 2.0, 0.5, 4.0, 5.0, 0.75])
 
-    np.testing.assert_allclose(config.pose(first), [1.0, 2.0, 0.5])
-    np.testing.assert_allclose(config.pose(second), [4.0, 5.0, 0.75])
-    np.testing.assert_allclose(config.pose(mechanism.ground), [0.0, 0.0, 0.0])
+    np.testing.assert_allclose(config.body_pose(first), [1.0, 2.0, 0.5])
+    np.testing.assert_allclose(config.body_pose(second), [4.0, 5.0, 0.75])
+    np.testing.assert_allclose(config.body_pose(mechanism.ground), [0.0, 0.0, 0.0])
 
 
 def test_position_transforms_link_point_from_arbitrary_local_frame():
@@ -53,9 +53,9 @@ def test_configuration_keeps_link_layout_after_mechanism_gains_a_link():
 
     added = mechanism.add_link("b")
 
-    np.testing.assert_allclose(config.pose(original), [1.0, 2.0, 0.3])
+    np.testing.assert_allclose(config.body_pose(original), [1.0, 2.0, 0.3])
     with pytest.raises(ValueError):
-        config.pose(added)
+        config.body_pose(added)
 
 
 def test_configuration_accepts_new_point_only_on_a_snapshotted_link():
@@ -145,8 +145,8 @@ def test_solution_sequence_properties_and_negative_indexing():
     assert solution.input_joint is joint
     assert solution[0].input_joint is joint
     assert solution[0].input_value == pytest.approx(0.0)
-    np.testing.assert_allclose(solution[0].pose(link), coordinates[0])
-    np.testing.assert_allclose(solution[-1].pose(link), coordinates[-1])
+    np.testing.assert_allclose(solution[0].body_pose(link), coordinates[0])
+    np.testing.assert_allclose(solution[-1].body_pose(link), coordinates[-1])
     np.testing.assert_allclose(solution.input_values, inputs)
     np.testing.assert_allclose(solution.coordinates, coordinates)
 
@@ -163,19 +163,19 @@ def test_solution_and_derived_configuration_keep_original_link_layout():
     added_joint = mechanism.revolute(original.points[0], added_point)
     config = solution[0]
 
-    np.testing.assert_allclose(solution.link_poses(original), [[1.0, 2.0, 0.5]])
-    np.testing.assert_allclose(config.pose(original), [1.0, 2.0, 0.5])
+    np.testing.assert_allclose(solution.body_poses(original), [[1.0, 2.0, 0.5]])
+    np.testing.assert_allclose(config.body_pose(original), [1.0, 2.0, 0.5])
     with pytest.raises(ValueError):
-        solution.link_poses(added)
+        solution.body_poses(added)
     with pytest.raises(ValueError):
         solution.point_path(added_point)
     with pytest.raises(ValueError):
         solution.joint_coordinates(added_joint)
     with pytest.raises(ValueError):
-        config.pose(added)
+        config.body_pose(added)
 
 
-def test_point_path_link_poses_and_joint_coordinates_have_expected_values():
+def test_point_path_body_poses_and_joint_coordinates_have_expected_values():
     mechanism, link, joint = _revolute_mechanism()
     point = link.add_point("P", (1.0, 0.0))
     angles = np.array([0.0, np.pi / 2, np.pi])
@@ -185,9 +185,9 @@ def test_point_path_link_poses_and_joint_coordinates_have_expected_values():
     expected_path = [[3.0, 3.0], [2.0, 4.0], [1.0, 3.0]]
     assert solution.point_path(point).shape == (3, 2)
     np.testing.assert_allclose(solution.point_path(point), expected_path, atol=1e-12)
-    assert solution.link_poses(link).shape == (3, 3)
-    np.testing.assert_allclose(solution.link_poses(link), coordinates)
-    np.testing.assert_allclose(solution.link_poses(mechanism.ground), np.zeros((3, 3)))
+    assert solution.body_poses(link).shape == (3, 3)
+    np.testing.assert_allclose(solution.body_poses(link), coordinates)
+    np.testing.assert_allclose(solution.body_poses(mechanism.ground), np.zeros((3, 3)))
     assert solution.joint_coordinates(joint).shape == (3,)
     np.testing.assert_allclose(solution.joint_coordinates(joint), angles)
 
@@ -198,8 +198,8 @@ def test_empty_solution_queries_preserve_documented_shapes():
     solution = KinematicSolution(mechanism, joint, np.empty(0), np.empty((0, 3)))
 
     assert solution.point_path(point).shape == (0, 2)
-    assert solution.link_poses(link).shape == (0, 3)
-    assert solution.link_poses(mechanism.ground).shape == (0, 3)
+    assert solution.body_poses(link).shape == (0, 3)
+    assert solution.body_poses(mechanism.ground).shape == (0, 3)
     assert solution.joint_coordinates(joint).shape == (0,)
 
 
@@ -210,7 +210,7 @@ def test_public_arrays_cannot_mutate_stored_results_or_alias_constructor_inputs(
     original_q[:] = -1.0
     exposed_q = config.coordinates
     exposed_q[:] = 99.0
-    np.testing.assert_allclose(config.pose(link), [1.0, 2.0, 0.5])
+    np.testing.assert_allclose(config.body_pose(link), [1.0, 2.0, 0.5])
 
     input_values = np.array([0.0, 0.5])
     coordinates = np.array([[1.0, 2.0, 0.0], [2.0, 3.0, 0.5]])
@@ -247,7 +247,7 @@ def test_configuration_validates_arrays_input_metadata_and_membership():
 
     config = Configuration(mechanism, [0.0, 0.0, 0.0])
     with pytest.raises(ValueError, match="body"):
-        config.pose(other_link)
+        config.body_pose(other_link)
     with pytest.raises(ValueError, match="point"):
         config.position(other_link.points[0])
     with pytest.raises(ValueError, match="joint"):
@@ -277,8 +277,8 @@ def test_solution_validates_shapes_finiteness_and_external_entities():
     with pytest.raises(ValueError):
         solution.point_path(external_point)
     with pytest.raises(ValueError):
-        solution.link_poses(other_link)
+        solution.body_poses(other_link)
     with pytest.raises(ValueError):
-        solution.link_poses(other.ground)
+        solution.body_poses(other.ground)
     with pytest.raises(ValueError):
         solution.joint_coordinates(other_joint)

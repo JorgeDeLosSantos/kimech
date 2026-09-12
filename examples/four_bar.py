@@ -59,12 +59,12 @@ def main():
     )
 
     path = solution.point_path(point_p)
-    rocker_poses = solution.link_poses(rocker)
+    rocker_poses = solution.body_poses(rocker)
     input_coordinates = solution.joint_coordinates(input_joint)
 
     first_config = solution[0]
     first_point_position = first_config.position(point_p)
-    first_crank_pose = first_config.pose(crank)
+    first_crank_pose = first_config.body_pose(crank)
 
     print("Four-bar")
     print(f"Solved {len(solution)} configurations")

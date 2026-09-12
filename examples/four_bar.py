@@ -1,4 +1,4 @@
-"""Solve a four-bar linkage through Kimech's public API."""
+"""Solve and animate a four-bar linkage through Kimech's public API."""
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -49,14 +49,10 @@ def main():
         mechanism,
         input=input_joint,
         values=values,
-        input_velocity=1.5,
-        input_acceleration=0.0,
         initial_guess=initial_guess,
     )
 
     path = solution.point_path(point_p)
-    point_velocities = solution.point_velocities(point_p)
-    point_accelerations = solution.point_accelerations(point_p)
     rocker_poses = solution.body_poses(rocker)
     input_coordinates = solution.joint_coordinates(input_joint)
 
@@ -64,13 +60,11 @@ def main():
     first_point_position = first_config.position(point_p)
     first_crank_pose = first_config.body_pose(crank)
 
-    print("Four-bar")
+    print("Four-bar motion")
     print(f"Solved {len(solution)} configurations")
     print(f"Input: {input_coordinates[0]:.3f} -> {input_coordinates[-1]:.3f} rad")
     print(f"Coupler point P: {first_point_position} -> {path[-1]}")
     print(f"First crank pose: {first_crank_pose}")
-    print(f"First P velocity: {point_velocities[0]}")
-    print(f"First P acceleration: {point_accelerations[0]}")
     print(f"Rocker angle: {rocker_poses[0, 2]:.3f} -> {rocker_poses[-1, 2]:.3f} rad")
 
     fig, ax = plt.subplots()

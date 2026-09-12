@@ -99,6 +99,18 @@ plt.show()
 
 ## Examples
 
-[`examples/four_bar.py`](examples/four_bar.py) and [`examples/slider_crank.py`](examples/slider_crank.py) are complete examples built with the generic public API.
+The example set separates **motion/geometry** from **kinematic analysis**:
+
+```text
+examples/
+├── four_bar.py
+├── four_bar_analysis.py
+├── slider_crank.py
+└── slider_crank_analysis.py
+```
+
+- [`examples/four_bar.py`](examples/four_bar.py) and [`examples/slider_crank.py`](examples/slider_crank.py) focus on position solving and animation.
+- [`examples/four_bar_analysis.py`](examples/four_bar_analysis.py) plots rocker angle, angular velocity, angular acceleration, and coupler-point speed/acceleration magnitude versus the prescribed crank angle.
+- [`examples/slider_crank_analysis.py`](examples/slider_crank_analysis.py) plots slider displacement, velocity, and acceleration versus crank angle and demonstrates reconstruction of the same state with the prismatic coordinate prescribed instead.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for release changes and intentional breaking renames.

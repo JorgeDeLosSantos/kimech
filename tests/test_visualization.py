@@ -116,7 +116,7 @@ def test_plot_returns_figure_and_axes_and_reuses_external_axes():
 
 def test_plot_can_be_saved_as_nonempty_svg(tmp_path):
     mechanism, input_joint, _, guess = _four_bar()
-    config = solve(mechanism, input=input_joint, values=0.8, initial_guess=guess)
+    config = solve(mechanism, input_joint=input_joint, input_position=0.8, initial_guess=guess)
     fig, _ = plot(config)
     path = tmp_path / "mechanism.svg"
 
@@ -169,7 +169,7 @@ def test_mobile_links_follow_public_matplotlib_color_cycle():
 
 def test_four_bar_has_body_skeletons_pivots_and_auxiliary_point():
     mechanism, input_joint, auxiliary, guess = _four_bar()
-    config = solve(mechanism, input=input_joint, values=0.8, initial_guess=guess)
+    config = solve(mechanism, input_joint=input_joint, input_position=0.8, initial_guess=guess)
 
     fig, ax = plot(config)
 
@@ -184,7 +184,7 @@ def test_four_bar_has_body_skeletons_pivots_and_auxiliary_point():
 
 def test_slider_crank_has_skeleton_guide_slider_patch_and_pivots():
     mechanism, input_joint, guess = _slider_crank()
-    config = solve(mechanism, input=input_joint, values=0.7, initial_guess=guess)
+    config = solve(mechanism, input_joint=input_joint, input_position=0.7, initial_guess=guess)
 
     fig, ax = plot(config)
 

@@ -22,12 +22,12 @@ _RESIDUAL_TOL = 1e-9
 def solve(
     mechanism: Mechanism,
     *,
-    input: RevoluteJoint | PrismaticJoint,
-    values,
+    input_joint: RevoluteJoint | PrismaticJoint,
+    input_position,
     initial_guess,
     input_velocity=None,
     input_acceleration=None,
-) -> Configuration | KinematicSolution:
+) -> KinematicSolution:
     """Solve position and, when requested, differential kinematics."""
     if not isinstance(mechanism, Mechanism):
         raise TypeError("mechanism must be a Mechanism")
@@ -48,23 +48,23 @@ def solve(
             f"({coordinate_count} coordinates versus {equation_count} equations)"
         )
 
-    if not isinstance(input, (RevoluteJoint, PrismaticJoint)):
-        raise TypeError("input must be a RevoluteJoint or PrismaticJoint")
-    if not any(input is joint for joint in joints):
-        raise InvalidModelError("input joint does not belong to the mechanism snapshot")
+    if not isinstance(input_joint, (RevoluteJoint, PrismaticJoint)):
+        raise TypeError("input_joint must be a RevoluteJoint or PrismaticJoint")
+    if not any(input_joint is joint for joint in joints):
+        raise InvalidModelError(
+            "input_joint does not belong to the mechanism snapshot"
+        )
 
-    input_values, scalar = _coerce_input_values(values)
+    input_positions = _coerce_input_positions(input_position)
     input_velocities = _coerce_optional_input_history(
         input_velocity,
         name="input_velocity",
-        scalar=scalar,
-        count=len(input_values),
+        count=len(input_positions),
     )
     input_accelerations = _coerce_optional_input_history(
         input_acceleration,
         name="input_acceleration",
-        scalar=scalar,
-        count=len(input_values),
+        count=len(input_positions),
     )
     if input_accelerations is not None and input_velocities is None:
         raise ValueError("input_acceleration requires input_velocity")
@@ -73,75 +73,20 @@ def solve(
         mechanism,
         links,
         joints,
-        input,
-        input_values,
+        input_joint,
+        input_positions,
     )
     initial_q = _pack_initial_guess(mechanism, links, initial_guess)
 
-    if scalar:
-        input_value = float(input_values[0])
-        coordinates = _solve_configuration(
-            mechanism,
-            links,
-            joints,
-            input,
-            input_value,
-            initial_q,
-            scaling,
-        )
-
-        coordinate_velocities = None
-        coordinate_accelerations = None
-        prescribed_velocity = None
-        prescribed_acceleration = None
-
-        if input_velocities is not None:
-            prescribed_velocity = float(input_velocities[0])
-            coordinate_velocities = solve_velocity(
-                mechanism,
-                links,
-                joints,
-                input,
-                coordinates,
-                input_value,
-                prescribed_velocity,
-                scaling,
-            )
-        if input_accelerations is not None:
-            prescribed_acceleration = float(input_accelerations[0])
-            coordinate_accelerations = solve_acceleration(
-                mechanism,
-                links,
-                joints,
-                input,
-                coordinates,
-                coordinate_velocities,
-                input_value,
-                prescribed_acceleration,
-                scaling,
-            )
-
-        return Configuration._from_snapshot(
-            mechanism,
-            links,
-            coordinates,
-            coordinate_velocities=coordinate_velocities,
-            coordinate_accelerations=coordinate_accelerations,
-            input_joint=input,
-            input_value=input_value,
-            input_velocity=prescribed_velocity,
-            input_acceleration=prescribed_acceleration,
-        )
-
-    coordinates = np.empty((len(input_values), coordinate_count), dtype=float)
+    coordinates = np.empty((len(input_positions), coordinate_count), dtype=float)
     current_guess = initial_q
-    for index, input_value in enumerate(input_values):
+    for index, input_position_value in enumerate(input_positions):
         accepted = _solve_configuration(
             mechanism,
             links,
             joints,
-            input,
-            float(input_value),
+            input_joint,
+            float(input_position_value),
             current_guess,
             scaling,
             input_index=index,
@@ -152,16 +97,16 @@ def solve(
     coordinate_velocities = None
     if input_velocities is not None:
         coordinate_velocities = np.empty_like(coordinates)
-        for index, (input_value, prescribed_velocity) in enumerate(
-            zip(input_values, input_velocities)
+        for index, (input_position_value, prescribed_velocity) in enumerate(
+            zip(input_positions, input_velocities)
         ):
             coordinate_velocities[index] = solve_velocity(
                 mechanism,
                 links,
                 joints,
-                input,
+                input_joint,
                 coordinates[index],
-                float(input_value),
+                float(input_position_value),
                 float(prescribed_velocity),
                 scaling,
                 input_index=index,
@@ -170,17 +115,17 @@ def solve(
     coordinate_accelerations = None
     if input_accelerations is not None:
         coordinate_accelerations = np.empty_like(coordinates)
-        for index, (input_value, prescribed_acceleration) in enumerate(
-            zip(input_values, input_accelerations)
+        for index, (input_position_value, prescribed_acceleration) in enumerate(
+            zip(input_positions, input_accelerations)
         ):
             coordinate_accelerations[index] = solve_acceleration(
                 mechanism,
                 links,
                 joints,
-                input,
+                input_joint,
                 coordinates[index],
                 coordinate_velocities[index],
-                float(input_value),
+                float(input_position_value),
                 float(prescribed_acceleration),
                 scaling,
                 input_index=index,
@@ -189,8 +134,8 @@ def solve(
     return KinematicSolution._from_snapshot(
         mechanism,
         links,
-        input,
-        input_values,
+        input_joint,
+        input_positions,
         coordinates,
         coordinate_velocities=coordinate_velocities,
         coordinate_accelerations=coordinate_accelerations,
@@ -199,28 +144,27 @@ def solve(
     )
 
 
-def _coerce_input_values(values: object) -> tuple[np.ndarray, bool]:
+def _coerce_input_positions(input_position: object) -> np.ndarray:
     try:
-        array = np.asarray(values, dtype=float)
+        array = np.asarray(input_position, dtype=float)
     except (TypeError, ValueError) as error:
-        raise TypeError("values must be numeric") from error
+        raise TypeError("input_position must be numeric") from error
 
-    scalar = array.ndim == 0
-    if not scalar and array.ndim != 1:
-        raise ValueError("values must be a scalar or a 1-dimensional sequence")
-    if not scalar and array.size == 0:
-        raise ValueError("values sequence must not be empty")
+    if array.ndim == 0:
+        array = np.atleast_1d(array)
+    elif array.ndim != 1:
+        raise ValueError("input_position must be a scalar or a 1-dimensional sequence")
+    if array.size == 0:
+        raise ValueError("input_position sequence must not be empty")
     if not np.all(np.isfinite(array)):
-        raise ValueError("values must contain only finite values")
-
-    return np.atleast_1d(array).astype(float, copy=True), scalar
+        raise ValueError("input_position must contain only finite values")
+    return array.astype(float, copy=True)
 
 
 def _coerce_optional_input_history(
     value: object,
     *,
     name: str,
-    scalar: bool,
     count: int,
 ) -> np.ndarray | None:
     if value is None:
@@ -229,14 +173,6 @@ def _coerce_optional_input_history(
         array = np.asarray(value, dtype=float)
     except (TypeError, ValueError) as error:
         raise TypeError(f"{name} must be numeric") from error
-
-    if scalar:
-        if array.ndim != 0:
-            raise ValueError(f"{name} must be a scalar when values is scalar")
-        scalar_value = float(array)
-        if not np.isfinite(scalar_value):
-            raise ValueError(f"{name} must be finite")
-        return np.array([scalar_value], dtype=float)
 
     if array.ndim == 0:
         scalar_value = float(array)

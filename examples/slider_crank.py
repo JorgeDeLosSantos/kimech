@@ -52,8 +52,8 @@ def main():
 
     solution = solve(
         mechanism,
-        input=crank_joint,
-        values=values,
+        input_joint=crank_joint,
+        input_position=values,
         initial_guess=initial_guess,
     )
 
@@ -61,7 +61,7 @@ def main():
 
     print("Slider-crank motion")
     print(f"Solved {len(solution)} configurations")
-    print(f"Crank input: {solution.input_values[0]:.3f} -> {solution.input_values[-1]:.3f} rad")
+    print(f"Crank input: {solution.input_positions[0]:.3f} -> {solution.input_positions[-1]:.3f} rad")
     print(
         f"Slider displacement: {slider_positions.min():.6f} -> "
         f"{slider_positions.max():.6f}"

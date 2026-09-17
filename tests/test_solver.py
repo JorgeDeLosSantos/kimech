@@ -22,17 +22,20 @@ def _single_revolute():
     return mechanism, link, joint
 
 
-def test_scalar_value_returns_configuration_and_complete_mapping_is_packed_by_link_order():
+def test_scalar_position_returns_length_one_solution_and_complete_mapping_is_packed_by_link_order():
     mechanism, link, joint = _single_revolute()
     pose = np.array([0.1, -0.1, 0.4])
 
-    config = solve(
+    solution = solve(
         mechanism,
         input_joint=joint,
         input_position=np.float64(0.5),
         initial_guess={link: pose},
     )
+    config = solution[0]
 
+    assert isinstance(solution, KinematicSolution)
+    assert len(solution) == 1
     assert isinstance(config, Configuration)
     assert config.input_joint is joint
     assert config.input_position == pytest.approx(0.5)
@@ -123,7 +126,12 @@ def test_configuration_from_same_mechanism_can_be_reused_as_guess():
     mechanism, link, joint = _single_revolute()
     first = Configuration(mechanism, [0.0, 0.0, 0.4])
 
-    second = solve(mechanism, input_joint=joint, input_position=0.6, initial_guess=first)
+    second = solve(
+        mechanism,
+        input_joint=joint,
+        input_position=0.6,
+        initial_guess=first,
+    )[0]
 
     assert second.joint_coordinate(joint) == pytest.approx(0.6)
     assert link.mechanism is mechanism

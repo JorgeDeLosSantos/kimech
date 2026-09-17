@@ -4,7 +4,7 @@ Kimech is a small Python library for modeling and solving the kinematics of plan
 
 It provides declarative rigid-body models with revolute and prismatic joints, position solving with warm-start continuation, analytic velocity and acceleration kinematics, result queries, and schematic plotting and animation.
 
-Kimech `0.2.0` supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms with one prescribed joint coordinate. The `0.1.0` position-kinematics baseline is recorded in [`docs/design.md`](docs/design.md), the `0.2.0` design baseline in [`docs/design-0.2.0.md`](docs/design-0.2.0.md), and [`docs/api.md`](docs/api.md) documents the current implemented public API.
+Kimech supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms with one prescribed joint coordinate. The `0.1.0` position-kinematics baseline is recorded in [`docs/design.md`](docs/design.md), the `0.2.0` differential-kinematics baseline in [`docs/design-0.2.0.md`](docs/design-0.2.0.md), and [`docs/api.md`](docs/api.md) documents the current development API for `0.3.0`.
 
 ## Installation
 
@@ -65,12 +65,12 @@ initial_guess = {
     coupler: (0.05, 0.06, 0.2),
     rocker: (0.30, 0.0, 2.2),
 }
-values = np.linspace(0.8, 1.3, 60)
+input_positions = np.linspace(0.8, 1.3, 60)
 
 solution = solve(
     mechanism,
-    input=input_joint,
-    values=values,
+    input_joint=input_joint,
+    input_position=input_positions,
     input_velocity=1.5,
     input_acceleration=0.0,
     initial_guess=initial_guess,
@@ -81,7 +81,7 @@ velocities = solution.point_velocities(point_p)
 accelerations = solution.point_accelerations(point_p)
 ```
 
-`values` are configuration parameters, not timestamps. `input_velocity` and `input_acceleration` are physical derivatives with respect to a common external time variable. Scalar differential inputs are broadcast across a sweep.
+`input_position` is the prescribed natural coordinate of `input_joint`: relative angle for a revolute joint and signed displacement for a prismatic joint. It may be a scalar or a one-dimensional sequence. `solve()` always returns a `KinematicSolution`; a scalar input therefore produces a solution of length one and `solution[0]` returns its `Configuration`. Differential inputs are physical derivatives with respect to a common external time variable, and scalar differential inputs are broadcast across sweeps.
 
 Position-only solving remains valid by omitting the differential inputs.
 

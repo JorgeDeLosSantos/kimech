@@ -75,7 +75,7 @@ def _assert_pose_history_is_continuous(poses):
 def test_four_bar_scalar_solve_satisfies_complete_constraint_system():
     mechanism, input_joint, _, guess = _four_bar()
 
-    config = solve(mechanism, input_joint=input_joint, input_position=0.8, initial_guess=guess)
+    config = solve(mechanism, input_joint=input_joint, input_position=0.8, initial_guess=guess)[0]
 
     assert isinstance(config, Configuration)
     assert config.joint_coordinate(input_joint) == pytest.approx(0.8, abs=1e-10)
@@ -100,7 +100,7 @@ def test_four_bar_sweep_uses_continuation_and_preserves_values():
 
 def test_four_bar_reverse_sweep_preserves_user_direction():
     mechanism, input_joint, _, guess = _four_bar()
-    endpoint = solve(mechanism, input_joint=input_joint, input_position=1.3, initial_guess=guess)
+    endpoint = solve(mechanism, input_joint=input_joint, input_position=1.3, initial_guess=guess)[0]
     values = np.linspace(0.8, 1.3, 40)[::-1]
 
     solution = solve(mechanism, input_joint=input_joint, input_position=values, initial_guess=endpoint)

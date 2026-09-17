@@ -51,8 +51,8 @@ def _four_bar_solution():
     mechanism.revolute(rocker_d, ground_d)
     solution = solve(
         mechanism,
-        input=input_joint,
-        values=np.linspace(0.8, 1.3, 4),
+        input_joint=input_joint,
+        input_position=np.linspace(0.8, 1.3, 4),
         initial_guess={
             crank: (0.0, 0.0, 0.8),
             coupler: (0.05, 0.06, 0.2),
@@ -88,8 +88,8 @@ def _slider_crank_solution():
     )
     return solve(
         mechanism,
-        input=input_joint,
-        values=np.linspace(0.7, 1.2, 4),
+        input_joint=input_joint,
+        input_position=np.linspace(0.7, 1.2, 4),
         initial_guess={
             crank: (0.0, 0.0, 0.7),
             rod: (0.06, 0.05, -0.2),

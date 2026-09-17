@@ -177,7 +177,7 @@ def _ground_probe(translation: tuple[float, float], *, add_poi: bool) -> StudyCa
         name="ground_translation_probe",
         mechanism=mechanism,
         input_joint=input_joint,
-        values=np.array([0.0]),
+        input_position=np.array([0.0]),
         initial_guess={link_a: (tx, ty, 0.0), link_b: (tx + 3.0, ty + 4.0, 0.0)},
         characteristic_length=1.0,
     )
@@ -203,7 +203,7 @@ def _single_revolute_offset(offset: float) -> StudyCase:
         name="single_revolute_offset",
         mechanism=mechanism,
         input_joint=input_joint,
-        values=np.linspace(0.0, 2.0 * np.pi, 361),
+        input_position=np.linspace(0.0, 2.0 * np.pi, 361),
         initial_guess={link: (-offset, 0.0, 0.0)},
         characteristic_length=1.0,
     )
@@ -246,7 +246,7 @@ def _pure_prismatic(scale: float) -> StudyCase:
         name="pure_prismatic",
         mechanism=mechanism,
         input_joint=input_joint,
-        values=scale * np.linspace(0.0, 100.0, 101),
+        input_position=scale * np.linspace(0.0, 100.0, 101),
         initial_guess={slider: (0.0, 0.0, 0.0)},
         characteristic_length=1.0,
     )
@@ -284,7 +284,7 @@ def fallback_check() -> None:
         name="zero_length_revolute",
         mechanism=mechanism,
         input_joint=input_joint,
-        values=np.array([0.5]),
+        input_position=np.array([0.5]),
         initial_guess={link: (0.0, 0.0, 0.0)},
         characteristic_length=1.0,
     )

@@ -39,7 +39,7 @@ def test_scalar_revolute_velocity_is_exact_relative_angular_rate():
         input_position=0.7,
         input_velocity=2.5,
         initial_guess=guess,
-    )
+    )[0]
 
     assert isinstance(config, Configuration)
     assert config.has_velocity
@@ -57,7 +57,7 @@ def test_scalar_prismatic_velocity_is_exact_translation_along_axis():
         input_position=1.2,
         input_velocity=-0.4,
         initial_guess=guess,
-    )
+    )[0]
 
     assert config.has_velocity
     np.testing.assert_allclose(config.body_velocity(slider), [-0.4, 0.0, 0.0])
@@ -112,7 +112,7 @@ def test_zero_input_velocity_requests_and_returns_zero_velocity_state():
         input_position=0.5,
         input_velocity=0.0,
         initial_guess=guess,
-    )
+    )[0]
 
     assert config.has_velocity
     np.testing.assert_allclose(config.coordinate_velocities, np.zeros(3))

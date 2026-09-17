@@ -80,7 +80,7 @@ def _assert_pose_history_is_continuous(poses):
 def test_slider_crank_revolute_input_scalar_and_sweep():
     mechanism, crank_joint, _, guess = _slider_crank()
 
-    config = solve(mechanism, input_joint=crank_joint, input_position=0.7, initial_guess=guess)
+    config = solve(mechanism, input_joint=crank_joint, input_position=0.7, initial_guess=guess)[0]
     values = np.linspace(0.7, 1.2, 35)
     solution = solve(mechanism, input_joint=crank_joint, input_position=values, initial_guess=config)
 
@@ -127,7 +127,7 @@ def test_slider_crank_completes_full_revolution_and_returns_to_physical_configur
 
 def test_slider_crank_prismatic_input_accepts_solver_configuration_as_guess():
     mechanism, crank_joint, prismatic_joint, guess = _slider_crank()
-    crank_config = solve(mechanism, input_joint=crank_joint, input_position=0.7, initial_guess=guess)
+    crank_config = solve(mechanism, input_joint=crank_joint, input_position=0.7, initial_guess=guess)[0]
     slider_position = crank_config.joint_coordinate(prismatic_joint)
 
     slider_config = solve(
@@ -135,7 +135,7 @@ def test_slider_crank_prismatic_input_accepts_solver_configuration_as_guess():
         input_joint=prismatic_joint,
         input_position=slider_position,
         initial_guess=crank_config,
-    )
+    )[0]
 
     assert isinstance(slider_config, Configuration)
     assert slider_config.input_joint is prismatic_joint
@@ -162,7 +162,7 @@ def test_slider_crank_velocity_and_acceleration_match_closed_form_slider_motion(
         input_velocity=omega,
         input_acceleration=alpha,
         initial_guess=guess,
-    )
+    )[0]
 
     sin_theta = np.sin(theta)
     cos_theta = np.cos(theta)

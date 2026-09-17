@@ -1,6 +1,6 @@
 # Kimech — Package structure and public API
 
-> Status: public API for `0.2.0`.
+> Status: current development API for `0.3.0`.
 >
 > Kimech remains a young project, and this API may evolve in future versions. [`design.md`](design.md) records the `0.1.0` position-kinematics baseline and [`design-0.2.0.md`](design-0.2.0.md) records the differential-kinematics design baseline.
 
@@ -18,11 +18,11 @@ from kimech import Mechanism, solve
 mechanism = Mechanism("four_bar")
 # ... declare links, points, and joints ...
 
-values = np.linspace(0.8, 1.3, 60)
+input_positions = np.linspace(0.8, 1.3, 60)
 solution = solve(
     mechanism,
-    input=input_joint,
-    values=values,
+    input_joint=input_joint,
+    input_position=input_positions,
     input_velocity=1.5,
     input_acceleration=0.0,
     initial_guess=initial_guess,
@@ -33,7 +33,7 @@ velocities = solution.point_velocities(point_p)
 accelerations = solution.point_accelerations(point_p)
 ```
 
-`values` parameterize configurations; they are not interpreted as physical time. Differential inputs are physical derivatives with respect to a common external time variable.
+`input_position` parameterizes configurations; it is not interpreted as physical time. It is the natural coordinate of `input_joint`: relative angle for a revolute joint and signed displacement for a prismatic joint. Differential inputs are physical derivatives with respect to a common external time variable.
 
 ## 2. Package structure
 
@@ -50,13 +50,14 @@ src/
     ├── _geometry.py
     ├── _constraints.py
     ├── _differential.py
+    ├── _scaling.py
     └── visualization/
         ├── __init__.py
         ├── plot.py
         └── animation.py
 ```
 
-The package remains intentionally flat. Mechanism-specific solver classes, backend registries, and plugin systems are not part of `0.2.0`.
+The package remains intentionally flat. Mechanism-specific solver classes, backend registries, and plugin systems are not part of `0.3.0`.
 
 ### Module responsibilities
 
@@ -65,6 +66,7 @@ The package remains intentionally flat. Mechanism-specific solver classes, backe
 - `_geometry.py` contains private planar numerical helpers.
 - `_constraints.py` assembles private residual, Jacobian, and analytic second-order constraint contributions.
 - `_differential.py` solves private velocity and acceleration linear systems and independently verifies their residuals.
+- `_scaling.py` constructs private dimensionless numerical scaling used consistently by position, velocity, and acceleration solves.
 - `solver.py` validates and normalizes the solve problem, performs complete position continuation first, then optional velocity and acceleration phases, and returns result objects.
 - `solution.py` owns solver-independent kinematic state and derived entity queries through `Configuration` and `KinematicSolution`.
 - `validation.py` provides lightweight structural validation and mobility estimation.
@@ -239,7 +241,7 @@ Kimech reuses the analytic position Jacobian and computes analytic second-order 
 
 ## 6. Time semantics
 
-`values` are configuration parameters, not a time array.
+`input_position` samples are configuration parameters, not a time array.
 
 The dot notation has its standard physical meaning. `input_velocity`, `input_acceleration`, generalized differential state, and derived differential queries are derivatives with respect to one common external physical time variable.
 
@@ -256,7 +258,7 @@ Important properties:
 ```python
 config.mechanism
 config.input_joint
-config.input_value
+config.input_position
 config.input_velocity
 config.input_acceleration
 
@@ -314,7 +316,7 @@ Important properties:
 ```python
 solution.mechanism
 solution.input_joint
-solution.input_values
+solution.input_positions
 solution.input_velocities
 solution.input_accelerations
 
@@ -328,7 +330,7 @@ solution.has_acceleration
 
 Shapes are:
 
-- `input_values`: `(N,)`;
+- `input_positions`: `(N,)`;
 - optional differential input histories: `(N,)`;
 - `coordinates`: `(N, 3*n)`;
 - optional generalized differential histories: `(N, 3*n)`.
@@ -359,9 +361,27 @@ solution.joint_accelerations(joint)     # (N,)
 
 Array properties and query results are safe values/copies and do not expose mutable internal state.
 
-## 9. Intentional breaking rename in `0.2.0`
+## 9. Intentional breaking changes
 
-Because Kimech remains pre-`1.0`, the result API was standardized without compatibility aliases:
+Because Kimech remains pre-`1.0`, API cleanups are applied without compatibility aliases.
+
+For `0.3.0`:
+
+```text
+solve(..., input=..., values=...)
+    -> solve(..., input_joint=..., input_position=...)
+
+solve(... scalar position ...) -> Configuration
+    -> solve(... scalar position ...) -> KinematicSolution(len=1)
+
+Configuration.input_value
+    -> Configuration.input_position
+
+KinematicSolution.input_values
+    -> KinematicSolution.input_positions
+```
+
+The earlier `0.2.0` result-method renames remain:
 
 ```text
 Configuration.pose()
@@ -387,7 +407,7 @@ KimechError
 
 `KinematicSolveError` reports numerical failures at position, velocity, or acceleration level. Differential failures identify the stage and, for sweeps, the input index/value when available. Kimech independently verifies accepted residuals rather than trusting the underlying numerical routine alone.
 
-No public singularity exception or condition-number policy exists in `0.2.0`.
+No public singularity exception or condition-number policy exists in `0.3.0`.
 
 ## 11. Validation
 
@@ -455,4 +475,4 @@ The test suite covers model/constraint behavior, position solving, differential 
 
 ## 15. Deliberately absent API
 
-`0.2.0` does not provide public abstractions for multiple inputs, motion laws, time histories, dynamics, forces, masses/inertias, formal singularity diagnostics, adaptive continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes.
+`0.3.0` does not provide public abstractions for multiple inputs, motion laws, time histories, dynamics, forces, masses/inertias, formal singularity diagnostics, adaptive continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes.

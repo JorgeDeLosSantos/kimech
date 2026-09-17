@@ -50,8 +50,8 @@ def main():
 
     solution = solve(
         mechanism,
-        input=input_joint,
-        values=input_angle,
+        input_joint=input_joint,
+        input_position=input_angle,
         input_velocity=input_angular_velocity,
         input_acceleration=input_angular_acceleration,
         initial_guess=initial_guess,

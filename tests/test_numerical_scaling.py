@@ -163,7 +163,7 @@ def test_differential_solution_preserves_physical_scaling(scale):
         input_velocity=omega,
         input_acceleration=alpha,
         initial_guess=guess,
-    )
+    )[0]
 
     assert np.all(np.isfinite(config.coordinates))
     assert np.all(np.isfinite(config.coordinate_velocities))

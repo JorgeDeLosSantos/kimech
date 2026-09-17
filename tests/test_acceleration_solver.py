@@ -41,7 +41,7 @@ def test_scalar_revolute_acceleration_matches_prescribed_angular_acceleration():
         input_velocity=2.5,
         input_acceleration=-1.2,
         initial_guess=guess,
-    )
+    )[0]
 
     assert isinstance(config, Configuration)
     assert config.has_velocity
@@ -61,7 +61,7 @@ def test_scalar_prismatic_acceleration_matches_prescribed_translation_accelerati
         input_velocity=-0.4,
         input_acceleration=0.75,
         initial_guess=guess,
-    )
+    )[0]
 
     np.testing.assert_allclose(config.body_acceleration(slider), [0.75, 0.0, 0.0])
     assert config.joint_acceleration(joint) == pytest.approx(0.75)
@@ -79,7 +79,7 @@ def test_point_acceleration_includes_centripetal_term_for_constant_input_speed()
         input_velocity=omega,
         input_acceleration=0.0,
         initial_guess=guess,
-    )
+    )[0]
 
     radial = np.array([2.0 * np.cos(theta), 2.0 * np.sin(theta)])
     np.testing.assert_allclose(config.acceleration(tip), -(omega**2) * radial, atol=1e-11)

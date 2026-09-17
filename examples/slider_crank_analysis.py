@@ -105,7 +105,7 @@ def main():
         input_velocity=slider_velocity[sample],
         input_acceleration=slider_acceleration[sample],
         initial_guess=reference,
-    )
+    )[0]
 
     coordinate_error = np.max(
         np.abs(reconstructed.coordinates - reference.coordinates)

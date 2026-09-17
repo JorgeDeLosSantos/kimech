@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from ._constraints import acceleration_rhs, jacobian
+from ._scaling import NumericalScaling
 from .errors import KinematicSolveError
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Link, Mechanism
@@ -21,6 +22,7 @@ def solve_velocity(
     q: np.ndarray,
     input_value: float,
     input_velocity: float,
+    scaling: NumericalScaling,
     *,
     input_index: int | None = None,
 ) -> np.ndarray:
@@ -30,8 +32,9 @@ def solve_velocity(
     rhs = np.zeros(matrix.shape[0], dtype=float)
     rhs[-1] = velocity
     return _solve_linear_state(
-        matrix,
-        rhs,
+        scaling.scale_jacobian(matrix),
+        scaling.scale_rhs(rhs),
+        scaling=scaling,
         link_count=len(links),
         stage="velocity",
         input_value=input_value,
@@ -48,6 +51,7 @@ def solve_acceleration(
     q_dot: np.ndarray,
     input_value: float,
     input_acceleration: float,
+    scaling: NumericalScaling,
     *,
     input_index: int | None = None,
 ) -> np.ndarray:
@@ -65,8 +69,9 @@ def solve_acceleration(
         prescribed,
     )
     return _solve_linear_state(
-        matrix,
-        rhs,
+        scaling.scale_jacobian(matrix),
+        scaling.scale_rhs(rhs),
+        scaling=scaling,
         link_count=len(links),
         stage="acceleration",
         input_value=input_value,
@@ -75,16 +80,17 @@ def solve_acceleration(
 
 
 def _solve_linear_state(
-    matrix: np.ndarray,
-    rhs: np.ndarray,
+    matrix_hat: np.ndarray,
+    rhs_hat: np.ndarray,
     *,
+    scaling: NumericalScaling,
     link_count: int,
     stage: str,
     input_value: float,
     input_index: int | None,
 ) -> np.ndarray:
     try:
-        candidate = np.asarray(np.linalg.solve(matrix, rhs), dtype=float)
+        candidate_hat = np.asarray(np.linalg.solve(matrix_hat, rhs_hat), dtype=float)
     except np.linalg.LinAlgError as error:
         raise KinematicSolveError(
             _failure_message(
@@ -97,18 +103,20 @@ def _solve_linear_state(
         ) from error
 
     expected_shape = (3 * link_count,)
-    candidate_valid = candidate.shape == expected_shape and np.all(np.isfinite(candidate))
+    candidate_valid = (
+        candidate_hat.shape == expected_shape and np.all(np.isfinite(candidate_hat))
+    )
     residual_norm = float("nan")
     if candidate_valid:
-        linear_residual = matrix @ candidate - rhs
-        residual_norm = float(np.linalg.norm(linear_residual, ord=np.inf))
+        linear_residual_hat = matrix_hat @ candidate_hat - rhs_hat
+        residual_norm = float(np.linalg.norm(linear_residual_hat, ord=np.inf))
 
     if (
         candidate_valid
         and np.isfinite(residual_norm)
         and residual_norm <= _LINEAR_RESIDUAL_TOL
     ):
-        return candidate.copy()
+        return scaling.unscale_state(candidate_hat).copy()
 
     raise KinematicSolveError(
         _failure_message(

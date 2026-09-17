@@ -55,15 +55,17 @@ def solve(
             "input_joint does not belong to the mechanism snapshot"
         )
 
-    input_positions = _coerce_input_positions(input_position)
+    input_positions, scalar_input = _coerce_input_positions(input_position)
     input_velocities = _coerce_optional_input_history(
         input_velocity,
         name="input_velocity",
+        scalar_input=scalar_input,
         count=len(input_positions),
     )
     input_accelerations = _coerce_optional_input_history(
         input_acceleration,
         name="input_acceleration",
+        scalar_input=scalar_input,
         count=len(input_positions),
     )
     if input_accelerations is not None and input_velocities is None:
@@ -144,13 +146,14 @@ def solve(
     )
 
 
-def _coerce_input_positions(input_position: object) -> np.ndarray:
+def _coerce_input_positions(input_position: object) -> tuple[np.ndarray, bool]:
     try:
         array = np.asarray(input_position, dtype=float)
     except (TypeError, ValueError) as error:
         raise TypeError("input_position must be numeric") from error
 
-    if array.ndim == 0:
+    scalar_input = array.ndim == 0
+    if scalar_input:
         array = np.atleast_1d(array)
     elif array.ndim != 1:
         raise ValueError("input_position must be a scalar or a 1-dimensional sequence")
@@ -158,13 +161,14 @@ def _coerce_input_positions(input_position: object) -> np.ndarray:
         raise ValueError("input_position sequence must not be empty")
     if not np.all(np.isfinite(array)):
         raise ValueError("input_position must contain only finite values")
-    return array.astype(float, copy=True)
+    return array.astype(float, copy=True), scalar_input
 
 
 def _coerce_optional_input_history(
     value: object,
     *,
     name: str,
+    scalar_input: bool,
     count: int,
 ) -> np.ndarray | None:
     if value is None:
@@ -180,6 +184,8 @@ def _coerce_optional_input_history(
             raise ValueError(f"{name} must be finite")
         return np.full(count, scalar_value, dtype=float)
 
+    if scalar_input:
+        raise ValueError(f"{name} must be a scalar when input_position is scalar")
     if array.ndim != 1:
         raise ValueError(f"{name} must be a scalar or a 1-dimensional sequence")
     if array.shape != (count,):

@@ -9,6 +9,7 @@ from scipy import optimize
 
 from ._constraints import jacobian, residual
 from ._differential import solve_acceleration, solve_velocity
+from ._scaling import NumericalScaling, build_numerical_scaling
 from .errors import InvalidModelError, KinematicSolveError
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Link, Mechanism
@@ -68,6 +69,13 @@ def solve(
     if input_accelerations is not None and input_velocities is None:
         raise ValueError("input_acceleration requires input_velocity")
 
+    scaling = build_numerical_scaling(
+        mechanism,
+        links,
+        joints,
+        input,
+        input_values,
+    )
     initial_q = _pack_initial_guess(mechanism, links, initial_guess)
 
     if scalar:
@@ -79,6 +87,7 @@ def solve(
             input,
             input_value,
             initial_q,
+            scaling,
         )
 
         coordinate_velocities = None
@@ -96,6 +105,7 @@ def solve(
                 coordinates,
                 input_value,
                 prescribed_velocity,
+                scaling,
             )
         if input_accelerations is not None:
             prescribed_acceleration = float(input_accelerations[0])
@@ -108,6 +118,7 @@ def solve(
                 coordinate_velocities,
                 input_value,
                 prescribed_acceleration,
+                scaling,
             )
 
         return Configuration._from_snapshot(
@@ -132,6 +143,7 @@ def solve(
             input,
             float(input_value),
             current_guess,
+            scaling,
             input_index=index,
         )
         coordinates[index] = accepted
@@ -151,6 +163,7 @@ def solve(
                 coordinates[index],
                 float(input_value),
                 float(prescribed_velocity),
+                scaling,
                 input_index=index,
             )
 
@@ -169,6 +182,7 @@ def solve(
                 coordinate_velocities[index],
                 float(input_value),
                 float(prescribed_acceleration),
+                scaling,
                 input_index=index,
             )
 
@@ -291,47 +305,48 @@ def _solve_configuration(
     input_joint: _Joint,
     input_value: float,
     initial_q: np.ndarray,
+    scaling: NumericalScaling,
     *,
     input_index: int | None = None,
 ) -> np.ndarray:
-    def fun(q: np.ndarray) -> np.ndarray:
-        return residual(mechanism, links, joints, input_joint, q, input_value)
+    def unpack(q_hat: np.ndarray) -> np.ndarray:
+        return scaling.unscale_coordinates(q_hat)
 
-    def jac(q: np.ndarray) -> np.ndarray:
-        return jacobian(mechanism, links, joints, input_joint, q, input_value)
+    def fun(q_hat: np.ndarray) -> np.ndarray:
+        q = unpack(q_hat)
+        phi = residual(mechanism, links, joints, input_joint, q, input_value)
+        return scaling.scale_residual(phi)
 
-    result = optimize.root(fun, initial_q, jac=jac, method="hybr")
+    def jac(q_hat: np.ndarray) -> np.ndarray:
+        q = unpack(q_hat)
+        matrix = jacobian(mechanism, links, joints, input_joint, q, input_value)
+        return scaling.scale_jacobian(matrix)
+
+    initial_q_hat = scaling.scale_coordinates(initial_q)
+    result = optimize.root(fun, initial_q_hat, jac=jac, method="hybr")
     expected_shape = (3 * len(links),)
-    candidate: np.ndarray | None
+    candidate_hat: np.ndarray | None
     try:
-        candidate = np.asarray(result.x, dtype=float)
+        candidate_hat = np.asarray(result.x, dtype=float)
     except (TypeError, ValueError):
-        candidate = None
+        candidate_hat = None
 
     residual_norm = float("nan")
     candidate_valid = (
-        candidate is not None
-        and candidate.shape == expected_shape
-        and np.all(np.isfinite(candidate))
+        candidate_hat is not None
+        and candidate_hat.shape == expected_shape
+        and np.all(np.isfinite(candidate_hat))
     )
     if candidate_valid:
-        phi = residual(
-            mechanism,
-            links,
-            joints,
-            input_joint,
-            candidate,
-            input_value,
-        )
-        residual_norm = float(np.linalg.norm(phi, ord=np.inf))
+        phi_hat = fun(candidate_hat)
+        residual_norm = float(np.linalg.norm(phi_hat, ord=np.inf))
 
     if (
-        result.success is True
-        and candidate_valid
+        candidate_valid
         and np.isfinite(residual_norm)
         and residual_norm <= _RESIDUAL_TOL
     ):
-        return candidate.copy()
+        return unpack(candidate_hat).copy()
 
     location = (
         f"input index {input_index} (value={input_value:.12g})"
@@ -339,7 +354,9 @@ def _solve_configuration(
         else f"input value {input_value:.12g}"
     )
     norm_text = f"{residual_norm:.12g}" if np.isfinite(residual_norm) else "unavailable"
+    success = bool(getattr(result, "success", False))
+    message = getattr(result, "message", "unavailable")
     raise KinematicSolveError(
         f"failed to solve {location}: residual_inf={norm_text}; "
-        f"solver message={result.message}"
+        f"solver success={success}; solver message={message}"
     )

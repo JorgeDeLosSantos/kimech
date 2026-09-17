@@ -77,7 +77,7 @@ def test_four_bar_velocity_and_speed_acceleration_scale_with_input_rate():
         input_velocity=omega,
         input_acceleration=0.0,
         initial_guess=guess,
-    )
+    )[0]
     doubled = solve(
         mechanism,
         input_joint=input_joint,
@@ -85,7 +85,7 @@ def test_four_bar_velocity_and_speed_acceleration_scale_with_input_rate():
         input_velocity=2.0 * omega,
         input_acceleration=0.0,
         initial_guess=guess,
-    )
+    )[0]
 
     np.testing.assert_allclose(doubled.coordinates, base.coordinates, atol=1e-12)
     np.testing.assert_allclose(
@@ -126,7 +126,7 @@ def test_four_bar_acceleration_is_linear_in_prescribed_input_acceleration():
         input_velocity=0.0,
         input_acceleration=alpha,
         initial_guess=guess,
-    )
+    )[0]
     doubled = solve(
         mechanism,
         input_joint=input_joint,
@@ -134,7 +134,7 @@ def test_four_bar_acceleration_is_linear_in_prescribed_input_acceleration():
         input_velocity=0.0,
         input_acceleration=2.0 * alpha,
         initial_guess=guess,
-    )
+    )[0]
 
     np.testing.assert_allclose(base.coordinate_velocities, 0.0, atol=1e-14)
     np.testing.assert_allclose(doubled.coordinate_velocities, 0.0, atol=1e-14)
@@ -159,7 +159,7 @@ def test_four_bar_acceleration_splits_into_speed_and_input_acceleration_terms():
         input_velocity=omega,
         input_acceleration=0.0,
         initial_guess=guess,
-    )
+    )[0]
     alpha_only = solve(
         mechanism,
         input_joint=input_joint,
@@ -167,7 +167,7 @@ def test_four_bar_acceleration_splits_into_speed_and_input_acceleration_terms():
         input_velocity=0.0,
         input_acceleration=alpha,
         initial_guess=guess,
-    )
+    )[0]
     combined = solve(
         mechanism,
         input_joint=input_joint,
@@ -175,7 +175,7 @@ def test_four_bar_acceleration_splits_into_speed_and_input_acceleration_terms():
         input_velocity=omega,
         input_acceleration=alpha,
         initial_guess=guess,
-    )
+    )[0]
 
     np.testing.assert_allclose(
         combined.coordinate_accelerations,

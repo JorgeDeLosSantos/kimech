@@ -96,7 +96,7 @@ from kimech.visualization import animate
 animation = animate(solution, fps=30)
 
 # Optional progressive trace for one or more mechanism points
-animation = animate(solution, fps=30, trace_points=[foot])
+animation = animate(solution, fps=30, trace_points=[point_p])
 plt.show()
 ```
 

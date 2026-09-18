@@ -448,11 +448,11 @@ For ground, `body_pose()` is the zero-coordinate identity pose and differential 
 ### 12.4 Points
 
 ```python
-config.position(point)
-config.velocity(point)
-config.acceleration(point)
+config.point_position(point)
+config.point_velocity(point)
+config.point_acceleration(point)
 
-solution.point_path(point)
+solution.point_positions(point)
 solution.point_velocities(point)
 solution.point_accelerations(point)
 ```

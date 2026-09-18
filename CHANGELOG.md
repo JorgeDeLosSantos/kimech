@@ -15,7 +15,7 @@ Kimech `0.3.0` consolidates numerical robustness and simplifies the public solve
 - point queries are named consistently as `point_position(s)`, `point_velocity/velocities`, and `point_acceleration/accelerations`;
 - `KinematicSolution` supports slicing to another `KinematicSolution` and explicit iteration over `Configuration` objects;
 - result containers remain externally immutable and may be empty when constructed manually;
-- prescribed-input metadata on `Configuration` requires an associated `input_joint`.
+- prescribed-input metadata on `Configuration` requires an associated `input_joint`;
 - visualization uses explicit body render scaffolds with fallback support for plate-like links and lightweight connectors for auxiliary points;
 - joint glyph scaling is derived from body scaffolds rather than arbitrary remote auxiliary points;
 - `animate()` supports opt-in progressive point traces through `trace_points=[...]`.

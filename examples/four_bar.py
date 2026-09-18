@@ -68,7 +68,7 @@ def main():
     print(f"Rocker angle: {rocker_poses[0, 2]:.3f} -> {rocker_poses[-1, 2]:.3f} rad")
 
     fig, ax = plt.subplots()
-    animation = animate(solution, fps=30, ax=ax)
+    animation = animate(solution, fps=30, trace_points=[point_p], ax=ax)
     ax.set_title("Four-bar mechanism")
     plt.show()
 

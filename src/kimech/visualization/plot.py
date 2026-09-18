@@ -89,7 +89,7 @@ def _plot_scale(config: Configuration) -> float:
 def _point_positions(config: Configuration) -> np.ndarray:
     mechanism = config.mechanism
     positions = [
-        config.position(point)
+        config.point_position(point)
         for body in (mechanism.ground, *mechanism.links)
         for point in body.points
     ]
@@ -102,7 +102,7 @@ def _auxiliary_points(body: _Body, structural: tuple[list[Point], set[int]]) -> 
 
 
 def _body_coordinates(config: Configuration, points: list[Point]) -> np.ndarray:
-    positions = np.asarray([config.position(point) for point in points])
+    positions = np.asarray([config.point_position(point) for point in points])
     if len(points) == 2:
         return positions
     hub = np.mean(positions, axis=0)
@@ -112,8 +112,8 @@ def _body_coordinates(config: Configuration, points: list[Point]) -> np.ndarray:
 
 
 def _revolute_center(config: Configuration, joint: RevoluteJoint) -> np.ndarray:
-    position_a = config.position(joint.point_a)
-    position_b = config.position(joint.point_b)
+    position_a = config.point_position(joint.point_a)
+    position_b = config.point_position(joint.point_b)
     return 0.5 * (position_a + position_b)
 
 
@@ -124,8 +124,8 @@ def _prismatic_geometry(
     *,
     guide_range: tuple[float, float] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    position_a = config.position(joint.point_a)
-    position_b = config.position(joint.point_b)
+    position_a = config.point_position(joint.point_a)
+    position_b = config.point_position(joint.point_b)
     theta_a = float(config.body_pose(joint.point_a.body)[2])
     axis = rotation_matrix(theta_a) @ np.asarray(joint.axis_a, dtype=float)
     normal = perpendicular(axis)
@@ -186,7 +186,7 @@ def _draw_auxiliary_points(
 ):
     if not points:
         return None
-    positions = np.asarray([config.position(point) for point in points])
+    positions = np.asarray([config.point_position(point) for point in points])
     artist = ax.scatter(
         positions[:, 0],
         positions[:, 1],

@@ -28,7 +28,7 @@ solution = solve(
     initial_guess=initial_guess,
 )
 
-positions = solution.point_path(point_p)
+positions = solution.point_positions(point_p)
 velocities = solution.point_velocities(point_p)
 accelerations = solution.point_accelerations(point_p)
 ```
@@ -287,9 +287,9 @@ Ground pose is the zero-coordinate identity. Ground differential state is zero o
 ### Point queries
 
 ```python
-config.position(point)      # (2,)
-config.velocity(point)      # (2,)
-config.acceleration(point)  # (2,)
+config.point_position(point)      # (2,)
+config.point_velocity(point)      # (2,)
+config.point_acceleration(point)  # (2,)
 ```
 
 Point velocity and acceleration are derived from rigid-body state, including tangential and centripetal contributions.
@@ -341,12 +341,12 @@ Shapes are:
 config = solution[i]
 ```
 
-Integer indexing returns a `Configuration` preserving all position, velocity, acceleration and prescribed-input metadata available at sample `i`. Slicing is not supported.
+Integer indexing returns a `Configuration` preserving all position, velocity, acceleration and prescribed-input metadata available at sample `i`. Slicing returns a new `KinematicSolution` over the selected samples, and iteration yields `Configuration` objects in solution order.
 
 ### History queries
 
 ```python
-solution.point_path(point)             # (N, 2)
+solution.point_positions(point)             # (N, 2)
 solution.point_velocities(point)        # (N, 2)
 solution.point_accelerations(point)     # (N, 2)
 
@@ -360,6 +360,19 @@ solution.joint_accelerations(joint)     # (N,)
 ```
 
 Array properties and query results are safe values/copies and do not expose mutable internal state.
+
+`KinematicSolution` behaves as an immutable sequence by protocol:
+
+```python
+config = solution[i]       # Configuration
+subset = solution[a:b]     # KinematicSolution
+reverse = solution[::-1]   # KinematicSolution
+
+for config in solution:
+    ...
+```
+
+Fancy indexing and mutation operations such as item assignment, `append`, or `extend` are not part of the public API. Empty `KinematicSolution` objects are valid containers, although `solve()` does not produce them.
 
 ## 9. Intentional breaking changes
 
@@ -452,6 +465,10 @@ animation.save("mechanism.gif", writer="pillow")
 ```
 
 ## 13. Result snapshot semantics
+
+Public `Configuration` and `KinematicSolution` constructors validate the structure, shape, finiteness, and entity compatibility of supplied state. They do not certify that manually supplied coordinates satisfy the mechanism constraints. Results returned by `solve()` contain states accepted by the solver.
+
+For `Configuration`, any prescribed-input metadata (`input_position`, `input_velocity`, or `input_acceleration`) requires `input_joint`. Input acceleration additionally requires input velocity.
 
 Result objects retain the link layout captured when they are constructed or solved. This keeps the mapping between links and generalized state stable even if the mechanism object is later extended. Queries require entities compatible with that retained snapshot.
 

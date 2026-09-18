@@ -52,12 +52,12 @@ def main():
         initial_guess=initial_guess,
     )
 
-    path = solution.point_path(point_p)
+    path = solution.point_positions(point_p)
     rocker_poses = solution.body_poses(rocker)
     input_coordinates = solution.joint_coordinates(input_joint)
 
     first_config = solution[0]
-    first_point_position = first_config.position(point_p)
+    first_point_position = first_config.point_position(point_p)
     first_crank_pose = first_config.body_pose(crank)
 
     print("Four-bar motion")

@@ -201,7 +201,7 @@ def _update_artists(config, scale: float, artists: _AnimationArtists) -> tuple[o
         artist.set_data(coordinates[:, 0], coordinates[:, 1])
         modified.append(artist)
     for points, artist in artists.auxiliary.values():
-        artist.set_offsets([config.position(point) for point in points])
+        artist.set_offsets([config.point_position(point) for point in points])
         modified.append(artist)
     for joint, artist in artists.revolute.items():
         artist.set_offsets([_revolute_center(config, joint)])

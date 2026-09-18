@@ -82,7 +82,7 @@ def test_point_acceleration_includes_centripetal_term_for_constant_input_speed()
     )[0]
 
     radial = np.array([2.0 * np.cos(theta), 2.0 * np.sin(theta)])
-    np.testing.assert_allclose(config.acceleration(tip), -(omega**2) * radial, atol=1e-11)
+    np.testing.assert_allclose(config.point_acceleration(tip), -(omega**2) * radial, atol=1e-11)
 
 
 def test_sweep_scalar_acceleration_broadcasts_and_preserves_result_shape():

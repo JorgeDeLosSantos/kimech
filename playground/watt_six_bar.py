@@ -215,10 +215,10 @@ def main():
     )
 
     expected_b, expected_c, expected_d, expected_tracer = analytical_geometry(values)
-    solved_b = solution.point_path(point_b)
-    solved_c = solution.point_path(point_c)
-    solved_d = solution.point_path(output_rocker["D"])
-    solved_tracer = solution.point_path(tracer)
+    solved_b = solution.point_positions(point_b)
+    solved_c = solution.point_positions(point_c)
+    solved_d = solution.point_positions(output_rocker["D"])
+    solved_tracer = solution.point_positions(tracer)
 
     b_error = np.max(np.linalg.norm(solved_b - expected_b, axis=1))
     c_error = np.max(np.linalg.norm(solved_c - expected_c, axis=1))

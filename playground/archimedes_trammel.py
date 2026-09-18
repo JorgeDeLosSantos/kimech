@@ -99,7 +99,7 @@ def main():
     )
 
     theta = solution.input_positions
-    path = solution.point_path(tracer)
+    path = solution.point_positions(tracer)
     horizontal_positions = solution.joint_coordinates(horizontal_joint)
     vertical_positions = solution.joint_coordinates(vertical_joint)
 

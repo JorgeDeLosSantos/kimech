@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import operator
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 import numpy as np
 
@@ -98,6 +98,11 @@ class Configuration:
     ) -> None:
         if input_joint is not None:
             _validate_joint(mechanism, links, input_joint)
+        elif any(
+            value is not None
+            for value in (input_position, input_velocity, input_acceleration)
+        ):
+            raise ValueError("input metadata requires input_joint")
         if coordinate_accelerations is not None and coordinate_velocities is None:
             raise ValueError("coordinate_accelerations requires coordinate_velocities")
         if input_acceleration is not None and input_velocity is None:
@@ -209,7 +214,7 @@ class Configuration:
         start = 3 * index
         return accelerations[start : start + 3].copy()
 
-    def position(self, point: Point) -> np.ndarray:
+    def point_position(self, point: Point) -> np.ndarray:
         """Return the global position of a point attached to a mechanism body."""
         _validate_point(self._mechanism, self._links, point)
         if point.body is self._mechanism.ground:
@@ -217,7 +222,7 @@ class Configuration:
         x, y, theta = self.body_pose(point.body)
         return np.array([x, y], dtype=float) + rotation_matrix(theta) @ point.local
 
-    def velocity(self, point: Point) -> np.ndarray:
+    def point_velocity(self, point: Point) -> np.ndarray:
         """Return the global velocity of a point attached to a mechanism body."""
         _validate_point(self._mechanism, self._links, point)
         body_velocity = self.body_velocity(point.body)
@@ -227,7 +232,7 @@ class Configuration:
         rotational = rotation_matrix(theta) @ perpendicular(point.local)
         return body_velocity[:2] + body_velocity[2] * rotational
 
-    def acceleration(self, point: Point) -> np.ndarray:
+    def point_acceleration(self, point: Point) -> np.ndarray:
         """Return the global acceleration of a point attached to a mechanism body."""
         _validate_point(self._mechanism, self._links, point)
         body_acceleration = self.body_acceleration(point.body)
@@ -254,7 +259,7 @@ class Configuration:
             return float(theta_b - theta_a)
         pose_a = self.body_pose(joint.point_a.body)
         axis_a = rotation_matrix(pose_a[2]) @ np.asarray(joint.axis_a, dtype=float)
-        displacement = self.position(joint.point_b) - self.position(joint.point_a)
+        displacement = self.point_position(joint.point_b) - self.point_position(joint.point_a)
         return float(axis_a @ displacement)
 
     def joint_velocity(self, joint: _Joint) -> float:
@@ -266,7 +271,7 @@ class Configuration:
             return float(omega_b - omega_a)
         pose_a = self.body_pose(joint.point_a.body)
         axis_a = rotation_matrix(pose_a[2]) @ np.asarray(joint.axis_a, dtype=float)
-        relative_velocity = self.velocity(joint.point_b) - self.velocity(joint.point_a)
+        relative_velocity = self.point_velocity(joint.point_b) - self.point_velocity(joint.point_a)
         return float(axis_a @ relative_velocity)
 
     def joint_acceleration(self, joint: _Joint) -> float:
@@ -278,7 +283,7 @@ class Configuration:
             return float(alpha_b - alpha_a)
         pose_a = self.body_pose(joint.point_a.body)
         axis_a = rotation_matrix(pose_a[2]) @ np.asarray(joint.axis_a, dtype=float)
-        relative_acceleration = self.acceleration(joint.point_b) - self.acceleration(joint.point_a)
+        relative_acceleration = self.point_acceleration(joint.point_b) - self.point_acceleration(joint.point_a)
         coordinate = self.joint_coordinate(joint)
         omega_a = self.body_velocity(joint.point_a.body)[2]
         return float(axis_a @ relative_acceleration + coordinate * omega_a**2)
@@ -480,10 +485,37 @@ class KinematicSolution:
     def __len__(self) -> int:
         return len(self._input_positions)
 
-    def __getitem__(self, index: int) -> Configuration:
-        """Return one configuration while preserving all available state."""
+    def __getitem__(self, index: int | slice) -> Configuration | KinematicSolution:
+        """Return one configuration or a sliced kinematic solution."""
         if isinstance(index, slice):
-            raise TypeError("KinematicSolution does not support slicing")
+            return KinematicSolution._from_snapshot(
+                self._mechanism,
+                self._links,
+                self._input_joint,
+                self._input_positions[index],
+                self._coordinates[index],
+                coordinate_velocities=(
+                    None
+                    if self._coordinate_velocities is None
+                    else self._coordinate_velocities[index]
+                ),
+                coordinate_accelerations=(
+                    None
+                    if self._coordinate_accelerations is None
+                    else self._coordinate_accelerations[index]
+                ),
+                input_velocities=(
+                    None
+                    if self._input_velocities is None
+                    else self._input_velocities[index]
+                ),
+                input_accelerations=(
+                    None
+                    if self._input_accelerations is None
+                    else self._input_accelerations[index]
+                ),
+            )
+
         item = operator.index(index)
         return Configuration._from_snapshot(
             self._mechanism,
@@ -509,13 +541,18 @@ class KinematicSolution:
             ),
         )
 
-    def point_path(self, point: Point) -> np.ndarray:
+    def __iter__(self) -> Iterator[Configuration]:
+        """Iterate over configurations in solution order."""
+        for index in range(len(self)):
+            yield self[index]
+
+    def point_positions(self, point: Point) -> np.ndarray:
         """Return global point positions for all configurations."""
         _validate_point(self._mechanism, self._links, point)
-        path = np.empty((len(self), 2), dtype=float)
+        values = np.empty((len(self), 2), dtype=float)
         for index in range(len(self)):
-            path[index] = self[index].position(point)
-        return path
+            values[index] = self[index].point_position(point)
+        return values
 
     def point_velocities(self, point: Point) -> np.ndarray:
         """Return global point velocities for all configurations."""
@@ -523,7 +560,7 @@ class KinematicSolution:
         self._require_velocity()
         values = np.empty((len(self), 2), dtype=float)
         for index in range(len(self)):
-            values[index] = self[index].velocity(point)
+            values[index] = self[index].point_velocity(point)
         return values
 
     def point_accelerations(self, point: Point) -> np.ndarray:
@@ -532,7 +569,7 @@ class KinematicSolution:
         self._require_acceleration()
         values = np.empty((len(self), 2), dtype=float)
         for index in range(len(self)):
-            values[index] = self[index].acceleration(point)
+            values[index] = self[index].point_acceleration(point)
         return values
 
     def body_poses(self, body: _Body) -> np.ndarray:

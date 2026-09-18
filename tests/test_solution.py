@@ -30,12 +30,12 @@ def test_position_transforms_link_point_from_arbitrary_local_frame():
     point = link.add_point("P", (1.0, 0.0))
     config = Configuration(mechanism, [2.0, 3.0, np.pi / 2])
 
-    np.testing.assert_allclose(config.position(point), [2.0, 4.0], atol=1e-12)
+    np.testing.assert_allclose(config.point_position(point), [2.0, 4.0], atol=1e-12)
 
     offset = link.add_point("offset", (2.0, -1.0))
     expected = [2.0 - np.sqrt(2) / 2, 3.0 + 3 * np.sqrt(2) / 2]
     rotated_config = Configuration(mechanism, [2.0, 3.0, 3 * np.pi / 4])
-    np.testing.assert_allclose(rotated_config.position(offset), expected)
+    np.testing.assert_allclose(rotated_config.point_position(offset), expected)
 
 
 def test_ground_point_position_is_independent_of_mobile_coordinates():
@@ -43,7 +43,7 @@ def test_ground_point_position_is_independent_of_mobile_coordinates():
     point = mechanism.ground.add_point("A", (3.0, 4.0))
     mechanism.add_link("link")
 
-    np.testing.assert_allclose(Configuration(mechanism, [9.0, -2.0, 8.0]).position(point), [3.0, 4.0])
+    np.testing.assert_allclose(Configuration(mechanism, [9.0, -2.0, 8.0]).point_position(point), [3.0, 4.0])
 
 
 def test_configuration_keeps_link_layout_after_mechanism_gains_a_link():
@@ -67,9 +67,25 @@ def test_configuration_accepts_new_point_only_on_a_snapshotted_link():
     added = mechanism.add_link("b")
     added_point = added.add_point("P", (0.0, 0.0))
 
-    np.testing.assert_allclose(config.position(original_point), [2.0, 2.0])
+    np.testing.assert_allclose(config.point_position(original_point), [2.0, 2.0])
     with pytest.raises(ValueError):
-        config.position(added_point)
+        config.point_position(added_point)
+
+
+def test_configuration_accepts_new_joint_between_snapshotted_bodies():
+    mechanism = Mechanism()
+    first = mechanism.add_link("a")
+    first_point = first.add_point("P", (0.0, 0.0))
+    second = mechanism.add_link("b")
+    second_point = second.add_point("P", (0.0, 0.0))
+    config = Configuration(
+        mechanism,
+        [1.0, 2.0, 0.2, 3.0, 4.0, 0.7],
+    )
+
+    joint = mechanism.revolute(first_point, second_point)
+
+    assert config.joint_coordinate(joint) == pytest.approx(0.5)
 
 
 def test_configuration_rejects_new_joint_using_link_outside_snapshot():
@@ -150,8 +166,20 @@ def test_solution_sequence_properties_and_negative_indexing():
     np.testing.assert_allclose(solution.input_positions, inputs)
     np.testing.assert_allclose(solution.coordinates, coordinates)
 
-    with pytest.raises(TypeError):
-        solution[:2]
+    sliced = solution[:2]
+    assert isinstance(sliced, KinematicSolution)
+    assert len(sliced) == 2
+    np.testing.assert_allclose(sliced.input_positions, inputs[:2])
+    np.testing.assert_allclose(sliced.coordinates, coordinates[:2])
+
+    reversed_solution = solution[::-1]
+    np.testing.assert_allclose(reversed_solution.input_positions, inputs[::-1])
+    np.testing.assert_allclose(reversed_solution.coordinates, coordinates[::-1])
+
+    configs = list(solution)
+    assert len(configs) == len(solution)
+    assert all(isinstance(config, Configuration) for config in configs)
+    np.testing.assert_allclose(configs[1].coordinates, coordinates[1])
 
 
 def test_solution_and_derived_configuration_keep_original_link_layout():
@@ -168,7 +196,7 @@ def test_solution_and_derived_configuration_keep_original_link_layout():
     with pytest.raises(ValueError):
         solution.body_poses(added)
     with pytest.raises(ValueError):
-        solution.point_path(added_point)
+        solution.point_positions(added_point)
     with pytest.raises(ValueError):
         solution.joint_coordinates(added_joint)
     with pytest.raises(ValueError):
@@ -183,8 +211,8 @@ def test_point_path_body_poses_and_joint_coordinates_have_expected_values():
     solution = KinematicSolution(mechanism, joint, angles, coordinates)
 
     expected_path = [[3.0, 3.0], [2.0, 4.0], [1.0, 3.0]]
-    assert solution.point_path(point).shape == (3, 2)
-    np.testing.assert_allclose(solution.point_path(point), expected_path, atol=1e-12)
+    assert solution.point_positions(point).shape == (3, 2)
+    np.testing.assert_allclose(solution.point_positions(point), expected_path, atol=1e-12)
     assert solution.body_poses(link).shape == (3, 3)
     np.testing.assert_allclose(solution.body_poses(link), coordinates)
     np.testing.assert_allclose(solution.body_poses(mechanism.ground), np.zeros((3, 3)))
@@ -197,10 +225,15 @@ def test_empty_solution_queries_preserve_documented_shapes():
     point = link.add_point("P", (1.0, 0.0))
     solution = KinematicSolution(mechanism, joint, np.empty(0), np.empty((0, 3)))
 
-    assert solution.point_path(point).shape == (0, 2)
+    assert solution.point_positions(point).shape == (0, 2)
     assert solution.body_poses(link).shape == (0, 3)
     assert solution.body_poses(mechanism.ground).shape == (0, 3)
     assert solution.joint_coordinates(joint).shape == (0,)
+
+    sliced = solution[:]
+    assert isinstance(sliced, KinematicSolution)
+    assert len(sliced) == 0
+    assert sliced.coordinates.shape == (0, 3)
 
 
 def test_public_arrays_cannot_mutate_stored_results_or_alias_constructor_inputs():
@@ -243,13 +276,22 @@ def test_configuration_validates_arrays_input_metadata_and_membership():
     with pytest.raises(ValueError, match="scalar"):
         Configuration(mechanism, [0.0, 0.0, 0.0], input_joint=joint, input_position=[1.0])
     with pytest.raises(ValueError, match="finite"):
-        Configuration(mechanism, [0.0, 0.0, 0.0], input_position=np.nan)
+        Configuration(
+            mechanism,
+            [0.0, 0.0, 0.0],
+            input_joint=joint,
+            input_position=np.nan,
+        )
+    with pytest.raises(ValueError, match="requires input_joint"):
+        Configuration(mechanism, [0.0, 0.0, 0.0], input_position=0.5)
+    with pytest.raises(ValueError, match="requires input_joint"):
+        Configuration(mechanism, [0.0, 0.0, 0.0], input_velocity=1.0)
 
     config = Configuration(mechanism, [0.0, 0.0, 0.0])
     with pytest.raises(ValueError, match="body"):
         config.body_pose(other_link)
     with pytest.raises(ValueError, match="point"):
-        config.position(other_link.points[0])
+        config.point_position(other_link.points[0])
     with pytest.raises(ValueError, match="joint"):
         config.joint_coordinate(other_joint)
     assert other is other_link.mechanism
@@ -275,7 +317,7 @@ def test_solution_validates_shapes_finiteness_and_external_entities():
 
     external_point = other_link.add_point("external", (1.0, 0.0))
     with pytest.raises(ValueError):
-        solution.point_path(external_point)
+        solution.point_positions(external_point)
     with pytest.raises(ValueError):
         solution.body_poses(other_link)
     with pytest.raises(ValueError):
@@ -335,13 +377,13 @@ def test_configuration_unavailable_differential_state_fails_explicitly():
     with pytest.raises(ValueError, match="velocity data"):
         config.body_velocity(link)
     with pytest.raises(ValueError, match="velocity data"):
-        config.velocity(point)
+        config.point_velocity(point)
     with pytest.raises(ValueError, match="velocity data"):
         config.joint_velocity(joint)
     with pytest.raises(ValueError, match="acceleration data"):
         config.body_acceleration(link)
     with pytest.raises(ValueError, match="acceleration data"):
-        config.acceleration(point)
+        config.point_acceleration(point)
     with pytest.raises(ValueError, match="acceleration data"):
         config.joint_acceleration(joint)
 
@@ -368,8 +410,8 @@ def test_configuration_point_differential_queries_follow_rigid_body_kinematics()
     expected_velocity = np.array([0.5, -0.25]) + omega * tangent
     expected_acceleration = np.array([0.1, 0.2]) + alpha * tangent - omega**2 * radial
 
-    np.testing.assert_allclose(config.velocity(point), expected_velocity)
-    np.testing.assert_allclose(config.acceleration(point), expected_acceleration)
+    np.testing.assert_allclose(config.point_velocity(point), expected_velocity)
+    np.testing.assert_allclose(config.point_acceleration(point), expected_acceleration)
     assert config.joint_velocity(joint) == pytest.approx(omega)
     assert config.joint_acceleration(joint) == pytest.approx(alpha)
 
@@ -398,7 +440,7 @@ def test_configuration_prismatic_differential_queries_follow_natural_coordinate(
 
 
 def test_configuration_validates_differential_state_invariants():
-    mechanism, _, _ = _revolute_mechanism()
+    mechanism, _, joint = _revolute_mechanism()
 
     with pytest.raises(ValueError, match="requires coordinate_velocities"):
         Configuration(
@@ -410,6 +452,7 @@ def test_configuration_validates_differential_state_invariants():
         Configuration(
             mechanism,
             [0.0, 0.0, 0.0],
+            input_joint=joint,
             input_acceleration=1.0,
         )
     with pytest.raises(ValueError, match="shape"):

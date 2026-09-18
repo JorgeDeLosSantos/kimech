@@ -128,7 +128,7 @@ def test_four_bar_completes_full_revolution_and_returns_to_physical_configuratio
         for config, value in zip((solution[i] for i in range(len(solution))), values)
     )
 
-    path = solution.point_path(point_p)
+    path = solution.point_positions(point_p)
     np.testing.assert_allclose(path[-1], path[0], atol=1e-8)
     for link in mechanism.links:
         poses = solution.body_poses(link)

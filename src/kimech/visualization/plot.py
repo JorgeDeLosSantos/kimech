@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from itertools import cycle
 
 import numpy as np
@@ -16,6 +17,13 @@ from ..solution import Configuration
 _Body = Link | Ground
 
 
+@dataclass(frozen=True)
+class _BodyRenderSpec:
+    scaffold_points: tuple[Point, ...]
+    auxiliary_points: tuple[Point, ...]
+    connector_points: tuple[Point, ...]
+
+
 def plot(config: Configuration, *, ax=None):
     """Plot one solved configuration and return its Matplotlib figure and axes."""
     if not isinstance(config, Configuration):
@@ -27,25 +35,34 @@ def plot(config: Configuration, *, ax=None):
         fig = ax.figure
 
     mechanism = config.mechanism
-    structural = _structural_points(config)
+    specs = _body_render_specs(config)
     scale = _plot_scale(config)
     body_colors: dict[_Body, str] = {mechanism.ground: "0.4"}
 
-    _draw_body(config, mechanism.ground, structural[mechanism.ground], "0.4", ax)
+    ground_spec = specs[mechanism.ground]
+    _draw_body(config, mechanism.ground, ground_spec.scaffold_points, "0.4", ax)
+    _draw_auxiliary_connectors(config, mechanism.ground, ground_spec, "0.4", ax)
 
     color_cycle = _link_color_cycle()
     for link in mechanism.links:
         color = next(color_cycle)
         body_colors[link] = color
-        _draw_body(config, link, structural[link], color, ax)
+        spec = specs[link]
+        _draw_body(config, link, spec.scaffold_points, color, ax)
+        _draw_auxiliary_connectors(config, link, spec, color, ax)
 
     for joint in mechanism.joints:
         if isinstance(joint, PrismaticJoint):
             _draw_prismatic_joint(config, joint, scale, ax)
 
     for body in (mechanism.ground, *mechanism.links):
-        auxiliary = _auxiliary_points(body, structural[body])
-        _draw_auxiliary_points(config, body, auxiliary, body_colors[body], ax)
+        _draw_auxiliary_points(
+            config,
+            body,
+            list(specs[body].auxiliary_points),
+            body_colors[body],
+            ax,
+        )
 
     for joint in mechanism.joints:
         if isinstance(joint, RevoluteJoint):
@@ -63,19 +80,42 @@ def _link_color_cycle():
     return cycle(colors)
 
 
-def _structural_points(config: Configuration) -> dict[_Body, tuple[list[Point], set[int]]]:
+def _body_render_specs(config: Configuration) -> dict[_Body, _BodyRenderSpec]:
     mechanism = config.mechanism
-    result: dict[_Body, tuple[list[Point], set[int]]] = {
-        body: ([], set()) for body in (mechanism.ground, *mechanism.links)
-    }
+    bodies = (mechanism.ground, *mechanism.links)
+    structural: dict[_Body, list[Point]] = {body: [] for body in bodies}
+    identities: dict[_Body, set[int]] = {body: set() for body in bodies}
+
     for joint in mechanism.joints:
         for point in (joint.point_a, joint.point_b):
-            points, identities = result[point.body]
-            identity = id(point)
-            if identity not in identities:
-                points.append(point)
-                identities.add(identity)
-    return result
+            point_id = id(point)
+            if point_id not in identities[point.body]:
+                structural[point.body].append(point)
+                identities[point.body].add(point_id)
+
+    specs: dict[_Body, _BodyRenderSpec] = {}
+    for body in bodies:
+        structural_points = tuple(structural[body])
+        auxiliary_points = tuple(
+            point for point in body.points if id(point) not in identities[body]
+        )
+
+        if isinstance(body, Ground):
+            scaffold_points = structural_points
+            connector_points: tuple[Point, ...] = ()
+        elif len(structural_points) >= 2:
+            scaffold_points = structural_points
+            connector_points = auxiliary_points
+        else:
+            scaffold_points = tuple(body.points)
+            connector_points = ()
+
+        specs[body] = _BodyRenderSpec(
+            scaffold_points=scaffold_points,
+            auxiliary_points=auxiliary_points,
+            connector_points=connector_points,
+        )
+    return specs
 
 
 def _plot_scale(config: Configuration) -> float:
@@ -94,11 +134,6 @@ def _point_positions(config: Configuration) -> np.ndarray:
         for point in body.points
     ]
     return np.asarray(positions, dtype=float).reshape((-1, 2))
-
-
-def _auxiliary_points(body: _Body, structural: tuple[list[Point], set[int]]) -> list[Point]:
-    _, structural_identities = structural
-    return [point for point in body.points if id(point) not in structural_identities]
 
 
 def _body_coordinates(config: Configuration, points: list[Point]) -> np.ndarray:
@@ -154,11 +189,10 @@ def _prismatic_geometry(
 def _draw_body(
     config: Configuration,
     body: _Body,
-    structural: tuple[list[Point], set[int]],
+    points: tuple[Point, ...] | list[Point],
     color: str,
     ax,
 ):
-    points, _ = structural
     if len(points) < 2:
         return None
 
@@ -174,6 +208,76 @@ def _draw_body(
         zorder=1 if is_ground else 2,
     )
     artist.set_gid(f"kimech-body:{body.name}")
+    return artist
+
+
+def _auxiliary_connector_coordinates(
+    config: Configuration,
+    scaffold_points: tuple[Point, ...],
+    connector_points: tuple[Point, ...],
+) -> np.ndarray:
+    if len(scaffold_points) < 2 or not connector_points:
+        return np.empty((0, 2), dtype=float)
+
+    scaffold_positions = np.asarray(
+        [config.point_position(point) for point in scaffold_points],
+        dtype=float,
+    )
+    if len(scaffold_positions) == 2:
+        segments = [(scaffold_positions[0], scaffold_positions[1])]
+    else:
+        hub = np.mean(scaffold_positions, axis=0)
+        segments = [(hub, position) for position in scaffold_positions]
+
+    coordinates: list[np.ndarray | tuple[float, float]] = []
+    for point in connector_points:
+        position = config.point_position(point)
+        anchor = min(
+            (_nearest_point_on_segment(position, start, end) for start, end in segments),
+            key=lambda candidate: float(np.sum((candidate - position) ** 2)),
+        )
+        coordinates.extend((anchor, position, (np.nan, np.nan)))
+    return np.asarray(coordinates, dtype=float)
+
+
+def _nearest_point_on_segment(
+    point: np.ndarray,
+    start: np.ndarray,
+    end: np.ndarray,
+) -> np.ndarray:
+    delta = end - start
+    denominator = float(delta @ delta)
+    if denominator <= np.finfo(float).eps:
+        return start.copy()
+    parameter = float((point - start) @ delta / denominator)
+    parameter = min(1.0, max(0.0, parameter))
+    return start + parameter * delta
+
+
+def _draw_auxiliary_connectors(
+    config: Configuration,
+    body: _Body,
+    spec: _BodyRenderSpec,
+    color: str,
+    ax,
+):
+    coordinates = _auxiliary_connector_coordinates(
+        config,
+        spec.scaffold_points,
+        spec.connector_points,
+    )
+    if len(coordinates) == 0:
+        return None
+    (artist,) = ax.plot(
+        coordinates[:, 0],
+        coordinates[:, 1],
+        color=color,
+        linewidth=1.0,
+        alpha=0.55,
+        solid_capstyle="round",
+        zorder=1.5,
+    )
+    artist.set_gid(f"kimech-auxiliary-connector:{body.name}")
     return artist
 
 

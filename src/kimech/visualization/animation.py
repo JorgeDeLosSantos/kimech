@@ -37,12 +37,14 @@ class _AnimationArtists:
     auxiliary_connectors: dict[Link, tuple[object, object]]
     revolute: dict[RevoluteJoint, object]
     prismatic: dict[PrismaticJoint, tuple[object, object, tuple[float, float]]]
+    traces: list[tuple[np.ndarray, object]]
 
 
 def animate(
     solution: KinematicSolution,
     *,
     fps: float = 30,
+    trace_points=None,
     ax=None,
 ) -> FuncAnimation:
     """Animate a kinematic solution and return Matplotlib's animation object."""
@@ -51,6 +53,11 @@ def animate(
     if len(solution) == 0:
         raise ValueError("solution must contain at least one configuration")
     fps_value = _validate_fps(fps)
+    normalized_trace_points = _normalize_trace_points(solution, trace_points)
+    trace_data = [
+        (point, solution.point_positions(point))
+        for point in normalized_trace_points
+    ]
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -62,8 +69,8 @@ def animate(
         for joint in solution.mechanism.joints
         if isinstance(joint, PrismaticJoint)
     }
-    scale, bounds = _solution_plot_geometry(solution, prismatic_ranges)
-    artists = _create_artists(solution[0], scale, prismatic_ranges, ax)
+    scale, bounds = _solution_plot_geometry(solution, prismatic_ranges, trace_data)
+    artists = _create_artists(solution[0], scale, prismatic_ranges, trace_data, ax)
     ax.set_xlim(bounds[0], bounds[1])
     ax.set_ylim(bounds[2], bounds[3])
     ax.set_aspect("equal", adjustable="box")
@@ -71,7 +78,7 @@ def animate(
     ax.set_ylabel("y")
 
     def update(index):
-        return _update_artists(solution[index], scale, artists)
+        return _update_artists(solution[index], scale, artists, index)
 
     return FuncAnimation(
         fig,
@@ -81,6 +88,32 @@ def animate(
         blit=False,
         repeat=True,
     )
+
+
+def _normalize_trace_points(
+    solution: KinematicSolution,
+    trace_points,
+) -> tuple[Point, ...]:
+    if trace_points is None:
+        return ()
+    if isinstance(trace_points, Point):
+        raise TypeError("trace_points must be a collection of Point objects")
+    try:
+        candidates = list(trace_points)
+    except TypeError as exc:
+        raise TypeError("trace_points must be a collection of Point objects") from exc
+
+    normalized: list[Point] = []
+    identities: set[int] = set()
+    for point in candidates:
+        if not isinstance(point, Point):
+            raise TypeError("trace_points must contain only Point objects")
+        solution.point_positions(point)
+        point_id = id(point)
+        if point_id not in identities:
+            normalized.append(point)
+            identities.add(point_id)
+    return tuple(normalized)
 
 
 def _validate_fps(value: object) -> float:
@@ -99,6 +132,7 @@ def _validate_fps(value: object) -> float:
 def _solution_plot_geometry(
     solution: KinematicSolution,
     prismatic_ranges: dict[PrismaticJoint, tuple[float, float]],
+    trace_data: list[tuple[Point, np.ndarray]],
 ) -> tuple[float, tuple[float, float, float, float]]:
     configurations = [solution[index] for index in range(len(solution))]
     point_positions = np.concatenate([_point_positions(config) for config in configurations])
@@ -115,7 +149,7 @@ def _solution_plot_geometry(
     if scale <= np.finfo(float).eps:
         scale = 1.0
 
-    rendered_geometry = [point_positions]
+    rendered_geometry = [point_positions, *[positions for _, positions in trace_data]]
     for config in configurations:
         for joint, guide_range in prismatic_ranges.items():
             start, end, vertices = _prismatic_geometry(
@@ -156,7 +190,13 @@ def _prismatic_range(
     return min(0.0, float(values.min())), max(0.0, float(values.max()))
 
 
-def _create_artists(config, scale: float, prismatic_ranges, ax) -> _AnimationArtists:
+def _create_artists(
+    config,
+    scale: float,
+    prismatic_ranges,
+    trace_data: list[tuple[Point, np.ndarray]],
+    ax,
+) -> _AnimationArtists:
     mechanism = config.mechanism
     specs = _body_render_specs(config)
     body_artists = {}
@@ -164,6 +204,8 @@ def _create_artists(config, scale: float, prismatic_ranges, ax) -> _AnimationArt
     auxiliary_connector_artists = {}
     revolute_artists = {}
     prismatic_artists = {}
+    trace_artists = []
+    body_colors = {mechanism.ground: "0.4"}
 
     ground_spec = specs[mechanism.ground]
     _draw_body(config, mechanism.ground, ground_spec.scaffold_points, "0.4", ax)
@@ -179,6 +221,7 @@ def _create_artists(config, scale: float, prismatic_ranges, ax) -> _AnimationArt
     color_cycle = _link_color_cycle()
     for link in mechanism.links:
         color = next(color_cycle)
+        body_colors[link] = color
         spec = specs[link]
         artist = _draw_body(config, link, spec.scaffold_points, color, ax)
         if artist is not None:
@@ -213,16 +256,36 @@ def _create_artists(config, scale: float, prismatic_ranges, ax) -> _AnimationArt
         if isinstance(joint, RevoluteJoint):
             revolute_artists[joint] = _draw_revolute_joint(config, joint, ax)
 
+    for point, positions in trace_data:
+        color = body_colors[point.body]
+        initial = positions[:1]
+        (artist,) = ax.plot(
+            initial[:, 0],
+            initial[:, 1],
+            color=color,
+            linewidth=1.2,
+            alpha=0.7,
+            zorder=1.25,
+        )
+        artist.set_gid(f"kimech-trace:{point.body.name}:{point.name}")
+        trace_artists.append((positions, artist))
+
     return _AnimationArtists(
         body_artists,
         auxiliary_artists,
         auxiliary_connector_artists,
         revolute_artists,
         prismatic_artists,
+        trace_artists,
     )
 
 
-def _update_artists(config, scale: float, artists: _AnimationArtists) -> tuple[object, ...]:
+def _update_artists(
+    config,
+    scale: float,
+    artists: _AnimationArtists,
+    index: int,
+) -> tuple[object, ...]:
     modified = []
     for points, artist in artists.bodies.values():
         coordinates = _body_coordinates(config, points)
@@ -252,4 +315,8 @@ def _update_artists(config, scale: float, artists: _AnimationArtists) -> tuple[o
         guide.set_data([start[0], end[0]], [start[1], end[1]])
         slider.set_xy(vertices)
         modified.extend((guide, slider))
+    for positions, artist in artists.traces:
+        visible = positions[: index + 1]
+        artist.set_data(visible[:, 0], visible[:, 1])
+        modified.append(artist)
     return tuple(modified)

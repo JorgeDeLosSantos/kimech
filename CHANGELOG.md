@@ -11,7 +11,11 @@ Kimech `0.3.0` consolidates numerical robustness and simplifies the public solve
 - scalar prescribed positions produce a one-sample solution and `solution[0]` returns the corresponding `Configuration`;
 - `Configuration.input_value` was renamed to `Configuration.input_position`;
 - `KinematicSolution.input_values` was renamed to `KinematicSolution.input_positions`;
-- position, velocity, and acceleration solves use internal dimensionless numerical scaling and scale-independent residual validation.
+- position, velocity, and acceleration solves use internal dimensionless numerical scaling and scale-independent residual validation;
+- point queries are named consistently as `point_position(s)`, `point_velocity/velocities`, and `point_acceleration/accelerations`;
+- `KinematicSolution` supports slicing to another `KinematicSolution` and explicit iteration over `Configuration` objects;
+- result containers remain externally immutable and may be empty when constructed manually;
+- prescribed-input metadata on `Configuration` requires an associated `input_joint`.
 
 These are intentional breaking changes. No compatibility aliases are provided because Kimech has not yet established an external user base or PyPI release workflow.
 

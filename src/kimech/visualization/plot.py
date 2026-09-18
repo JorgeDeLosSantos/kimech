@@ -36,7 +36,7 @@ def plot(config: Configuration, *, ax=None):
 
     mechanism = config.mechanism
     specs = _body_render_specs(config)
-    scale = _plot_scale(config)
+    scale = _plot_scale(config, specs)
     body_colors: dict[_Body, str] = {mechanism.ground: "0.4"}
 
     ground_spec = specs[mechanism.ground]
@@ -118,12 +118,38 @@ def _body_render_specs(config: Configuration) -> dict[_Body, _BodyRenderSpec]:
     return specs
 
 
-def _plot_scale(config: Configuration) -> float:
-    coordinates = _point_positions(config)
-    if len(coordinates) == 0:
-        return 1.0
-    extent = float(max(np.ptp(coordinates[:, 0]), np.ptp(coordinates[:, 1])))
+def _plot_scale(
+    config: Configuration,
+    specs: dict[_Body, _BodyRenderSpec] | None = None,
+) -> float:
+    if specs is None:
+        specs = _body_render_specs(config)
+
+    scaffold_positions = _scaffold_positions(config, specs)
+    extent = _coordinate_extent(scaffold_positions)
+    if extent > np.finfo(float).eps:
+        return extent
+
+    extent = _coordinate_extent(_point_positions(config))
     return 1.0 if extent <= np.finfo(float).eps else extent
+
+
+def _scaffold_positions(
+    config: Configuration,
+    specs: dict[_Body, _BodyRenderSpec],
+) -> np.ndarray:
+    positions = [
+        config.point_position(point)
+        for spec in specs.values()
+        for point in spec.scaffold_points
+    ]
+    return np.asarray(positions, dtype=float).reshape((-1, 2))
+
+
+def _coordinate_extent(coordinates: np.ndarray) -> float:
+    if len(coordinates) == 0:
+        return 0.0
+    return float(max(np.ptp(coordinates[:, 0]), np.ptp(coordinates[:, 1])))
 
 
 def _point_positions(config: Configuration) -> np.ndarray:

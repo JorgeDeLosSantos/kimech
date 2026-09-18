@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — 0.3.0
+## 0.3.0
 
 Kimech `0.3.0` consolidates numerical robustness and simplifies the public solve API.
 

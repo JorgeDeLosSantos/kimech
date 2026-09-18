@@ -313,3 +313,23 @@ def test_updates_keep_artist_counts_and_viewport_fixed():
         assert ax.get_ylim() == ylim
 
     _finish(animation)
+
+def test_animation_updates_auxiliary_connector_in_place():
+    solution, auxiliary = _four_bar_solution()
+    fig, ax = plt.subplots()
+    animation = animate(solution, ax=ax)
+    connector = _artists_with_gid(ax, "kimech-auxiliary-connector:coupler")[0]
+    before = np.column_stack((connector.get_xdata(), connector.get_ydata())).copy()
+    counts = (len(ax.lines), len(ax.collections), len(ax.patches))
+
+    animation._func(3)
+
+    assert _artists_with_gid(ax, "kimech-auxiliary-connector:coupler")[0] is connector
+    after = np.column_stack((connector.get_xdata(), connector.get_ydata()))
+    assert not np.allclose(after[:2], before[:2])
+    assert (len(ax.lines), len(ax.collections), len(ax.patches)) == counts
+    np.testing.assert_allclose(
+        after[1],
+        solution[3].point_position(auxiliary),
+    )
+    _finish(animation)

@@ -51,6 +51,17 @@ def test_solution_stores_differential_histories_and_preserves_them_when_indexed(
     np.testing.assert_allclose(config.coordinate_velocities, velocities[1])
     np.testing.assert_allclose(config.coordinate_accelerations, accelerations[1])
 
+    sliced = solution[1:]
+    assert isinstance(sliced, KinematicSolution)
+    assert sliced.has_velocity is True
+    assert sliced.has_acceleration is True
+    np.testing.assert_allclose(sliced.input_positions, values[1:])
+    np.testing.assert_allclose(sliced.input_velocities, input_velocities[1:])
+    np.testing.assert_allclose(sliced.input_accelerations, input_accelerations[1:])
+    np.testing.assert_allclose(sliced.coordinates, coordinates[1:])
+    np.testing.assert_allclose(sliced.coordinate_velocities, velocities[1:])
+    np.testing.assert_allclose(sliced.coordinate_accelerations, accelerations[1:])
+
 
 def test_solution_differential_entity_histories_have_expected_values():
     mechanism, link, point, joint = _mechanism()

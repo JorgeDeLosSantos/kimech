@@ -226,7 +226,7 @@ def test_four_bar_updates_existing_body_auxiliary_and_revolute_artists():
     assert not np.allclose(np.column_stack((body.get_xdata(), body.get_ydata())), body_before)
     assert not np.allclose(auxiliary_artist.get_offsets(), auxiliary_before)
     assert not np.allclose(moving_pivot.get_offsets(), pivot_before)
-    np.testing.assert_allclose(auxiliary_artist.get_offsets(), [solution[3].position(auxiliary)])
+    np.testing.assert_allclose(auxiliary_artist.get_offsets(), [solution[3].point_position(auxiliary)])
     _finish(animation)
 
 

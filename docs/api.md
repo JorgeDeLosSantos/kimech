@@ -1,6 +1,6 @@
 # Kimech — Package structure and public API
 
-> Status: current development API for `0.3.0`.
+> Status: current API for `0.3.0`.
 >
 > Kimech remains a young project, and this API may evolve in future versions. [`design.md`](design.md) records the `0.1.0` position-kinematics baseline and [`design-0.2.0.md`](design-0.2.0.md) records the differential-kinematics design baseline.
 

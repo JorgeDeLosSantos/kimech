@@ -115,7 +115,7 @@ The public API should favor direct operations such as:
 
 ```python
 solution = solve(m, input=J1, values=theta, initial_guess=guess)
-path = solution.point_path(P)
+path = solution.point_positions(P)
 ```
 
 instead of requiring users to manually assemble residual vectors, coordinate maps, or solver objects.
@@ -262,7 +262,7 @@ P = coupler.add_point("P", (0.10, 0.05))
 Global position is configuration-dependent:
 
 ```python
-config.position(P)
+config.point_position(P)
 ```
 
 The same point may be referenced by multiple joints.
@@ -629,7 +629,7 @@ Preferred domain queries include:
 
 ```python
 config.pose(link)
-config.position(point)
+config.point_position(point)
 config.joint_coordinate(joint)
 ```
 
@@ -669,7 +669,7 @@ Implemented queries include:
 
 ```python
 config = solution[i]
-path = solution.point_path(P)
+path = solution.point_positions(P)
 poses = solution.link_poses(coupler)
 coords = solution.joint_coordinates(J)
 ```
@@ -744,7 +744,7 @@ Matplotlib is the only visualization backend. `plot()` returns Matplotlib `Figur
 
 Kimech constructs the schematic while Matplotlib remains responsible for display and file output. SVG uses `Figure.savefig(...)`; GIF uses `FuncAnimation.save(..., writer="pillow")`, with Pillow supplied by the optional `[viz]` dependency group. Kimech has no dedicated exporter. MP4/WebM and additional rendering backends are deferred.
 
-Trajectory overlays remain deferred. This does not affect `solution.point_path(point)`, which is an implemented analysis query rather than a rendering feature.
+Trajectory overlays remain deferred. This does not affect `solution.point_positions(point)`, which is an implemented analysis query rather than a rendering feature.
 
 ### 19.1 Animation implementation decisions
 

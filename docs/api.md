@@ -169,49 +169,55 @@ A `Point` exposes `name`, `body`, and `local`. `local` returns a safe NumPy copy
 solve(
     mechanism,
     *,
-    input,
-    values,
+    input_joint,
+    input_position,
     initial_guess,
     input_velocity=None,
     input_acceleration=None,
-)
+) -> KinematicSolution
 ```
 
-`input` must be a revolute or prismatic joint belonging to the mechanism. The shape of `values` determines the return type:
+`input_joint` must be a revolute or prismatic joint belonging to the mechanism. `input_position` is that joint's prescribed natural coordinate: relative angle for a revolute joint and signed displacement for a prismatic joint.
 
-- scalar `values` returns `Configuration`;
-- one-dimensional non-empty `values` returns `KinematicSolution`.
+`input_position` may be either a finite scalar or a finite, non-empty one-dimensional sequence. `solve()` always returns a `KinematicSolution`:
+
+- scalar `input_position` produces a one-sample solution;
+- one-dimensional `input_position` produces an ordered multi-sample solution.
+
+For a scalar solve, access the configuration with `solution[0]`.
 
 The requested kinematic level is determined by optional differential inputs:
 
 ```text
-values only
+input_position only
     -> position
 
-values + input_velocity
+input_position + input_velocity
     -> position + velocity
 
-values + input_velocity + input_acceleration
+input_position + input_velocity + input_acceleration
     -> position + velocity + acceleration
 ```
 
 `input_acceleration` without `input_velocity` is invalid. `None` means a differential level was not requested; `0.0` is a valid physical derivative and requests that level.
 
-For a sweep, `input_velocity` and `input_acceleration` may each be either:
+When `input_position` is scalar, each requested differential input must also be scalar. For a position sweep, `input_velocity` and `input_acceleration` may each be either:
 
 - a scalar, explicitly broadcast to every sample; or
-- a one-dimensional array with exactly the same length as `values`.
+- a one-dimensional array with exactly the same length as `input_position`.
 
-General NumPy broadcasting is not part of the public contract. All input data are validated before the position solve begins.
+General NumPy broadcasting is not part of the public contract. All prescribed input data are validated before the position solve begins.
 
 ### Position semantics
 
 For sweeps, user order is preserved and each accepted position configuration warm-starts the next position solve. Differential phases run only after the complete position history has been accepted, so requesting velocity or acceleration does not alter branch continuation.
 
-`initial_guess` may be either:
+`initial_guess` is required because it selects the numerical starting state and, in mechanisms with multiple assembly branches, helps select the intended branch. It may be either:
 
 - a mapping containing exactly every mobile link with an `(x, y, theta)` pose; or
-- a compatible `Configuration` from the same mechanism.
+- a compatible `Configuration` from the same mechanism snapshot.
+
+Kimech internally solves the position problem in dimensionless scaled coordinates and validates accepted configurations with a dimensionless residual tolerance. Public positions and derived quantities remain in the user's original units.
 
 The current model supports one prescribed input and square mobility-one R/P solve systems.
 
@@ -346,7 +352,7 @@ Integer indexing returns a `Configuration` preserving all position, velocity, ac
 ### History queries
 
 ```python
-solution.point_positions(point)             # (N, 2)
+solution.point_positions(point)         # (N, 2)
 solution.point_velocities(point)        # (N, 2)
 solution.point_accelerations(point)     # (N, 2)
 

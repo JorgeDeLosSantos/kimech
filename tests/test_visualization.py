@@ -177,7 +177,7 @@ def test_four_bar_has_body_skeletons_pivots_and_auxiliary_point():
     assert len(_artists_with_gid(ax, "kimech-joint:revolute")) == 4
     auxiliary_artists = _artists_with_gid(ax, "kimech-auxiliary:coupler")
     assert len(auxiliary_artists) == 1
-    np.testing.assert_allclose(auxiliary_artists[0].get_offsets(), [config.position(auxiliary)])
+    np.testing.assert_allclose(auxiliary_artists[0].get_offsets(), [config.point_position(auxiliary)])
     assert ax.get_aspect() == pytest.approx(1.0)
     plt.close(fig)
 
@@ -225,7 +225,7 @@ def test_body_with_three_structural_points_uses_one_hub_and_spoke_line():
     assert np.count_nonzero(np.isnan(x_data)) == 3
     np.testing.assert_allclose(
         np.column_stack((x_data, y_data))[[0, 3, 6]],
-        np.tile(np.mean([config.position(point) for point in center_points], axis=0), (3, 1)),
+        np.tile(np.mean([config.point_position(point) for point in center_points], axis=0), (3, 1)),
     )
     plt.close(fig)
 

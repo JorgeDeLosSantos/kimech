@@ -333,3 +333,89 @@ def test_animation_updates_auxiliary_connector_in_place():
         solution[3].point_position(auxiliary),
     )
     _finish(animation)
+
+
+def test_animate_trace_points_are_opt_in_and_duplicates_are_deduplicated():
+    solution, point = _four_bar_solution()
+
+    animation = animate(solution)
+    assert not [line for line in animation._fig.axes[0].lines if str(line.get_gid()).startswith("kimech-trace:")]
+    _finish(animation)
+
+    animation = animate(solution, trace_points=[point, point])
+    traces = [
+        line
+        for line in animation._fig.axes[0].lines
+        if str(line.get_gid()).startswith("kimech-trace:")
+    ]
+    assert len(traces) == 1
+    _finish(animation)
+
+
+def test_trace_progresses_with_frame_order_and_resets_on_first_frame():
+    solution, point = _four_bar_solution()
+    animation = animate(solution, trace_points=[point])
+    ax = animation._fig.axes[0]
+    trace = [line for line in ax.lines if str(line.get_gid()).startswith("kimech-trace:")][0]
+    expected = solution.point_positions(point)
+
+    for index in range(len(solution)):
+        animation._func(index)
+        actual = np.column_stack((trace.get_xdata(), trace.get_ydata()))
+        np.testing.assert_allclose(actual, expected[: index + 1])
+
+    animation._func(0)
+    actual = np.column_stack((trace.get_xdata(), trace.get_ydata()))
+    np.testing.assert_allclose(actual, expected[:1])
+    _finish(animation)
+
+
+def test_trace_respects_reversed_solution_order():
+    solution, point = _four_bar_solution()
+    reversed_solution = solution[::-1]
+    animation = animate(reversed_solution, trace_points=[point])
+    trace = [
+        line
+        for line in animation._fig.axes[0].lines
+        if str(line.get_gid()).startswith("kimech-trace:")
+    ][0]
+
+    animation._func(len(reversed_solution) - 1)
+
+    actual = np.column_stack((trace.get_xdata(), trace.get_ydata()))
+    np.testing.assert_allclose(actual, reversed_solution.point_positions(point))
+    _finish(animation)
+
+
+def test_animate_validates_trace_points_collection_and_membership():
+    solution, point = _four_bar_solution()
+
+    with pytest.raises(TypeError, match="collection"):
+        animate(solution, trace_points=point)
+    with pytest.raises(TypeError, match="only Point"):
+        animate(solution, trace_points=[solution.mechanism.links[0]])
+
+    foreign = Mechanism()
+    foreign_link = foreign.add_link("foreign")
+    foreign_point = foreign_link.add_point("P", (0.0, 0.0))
+    with pytest.raises(ValueError):
+        animate(solution, trace_points=[foreign_point])
+
+
+def test_trace_artists_and_viewport_remain_fixed_while_data_updates():
+    solution, point = _four_bar_solution()
+    fig, ax = plt.subplots()
+    animation = animate(solution, trace_points=[point], ax=ax)
+    trace = [line for line in ax.lines if str(line.get_gid()).startswith("kimech-trace:")][0]
+    counts = (len(ax.lines), len(ax.collections), len(ax.patches))
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+
+    for index in range(len(solution)):
+        animation._func(index)
+        assert [line for line in ax.lines if str(line.get_gid()).startswith("kimech-trace:")][0] is trace
+        assert (len(ax.lines), len(ax.collections), len(ax.patches)) == counts
+        assert ax.get_xlim() == xlim
+        assert ax.get_ylim() == ylim
+
+    _finish(animation)

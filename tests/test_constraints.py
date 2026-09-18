@@ -197,9 +197,9 @@ def test_prismatic_mobile_ground_residual_and_jacobians():
         q,
     )
 
-    input_value = -0.28
+    input_position = -0.28
     assert_jacobian_matches(
-        lambda value: driver_residual(mechanism, links, joint, value, input_value),
+        lambda value: driver_residual(mechanism, links, joint, value, input_position),
         driver_jacobian(mechanism, links, joint, q),
         q,
     )
@@ -234,14 +234,14 @@ def test_driver_coordinate_matches_configuration_and_jacobian(kind):
     else:
         mechanism, joint, q = _prismatic_case("mobile-mobile")
     links = mechanism.links
-    input_value = -0.34
+    input_position = -0.34
     expected_coordinate = Configuration(mechanism, q).joint_coordinate(joint)
     np.testing.assert_allclose(
-        driver_residual(mechanism, links, joint, q, input_value),
-        [expected_coordinate - input_value],
+        driver_residual(mechanism, links, joint, q, input_position),
+        [expected_coordinate - input_position],
     )
     assert_jacobian_matches(
-        lambda value: driver_residual(mechanism, links, joint, value, input_value),
+        lambda value: driver_residual(mechanism, links, joint, value, input_position),
         driver_jacobian(mechanism, links, joint, q),
         q,
     )
@@ -293,14 +293,14 @@ def test_complete_nine_equation_system_jacobian_matches_finite_differences(build
     links = mechanism.links
     joints = mechanism.joints
     q = np.array([0.2, -0.15, 0.38, 1.25, 0.45, -0.27, 3.0, 0.12, 0.19])
-    input_value = 0.31
-    phi = residual(mechanism, links, joints, input_joint, q, input_value)
-    analytical = jacobian(mechanism, links, joints, input_joint, q, input_value)
+    input_position = 0.31
+    phi = residual(mechanism, links, joints, input_joint, q, input_position)
+    analytical = jacobian(mechanism, links, joints, input_joint, q, input_position)
     assert phi.shape == (9,)
     assert analytical.shape == (9, 9)
     assert_jacobian_matches(
         lambda value: residual(
-            mechanism, links, joints, input_joint, value, input_value
+            mechanism, links, joints, input_joint, value, input_position
         ),
         analytical,
         q,

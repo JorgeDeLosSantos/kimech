@@ -36,12 +36,12 @@ def test_scalar_revolute_acceleration_matches_prescribed_angular_acceleration():
 
     config = solve(
         mechanism,
-        input=joint,
-        values=0.7,
+        input_joint=joint,
+        input_position=0.7,
         input_velocity=2.5,
         input_acceleration=-1.2,
         initial_guess=guess,
-    )
+    )[0]
 
     assert isinstance(config, Configuration)
     assert config.has_velocity
@@ -56,12 +56,12 @@ def test_scalar_prismatic_acceleration_matches_prescribed_translation_accelerati
 
     config = solve(
         mechanism,
-        input=joint,
-        values=1.2,
+        input_joint=joint,
+        input_position=1.2,
         input_velocity=-0.4,
         input_acceleration=0.75,
         initial_guess=guess,
-    )
+    )[0]
 
     np.testing.assert_allclose(config.body_acceleration(slider), [0.75, 0.0, 0.0])
     assert config.joint_acceleration(joint) == pytest.approx(0.75)
@@ -74,12 +74,12 @@ def test_point_acceleration_includes_centripetal_term_for_constant_input_speed()
 
     config = solve(
         mechanism,
-        input=joint,
-        values=theta,
+        input_joint=joint,
+        input_position=theta,
         input_velocity=omega,
         input_acceleration=0.0,
         initial_guess=guess,
-    )
+    )[0]
 
     radial = np.array([2.0 * np.cos(theta), 2.0 * np.sin(theta)])
     np.testing.assert_allclose(config.acceleration(tip), -(omega**2) * radial, atol=1e-11)
@@ -91,8 +91,8 @@ def test_sweep_scalar_acceleration_broadcasts_and_preserves_result_shape():
 
     solution = solve(
         mechanism,
-        input=joint,
-        values=values,
+        input_joint=joint,
+        input_position=values,
         input_velocity=2.0,
         input_acceleration=-0.5,
         initial_guess=guess,
@@ -112,8 +112,8 @@ def test_sweep_accepts_elementwise_acceleration_history():
 
     solution = solve(
         mechanism,
-        input=joint,
-        values=values,
+        input_joint=joint,
+        input_position=values,
         input_velocity=velocities,
         input_acceleration=accelerations,
         initial_guess=guess,
@@ -130,15 +130,15 @@ def test_acceleration_request_does_not_change_position_or_velocity_solution():
 
     velocity_only = solve(
         mechanism,
-        input=joint,
-        values=values,
+        input_joint=joint,
+        input_position=values,
         input_velocity=4.0,
         initial_guess=guess,
     )
     with_acceleration = solve(
         mechanism,
-        input=joint,
-        values=values,
+        input_joint=joint,
+        input_position=values,
         input_velocity=4.0,
         input_acceleration=1.25,
         initial_guess=guess,
@@ -157,8 +157,8 @@ def test_input_acceleration_without_velocity_is_rejected_before_solving():
     with pytest.raises(ValueError, match="requires input_velocity"):
         solve(
             mechanism,
-            input=joint,
-            values=0.5,
+            input_joint=joint,
+            input_position=0.5,
             input_acceleration=1.0,
             initial_guess=guess,
         )
@@ -180,8 +180,8 @@ def test_input_acceleration_shape_and_finiteness_validation(values, acceleration
     with pytest.raises((TypeError, ValueError), match=message):
         solve(
             mechanism,
-            input=joint,
-            values=values,
+            input_joint=joint,
+            input_position=values,
             input_velocity=1.0,
             input_acceleration=acceleration,
             initial_guess=guess,
@@ -208,8 +208,8 @@ def test_acceleration_linear_algebra_failure_is_translated(monkeypatch):
     ):
         solve(
             mechanism,
-            input=joint,
-            values=0.5,
+            input_joint=joint,
+            input_position=0.5,
             input_velocity=1.0,
             input_acceleration=0.0,
             initial_guess=guess,

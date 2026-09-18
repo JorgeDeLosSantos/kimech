@@ -144,10 +144,10 @@ def test_solution_sequence_properties_and_negative_indexing():
     assert solution.mechanism is mechanism
     assert solution.input_joint is joint
     assert solution[0].input_joint is joint
-    assert solution[0].input_value == pytest.approx(0.0)
+    assert solution[0].input_position == pytest.approx(0.0)
     np.testing.assert_allclose(solution[0].body_pose(link), coordinates[0])
     np.testing.assert_allclose(solution[-1].body_pose(link), coordinates[-1])
-    np.testing.assert_allclose(solution.input_values, inputs)
+    np.testing.assert_allclose(solution.input_positions, inputs)
     np.testing.assert_allclose(solution.coordinates, coordinates)
 
     with pytest.raises(TypeError):
@@ -212,17 +212,17 @@ def test_public_arrays_cannot_mutate_stored_results_or_alias_constructor_inputs(
     exposed_q[:] = 99.0
     np.testing.assert_allclose(config.body_pose(link), [1.0, 2.0, 0.5])
 
-    input_values = np.array([0.0, 0.5])
+    input_positions = np.array([0.0, 0.5])
     coordinates = np.array([[1.0, 2.0, 0.0], [2.0, 3.0, 0.5]])
-    solution = KinematicSolution(mechanism, joint, input_values, coordinates)
-    input_values[:] = -1.0
+    solution = KinematicSolution(mechanism, joint, input_positions, coordinates)
+    input_positions[:] = -1.0
     coordinates[:] = -1.0
-    exposed_values = solution.input_values
+    exposed_values = solution.input_positions
     exposed_coordinates = solution.coordinates
     exposed_values[:] = 99.0
     exposed_coordinates[:] = 99.0
 
-    np.testing.assert_allclose(solution.input_values, [0.0, 0.5])
+    np.testing.assert_allclose(solution.input_positions, [0.0, 0.5])
     np.testing.assert_allclose(solution.coordinates, [[1.0, 2.0, 0.0], [2.0, 3.0, 0.5]])
 
 
@@ -241,9 +241,9 @@ def test_configuration_validates_arrays_input_metadata_and_membership():
     with pytest.raises(ValueError, match="joint"):
         Configuration(mechanism, [0.0, 0.0, 0.0], input_joint=other_joint)
     with pytest.raises(ValueError, match="scalar"):
-        Configuration(mechanism, [0.0, 0.0, 0.0], input_joint=joint, input_value=[1.0])
+        Configuration(mechanism, [0.0, 0.0, 0.0], input_joint=joint, input_position=[1.0])
     with pytest.raises(ValueError, match="finite"):
-        Configuration(mechanism, [0.0, 0.0, 0.0], input_value=np.nan)
+        Configuration(mechanism, [0.0, 0.0, 0.0], input_position=np.nan)
 
     config = Configuration(mechanism, [0.0, 0.0, 0.0])
     with pytest.raises(ValueError, match="body"):
@@ -294,7 +294,7 @@ def test_configuration_stores_optional_differential_state_and_metadata_as_safe_c
         coordinate_velocities=q_dot,
         coordinate_accelerations=q_ddot,
         input_joint=joint,
-        input_value=0.5,
+        input_position=0.5,
         input_velocity=9.0,
         input_acceleration=10.0,
     )

@@ -72,20 +72,20 @@ def test_four_bar_velocity_and_speed_acceleration_scale_with_input_rate():
 
     base = solve(
         mechanism,
-        input=input_joint,
-        values=theta,
+        input_joint=input_joint,
+        input_position=theta,
         input_velocity=omega,
         input_acceleration=0.0,
         initial_guess=guess,
-    )
+    )[0]
     doubled = solve(
         mechanism,
-        input=input_joint,
-        values=theta,
+        input_joint=input_joint,
+        input_position=theta,
         input_velocity=2.0 * omega,
         input_acceleration=0.0,
         initial_guess=guess,
-    )
+    )[0]
 
     np.testing.assert_allclose(doubled.coordinates, base.coordinates, atol=1e-12)
     np.testing.assert_allclose(
@@ -121,20 +121,20 @@ def test_four_bar_acceleration_is_linear_in_prescribed_input_acceleration():
 
     base = solve(
         mechanism,
-        input=input_joint,
-        values=theta,
+        input_joint=input_joint,
+        input_position=theta,
         input_velocity=0.0,
         input_acceleration=alpha,
         initial_guess=guess,
-    )
+    )[0]
     doubled = solve(
         mechanism,
-        input=input_joint,
-        values=theta,
+        input_joint=input_joint,
+        input_position=theta,
         input_velocity=0.0,
         input_acceleration=2.0 * alpha,
         initial_guess=guess,
-    )
+    )[0]
 
     np.testing.assert_allclose(base.coordinate_velocities, 0.0, atol=1e-14)
     np.testing.assert_allclose(doubled.coordinate_velocities, 0.0, atol=1e-14)
@@ -154,28 +154,28 @@ def test_four_bar_acceleration_splits_into_speed_and_input_acceleration_terms():
 
     speed_only = solve(
         mechanism,
-        input=input_joint,
-        values=theta,
+        input_joint=input_joint,
+        input_position=theta,
         input_velocity=omega,
         input_acceleration=0.0,
         initial_guess=guess,
-    )
+    )[0]
     alpha_only = solve(
         mechanism,
-        input=input_joint,
-        values=theta,
+        input_joint=input_joint,
+        input_position=theta,
         input_velocity=0.0,
         input_acceleration=alpha,
         initial_guess=guess,
-    )
+    )[0]
     combined = solve(
         mechanism,
-        input=input_joint,
-        values=theta,
+        input_joint=input_joint,
+        input_position=theta,
         input_velocity=omega,
         input_acceleration=alpha,
         initial_guess=guess,
-    )
+    )[0]
 
     np.testing.assert_allclose(
         combined.coordinate_accelerations,
@@ -193,21 +193,21 @@ def test_four_bar_differential_sweep_preserves_input_and_position_history():
 
     position_only = solve(
         mechanism,
-        input=input_joint,
-        values=values,
+        input_joint=input_joint,
+        input_position=values,
         initial_guess=guess,
     )
     differential = solve(
         mechanism,
-        input=input_joint,
-        values=values,
+        input_joint=input_joint,
+        input_position=values,
         input_velocity=velocities,
         input_acceleration=accelerations,
         initial_guess=guess,
     )
 
     np.testing.assert_array_equal(differential.coordinates, position_only.coordinates)
-    np.testing.assert_array_equal(differential.input_values, values)
+    np.testing.assert_array_equal(differential.input_positions, values)
     np.testing.assert_array_equal(differential.input_velocities, velocities)
     np.testing.assert_array_equal(differential.input_accelerations, accelerations)
     np.testing.assert_allclose(
@@ -228,8 +228,8 @@ def test_slider_crank_prismatic_inverse_reconstructs_full_differential_state():
 
     forward = solve(
         mechanism,
-        input=crank_joint,
-        values=crank_values,
+        input_joint=crank_joint,
+        input_position=crank_values,
         input_velocity=1.1,
         input_acceleration=-0.3,
         initial_guess=guess,
@@ -240,8 +240,8 @@ def test_slider_crank_prismatic_inverse_reconstructs_full_differential_state():
 
     inverse = solve(
         mechanism,
-        input=prismatic_joint,
-        values=slider_values,
+        input_joint=prismatic_joint,
+        input_position=slider_values,
         input_velocity=slider_velocities,
         input_acceleration=slider_accelerations,
         initial_guess=forward[0],
@@ -286,8 +286,8 @@ def test_sweep_acceleration_failure_reports_stage_and_sample_index(monkeypatch):
     ):
         solve(
             mechanism,
-            input=input_joint,
-            values=[0.9, 1.0, 1.1],
+            input_joint=input_joint,
+            input_position=[0.9, 1.0, 1.1],
             input_velocity=1.0,
             input_acceleration=0.0,
             initial_guess=guess,

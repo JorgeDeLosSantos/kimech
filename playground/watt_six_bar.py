@@ -209,8 +209,8 @@ def main():
 
     solution = solve(
         mechanism,
-        input=input_joint,
-        values=values,
+        input_joint=input_joint,
+        input_position=values,
         initial_guess=initial_guess,
     )
 

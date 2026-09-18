@@ -91,13 +91,13 @@ def test_problem_four_bar_sweep_is_scale_invariant(scale):
 
     solution = solve(
         mechanism,
-        input=input_joint,
-        values=values,
+        input_joint=input_joint,
+        input_position=values,
         initial_guess=guess,
     )
 
     assert len(solution) == len(values)
-    np.testing.assert_allclose(solution.input_values, values)
+    np.testing.assert_allclose(solution.input_positions, values)
 
 
 def test_characteristic_length_scales_with_problem_geometry():
@@ -141,8 +141,8 @@ def test_prismatic_sweep_accepts_verified_root_even_if_hybr_reports_no_progress(
 
     solution = solve(
         mechanism,
-        input=input_joint,
-        values=values,
+        input_joint=input_joint,
+        input_position=values,
         initial_guess=guess,
     )
 
@@ -158,12 +158,12 @@ def test_differential_solution_preserves_physical_scaling(scale):
 
     config = solve(
         mechanism,
-        input=input_joint,
-        values=theta,
+        input_joint=input_joint,
+        input_position=theta,
         input_velocity=omega,
         input_acceleration=alpha,
         initial_guess=guess,
-    )
+    )[0]
 
     assert np.all(np.isfinite(config.coordinates))
     assert np.all(np.isfinite(config.coordinate_velocities))

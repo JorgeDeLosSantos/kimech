@@ -24,7 +24,7 @@ class Configuration:
         "_coordinates",
         "_input_acceleration",
         "_input_joint",
-        "_input_value",
+        "_input_position",
         "_input_velocity",
         "_links",
         "_mechanism",
@@ -38,7 +38,7 @@ class Configuration:
         coordinate_velocities: Sequence[float] | np.ndarray | None = None,
         coordinate_accelerations: Sequence[float] | np.ndarray | None = None,
         input_joint: _Joint | None = None,
-        input_value: float | None = None,
+        input_position: float | None = None,
         input_velocity: float | None = None,
         input_acceleration: float | None = None,
     ) -> None:
@@ -50,7 +50,7 @@ class Configuration:
             coordinate_velocities=coordinate_velocities,
             coordinate_accelerations=coordinate_accelerations,
             input_joint=input_joint,
-            input_value=input_value,
+            input_position=input_position,
             input_velocity=input_velocity,
             input_acceleration=input_acceleration,
         )
@@ -65,7 +65,7 @@ class Configuration:
         coordinate_velocities: Sequence[float] | np.ndarray | None = None,
         coordinate_accelerations: Sequence[float] | np.ndarray | None = None,
         input_joint: _Joint | None = None,
-        input_value: float | None = None,
+        input_position: float | None = None,
         input_velocity: float | None = None,
         input_acceleration: float | None = None,
     ) -> Configuration:
@@ -77,7 +77,7 @@ class Configuration:
             coordinate_velocities=coordinate_velocities,
             coordinate_accelerations=coordinate_accelerations,
             input_joint=input_joint,
-            input_value=input_value,
+            input_position=input_position,
             input_velocity=input_velocity,
             input_acceleration=input_acceleration,
         )
@@ -92,7 +92,7 @@ class Configuration:
         coordinate_velocities: Sequence[float] | np.ndarray | None,
         coordinate_accelerations: Sequence[float] | np.ndarray | None,
         input_joint: _Joint | None,
-        input_value: float | None,
+        input_position: float | None,
         input_velocity: float | None,
         input_acceleration: float | None,
     ) -> None:
@@ -122,7 +122,7 @@ class Configuration:
             shape=state_shape,
         )
         self._input_joint = input_joint
-        self._input_value = _optional_finite_scalar(input_value, name="input_value")
+        self._input_position = _optional_finite_scalar(input_position, name="input_position")
         self._input_velocity = _optional_finite_scalar(input_velocity, name="input_velocity")
         self._input_acceleration = _optional_finite_scalar(
             input_acceleration,
@@ -140,9 +140,9 @@ class Configuration:
         return self._input_joint
 
     @property
-    def input_value(self) -> float | None:
+    def input_position(self) -> float | None:
         """Return the prescribed joint coordinate associated with this configuration."""
-        return self._input_value
+        return self._input_position
 
     @property
     def input_velocity(self) -> float | None:
@@ -303,7 +303,7 @@ class KinematicSolution:
         "_coordinates",
         "_input_accelerations",
         "_input_joint",
-        "_input_values",
+        "_input_positions",
         "_input_velocities",
         "_links",
         "_mechanism",
@@ -313,7 +313,7 @@ class KinematicSolution:
         self,
         mechanism: Mechanism,
         input_joint: _Joint,
-        input_values: Sequence[float] | np.ndarray,
+        input_positions: Sequence[float] | np.ndarray,
         coordinates: Sequence[Sequence[float]] | np.ndarray,
         *,
         coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None = None,
@@ -326,7 +326,7 @@ class KinematicSolution:
             mechanism,
             mechanism.links,
             input_joint,
-            input_values,
+            input_positions,
             coordinates,
             coordinate_velocities=coordinate_velocities,
             coordinate_accelerations=coordinate_accelerations,
@@ -340,7 +340,7 @@ class KinematicSolution:
         mechanism: Mechanism,
         links: tuple[Link, ...],
         input_joint: _Joint,
-        input_values: Sequence[float] | np.ndarray,
+        input_positions: Sequence[float] | np.ndarray,
         coordinates: Sequence[Sequence[float]] | np.ndarray,
         *,
         coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None = None,
@@ -353,7 +353,7 @@ class KinematicSolution:
             mechanism,
             links,
             input_joint,
-            input_values,
+            input_positions,
             coordinates,
             coordinate_velocities=coordinate_velocities,
             coordinate_accelerations=coordinate_accelerations,
@@ -367,7 +367,7 @@ class KinematicSolution:
         mechanism: Mechanism,
         links: tuple[Link, ...],
         input_joint: _Joint,
-        input_values: Sequence[float] | np.ndarray,
+        input_positions: Sequence[float] | np.ndarray,
         coordinates: Sequence[Sequence[float]] | np.ndarray,
         *,
         coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None,
@@ -382,7 +382,7 @@ class KinematicSolution:
         if input_accelerations is not None and input_velocities is None:
             raise ValueError("input_accelerations requires input_velocities")
 
-        values = _finite_float_array(input_values, name="input_values", ndim=1)
+        values = _finite_float_array(input_positions, name="input_positions", ndim=1)
         coordinate_array = _finite_float_array(coordinates, name="coordinates", ndim=2)
         state_shape = (len(values), 3 * len(links))
         if coordinate_array.shape != state_shape:
@@ -412,7 +412,7 @@ class KinematicSolution:
         self._mechanism = mechanism
         self._links = links
         self._input_joint = input_joint
-        self._input_values = values
+        self._input_positions = values
         self._input_velocities = input_velocity_array
         self._input_accelerations = input_acceleration_array
         self._coordinates = coordinate_array
@@ -430,9 +430,9 @@ class KinematicSolution:
         return self._input_joint
 
     @property
-    def input_values(self) -> np.ndarray:
+    def input_positions(self) -> np.ndarray:
         """Return a safe copy of the ordered prescribed coordinates."""
-        return self._input_values.copy()
+        return self._input_positions.copy()
 
     @property
     def input_velocities(self) -> np.ndarray | None:
@@ -478,7 +478,7 @@ class KinematicSolution:
         return self._coordinate_accelerations is not None
 
     def __len__(self) -> int:
-        return len(self._input_values)
+        return len(self._input_positions)
 
     def __getitem__(self, index: int) -> Configuration:
         """Return one configuration while preserving all available state."""
@@ -498,7 +498,7 @@ class KinematicSolution:
                 else self._coordinate_accelerations[item]
             ),
             input_joint=self._input_joint,
-            input_value=self._input_values[item],
+            input_position=self._input_positions[item],
             input_velocity=(
                 None if self._input_velocities is None else self._input_velocities[item]
             ),

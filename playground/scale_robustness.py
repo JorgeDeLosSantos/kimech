@@ -117,7 +117,7 @@ def _control_case(scale: float) -> StudyCase:
         name="control_revolute",
         mechanism=mechanism,
         input_joint=input_joint,
-        values=np.linspace(0.0, 2.0 * np.pi, 361),
+        input_position=np.linspace(0.0, 2.0 * np.pi, 361),
         initial_guess=guess,
         characteristic_length=100.0 * scale,
     )
@@ -155,7 +155,7 @@ def _baseline_four_bar(scale: float) -> StudyCase:
         name="baseline_four_bar",
         mechanism=mechanism,
         input_joint=input_joint,
-        values=np.linspace(0.8, 1.3, 25),
+        input_position=np.linspace(0.8, 1.3, 25),
         initial_guess=guess,
         characteristic_length=0.30 * scale,
     )
@@ -198,7 +198,7 @@ def _problem_four_bar(scale: float) -> StudyCase:
         name="problem_four_bar",
         mechanism=mechanism,
         input_joint=input_joint,
-        values=np.linspace(0.0, 2.0 * np.pi, 361),
+        input_position=np.linspace(0.0, 2.0 * np.pi, 361),
         initial_guess=guess,
         characteristic_length=200.0 * scale,
     )

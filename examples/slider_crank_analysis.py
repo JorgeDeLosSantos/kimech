@@ -54,8 +54,8 @@ def main():
 
     solution = solve(
         mechanism,
-        input=crank_joint,
-        values=input_angle,
+        input_joint=crank_joint,
+        input_position=input_angle,
         input_velocity=input_angular_velocity,
         input_acceleration=input_angular_acceleration,
         initial_guess=initial_guess,
@@ -100,12 +100,12 @@ def main():
     reference = solution[sample]
     reconstructed = solve(
         mechanism,
-        input=prismatic_joint,
-        values=slider_position[sample],
+        input_joint=prismatic_joint,
+        input_position=slider_position[sample],
         input_velocity=slider_velocity[sample],
         input_acceleration=slider_acceleration[sample],
         initial_guess=reference,
-    )
+    )[0]
 
     coordinate_error = np.max(
         np.abs(reconstructed.coordinates - reference.coordinates)

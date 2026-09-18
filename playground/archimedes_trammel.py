@@ -93,12 +93,12 @@ def main():
 
     solution = solve(
         mechanism,
-        input=input_joint,
-        values=values,
+        input_joint=input_joint,
+        input_position=values,
         initial_guess=initial_guess,
     )
 
-    theta = solution.input_values
+    theta = solution.input_positions
     path = solution.point_path(tracer)
     horizontal_positions = solution.joint_coordinates(horizontal_joint)
     vertical_positions = solution.joint_coordinates(vertical_joint)

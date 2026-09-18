@@ -4,7 +4,7 @@ Kimech is a small Python library for modeling and solving the kinematics of plan
 
 It provides declarative rigid-body models with revolute and prismatic joints, position solving with warm-start continuation, analytic velocity and acceleration kinematics, result queries, and schematic plotting and animation.
 
-Kimech supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms with one prescribed joint coordinate. The `0.1.0` position-kinematics baseline is recorded in [`docs/design.md`](docs/design.md), the `0.2.0` differential-kinematics baseline in [`docs/design-0.2.0.md`](docs/design-0.2.0.md), and [`docs/api.md`](docs/api.md) documents the current development API for `0.3.0`.
+Kimech supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms with one prescribed joint coordinate. The `0.1.0` position-kinematics baseline is recorded in [`docs/design.md`](docs/design.md), the `0.2.0` differential-kinematics baseline in [`docs/design-0.2.0.md`](docs/design-0.2.0.md), and [`docs/api.md`](docs/api.md) documents the current API for `0.3.0`.
 
 ## Installation
 
@@ -96,7 +96,7 @@ from kimech.visualization import animate
 animation = animate(solution, fps=30)
 
 # Optional progressive trace for one or more mechanism points
-animation = animate(solution, fps=30, trace_points=[foot])
+animation = animate(solution, fps=30, trace_points=[point_p])
 plt.show()
 ```
 

@@ -30,3 +30,32 @@ jobs:
 
       - name: Run tests
         run: pytest
+
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip build
+
+      - name: Build wheel and sdist
+        run: |
+          python -m build
+          ls -lh dist
+
+      - name: Verify wheel in clean environment
+        run: |
+          python -m venv /tmp/kimech-wheel-check
+          /tmp/kimech-wheel-check/bin/python -m pip install --upgrade pip
+          /tmp/kimech-wheel-check/bin/python -m pip install dist/*.whl
+          /tmp/kimech-wheel-check/bin/python -c "from importlib.metadata import version; import kimech; assert kimech.__version__ == version('kimech'); print(kimech.__version__)"

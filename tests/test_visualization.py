@@ -16,6 +16,7 @@ from matplotlib.patches import Polygon
 
 from kimech import Configuration, Mechanism, solve
 from kimech.visualization import plot
+from kimech.visualization.plot import _body_render_specs, _plot_scale
 
 
 def _artists_with_gid(ax, gid):
@@ -316,3 +317,53 @@ def test_ground_auxiliary_points_do_not_create_fallback_scaffold_or_connectors()
     auxiliary = _artists_with_gid(ax, "kimech-auxiliary:ground")[0]
     np.testing.assert_allclose(auxiliary.get_offsets(), [config.point_position(reference)])
     plt.close(fig)
+
+
+def test_glyph_scale_ignores_remote_auxiliary_point_when_structural_scaffold_exists():
+    mechanism = Mechanism()
+    ground_a = mechanism.ground.add_point("A", (0.0, 0.0))
+    ground_b = mechanism.ground.add_point("B", (2.0, 0.0))
+    link = mechanism.add_link("bar")
+    point_a = link.add_point("A", (0.0, 0.0))
+    point_b = link.add_point("B", (2.0, 0.0))
+    mechanism.revolute(ground_a, point_a)
+    mechanism.revolute(point_b, ground_b)
+    config = Configuration(mechanism, [0.0, 0.0, 0.0])
+    baseline = _plot_scale(config, _body_render_specs(config))
+
+    link.add_point("far", (1000.0, 500.0))
+    with_auxiliary = _plot_scale(config, _body_render_specs(config))
+
+    assert with_auxiliary == pytest.approx(baseline)
+
+
+def test_glyph_scale_uses_auxiliary_points_for_single_joint_plate_fallback():
+    mechanism = Mechanism()
+    fixed = mechanism.ground.add_point("O", (0.0, 0.0))
+    plate = mechanism.add_link("plate")
+    pivot = plate.add_point("O", (0.0, 0.0))
+    plate.add_point("A", (-2.0, -1.0))
+    plate.add_point("B", (2.0, 1.0))
+    mechanism.revolute(fixed, pivot)
+    config = Configuration(mechanism, [0.0, 0.0, 0.0])
+
+    assert _plot_scale(config, _body_render_specs(config)) == pytest.approx(4.0)
+
+
+def test_glyph_scale_is_uniformly_scale_invariant():
+    def make(scale):
+        mechanism = Mechanism()
+        ground_a = mechanism.ground.add_point("A", (0.0, 0.0))
+        ground_b = mechanism.ground.add_point("B", (2.0 * scale, 0.0))
+        link = mechanism.add_link("bar")
+        point_a = link.add_point("A", (0.0, 0.0))
+        point_b = link.add_point("B", (2.0 * scale, 0.0))
+        mechanism.revolute(ground_a, point_a)
+        mechanism.revolute(point_b, ground_b)
+        config = Configuration(mechanism, [0.0, 0.0, 0.0])
+        return _plot_scale(config, _body_render_specs(config))
+
+    millimetre_scale = make(1000.0)
+    metre_scale = make(1.0)
+
+    assert millimetre_scale / metre_scale == pytest.approx(1000.0)

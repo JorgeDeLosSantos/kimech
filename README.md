@@ -76,7 +76,7 @@ solution = solve(
     initial_guess=initial_guess,
 )
 
-positions = solution.point_path(point_p)
+positions = solution.point_positions(point_p)
 velocities = solution.point_velocities(point_p)
 accelerations = solution.point_accelerations(point_p)
 ```

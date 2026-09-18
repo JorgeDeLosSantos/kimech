@@ -28,7 +28,7 @@ solution = solve(
     initial_guess=initial_guess,
 )
 
-positions = solution.point_path(point_p)
+positions = solution.point_positions(point_p)
 velocities = solution.point_velocities(point_p)
 accelerations = solution.point_accelerations(point_p)
 ```
@@ -287,9 +287,9 @@ Ground pose is the zero-coordinate identity. Ground differential state is zero o
 ### Point queries
 
 ```python
-config.position(point)      # (2,)
-config.velocity(point)      # (2,)
-config.acceleration(point)  # (2,)
+config.point_position(point)      # (2,)
+config.point_velocity(point)      # (2,)
+config.point_acceleration(point)  # (2,)
 ```
 
 Point velocity and acceleration are derived from rigid-body state, including tangential and centripetal contributions.
@@ -346,7 +346,7 @@ Integer indexing returns a `Configuration` preserving all position, velocity, ac
 ### History queries
 
 ```python
-solution.point_path(point)             # (N, 2)
+solution.point_positions(point)             # (N, 2)
 solution.point_velocities(point)        # (N, 2)
 solution.point_accelerations(point)     # (N, 2)
 

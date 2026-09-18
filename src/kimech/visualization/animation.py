@@ -13,8 +13,10 @@ from ..joints import PrismaticJoint, RevoluteJoint
 from ..model import Link, Point
 from ..solution import KinematicSolution
 from .plot import (
-    _auxiliary_points,
+    _auxiliary_connector_coordinates,
     _body_coordinates,
+    _body_render_specs,
+    _draw_auxiliary_connectors,
     _draw_auxiliary_points,
     _draw_body,
     _draw_prismatic_joint,
@@ -23,14 +25,14 @@ from .plot import (
     _point_positions,
     _prismatic_geometry,
     _revolute_center,
-    _structural_points,
 )
 
 
 @dataclass
 class _AnimationArtists:
-    bodies: dict[Link, tuple[list[Point], object]]
-    auxiliary: dict[Link, tuple[list[Point], object]]
+    bodies: dict[Link, tuple[tuple[Point, ...], object]]
+    auxiliary: dict[Link, tuple[tuple[Point, ...], object]]
+    auxiliary_connectors: dict[Link, tuple[object, object]]
     revolute: dict[RevoluteJoint, object]
     prismatic: dict[PrismaticJoint, tuple[object, object, tuple[float, float]]]
 
@@ -149,27 +151,45 @@ def _prismatic_range(
 
 def _create_artists(config, scale: float, prismatic_ranges, ax) -> _AnimationArtists:
     mechanism = config.mechanism
-    structural = _structural_points(config)
+    specs = _body_render_specs(config)
     body_artists = {}
     auxiliary_artists = {}
+    auxiliary_connector_artists = {}
     revolute_artists = {}
     prismatic_artists = {}
 
-    _draw_body(config, mechanism.ground, structural[mechanism.ground], "0.4", ax)
+    ground_spec = specs[mechanism.ground]
+    _draw_body(config, mechanism.ground, ground_spec.scaffold_points, "0.4", ax)
+    _draw_auxiliary_connectors(config, mechanism.ground, ground_spec, "0.4", ax)
+    _draw_auxiliary_points(
+        config,
+        mechanism.ground,
+        list(ground_spec.auxiliary_points),
+        "0.4",
+        ax,
+    )
+
     color_cycle = _link_color_cycle()
     for link in mechanism.links:
         color = next(color_cycle)
-        points = structural[link][0]
-        artist = _draw_body(config, link, structural[link], color, ax)
+        spec = specs[link]
+        artist = _draw_body(config, link, spec.scaffold_points, color, ax)
         if artist is not None:
-            body_artists[link] = (points, artist)
-        auxiliary = _auxiliary_points(link, structural[link])
-        auxiliary_artist = _draw_auxiliary_points(config, link, auxiliary, color, ax)
-        if auxiliary_artist is not None:
-            auxiliary_artists[link] = (auxiliary, auxiliary_artist)
+            body_artists[link] = (spec.scaffold_points, artist)
 
-    ground_auxiliary = _auxiliary_points(mechanism.ground, structural[mechanism.ground])
-    _draw_auxiliary_points(config, mechanism.ground, ground_auxiliary, "0.4", ax)
+        connector_artist = _draw_auxiliary_connectors(config, link, spec, color, ax)
+        if connector_artist is not None:
+            auxiliary_connector_artists[link] = (spec, connector_artist)
+
+        auxiliary_artist = _draw_auxiliary_points(
+            config,
+            link,
+            list(spec.auxiliary_points),
+            color,
+            ax,
+        )
+        if auxiliary_artist is not None:
+            auxiliary_artists[link] = (spec.auxiliary_points, auxiliary_artist)
 
     for joint in mechanism.joints:
         if isinstance(joint, PrismaticJoint):
@@ -189,6 +209,7 @@ def _create_artists(config, scale: float, prismatic_ranges, ax) -> _AnimationArt
     return _AnimationArtists(
         body_artists,
         auxiliary_artists,
+        auxiliary_connector_artists,
         revolute_artists,
         prismatic_artists,
     )
@@ -202,6 +223,14 @@ def _update_artists(config, scale: float, artists: _AnimationArtists) -> tuple[o
         modified.append(artist)
     for points, artist in artists.auxiliary.values():
         artist.set_offsets([config.point_position(point) for point in points])
+        modified.append(artist)
+    for spec, artist in artists.auxiliary_connectors.values():
+        coordinates = _auxiliary_connector_coordinates(
+            config,
+            spec.scaffold_points,
+            spec.connector_points,
+        )
+        artist.set_data(coordinates[:, 0], coordinates[:, 1])
         modified.append(artist)
     for joint, artist in artists.revolute.items():
         artist.set_offsets([_revolute_center(config, joint)])

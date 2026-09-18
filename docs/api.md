@@ -450,11 +450,27 @@ fig, ax = plot(config)
 fig.savefig("mechanism.svg")
 ```
 
+Kimech renders a schematic rigid-body scaffold rather than physical/CAD geometry. Structural joint points define the primary scaffold. Mobile links with fewer than two structural points fall back to their declared body points so plate-like bodies remain visually coherent. Auxiliary points on an already-defined scaffold remain markers and receive lightweight visual connectors to that scaffold. Ground does not use this fallback.
+
+Joint glyph sizes are scaled from effective body scaffolds rather than arbitrary remote auxiliary points. The plot bounds still include all rendered geometry.
+
 ### Animation
 
 ```python
 animation = animate(solution, fps=30)
 ```
+
+Optional progressive point traces can be requested explicitly:
+
+```python
+animation = animate(
+    solution,
+    fps=30,
+    trace_points=[foot],
+)
+```
+
+`trace_points` must be a collection of mechanism `Point` objects. Duplicate point objects are collapsed. A trace grows from the first configuration through the current frame and follows the stored solution order; it does not imply a physical time parameter.
 
 One configuration corresponds to one frame. `fps` controls presentation playback speed only and is not a physical time step. Kimech does not call `plt.show()` automatically.
 

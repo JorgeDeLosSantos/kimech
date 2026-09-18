@@ -16,6 +16,7 @@ from matplotlib.patches import Polygon
 
 from kimech import Configuration, Mechanism, solve
 from kimech.visualization import plot
+from kimech.visualization.plot import _body_render_specs, _plot_scale
 
 
 def _artists_with_gid(ax, gid):
@@ -243,3 +244,126 @@ def test_body_with_one_structural_point_has_joint_but_no_skeleton():
     assert not _artists_with_gid(ax, "kimech-body:single")
     assert len(_artists_with_gid(ax, "kimech-joint:revolute")) == 1
     plt.close(fig)
+
+def test_auxiliary_point_on_two_point_link_gets_connector_without_changing_scaffold():
+    mechanism = Mechanism()
+    ground_a = mechanism.ground.add_point("A", (0.0, 0.0))
+    ground_b = mechanism.ground.add_point("B", (2.0, 0.0))
+    link = mechanism.add_link("bar")
+    point_a = link.add_point("A", (0.0, 0.0))
+    point_b = link.add_point("B", (2.0, 0.0))
+    auxiliary = link.add_point("P", (1.0, 1.0))
+    mechanism.revolute(ground_a, point_a)
+    mechanism.revolute(point_b, ground_b)
+    config = Configuration(mechanism, [0.0, 0.0, 0.0])
+
+    fig, ax = plot(config)
+
+    body = _artists_with_gid(ax, "kimech-body:bar")[0]
+    connector = _artists_with_gid(ax, "kimech-auxiliary-connector:bar")[0]
+    marker = _artists_with_gid(ax, "kimech-auxiliary:bar")[0]
+
+    np.testing.assert_allclose(
+        np.column_stack((body.get_xdata(), body.get_ydata())),
+        [[0.0, 0.0], [2.0, 0.0]],
+    )
+    connector_data = np.column_stack((connector.get_xdata(), connector.get_ydata()))
+    np.testing.assert_allclose(connector_data[:2], [[1.0, 0.0], [1.0, 1.0]])
+    assert np.isnan(connector_data[2]).all()
+    np.testing.assert_allclose(marker.get_offsets(), [config.point_position(auxiliary)])
+    plt.close(fig)
+
+
+def test_single_joint_plate_uses_all_link_points_as_fallback_scaffold():
+    mechanism = Mechanism()
+    fixed = mechanism.ground.add_point("O", (0.0, 0.0))
+    plate = mechanism.add_link("plate")
+    pivot = plate.add_point("O", (0.0, 0.0))
+    corners = [
+        plate.add_point("A", (-1.0, -0.5)),
+        plate.add_point("B", (1.0, -0.5)),
+        plate.add_point("C", (1.0, 0.5)),
+        plate.add_point("D", (-1.0, 0.5)),
+    ]
+    mechanism.revolute(fixed, pivot)
+    config = Configuration(mechanism, [0.0, 0.0, 0.4])
+
+    fig, ax = plot(config)
+
+    body = _artists_with_gid(ax, "kimech-body:plate")
+    assert len(body) == 1
+    x_data = np.asarray(body[0].get_xdata())
+    assert len(x_data) == 15
+    assert np.count_nonzero(np.isnan(x_data)) == 5
+    assert not _artists_with_gid(ax, "kimech-auxiliary-connector:plate")
+    marker = _artists_with_gid(ax, "kimech-auxiliary:plate")[0]
+    assert len(marker.get_offsets()) == len(corners)
+    plt.close(fig)
+
+
+def test_ground_auxiliary_points_do_not_create_fallback_scaffold_or_connectors():
+    mechanism = Mechanism()
+    fixed = mechanism.ground.add_point("O", (0.0, 0.0))
+    reference = mechanism.ground.add_point("R", (2.0, 1.0))
+    link = mechanism.add_link("link")
+    moving = link.add_point("O", (0.0, 0.0))
+    mechanism.revolute(fixed, moving)
+    config = Configuration(mechanism, [0.0, 0.0, 0.3])
+
+    fig, ax = plot(config)
+
+    assert not _artists_with_gid(ax, "kimech-body:ground")
+    assert not _artists_with_gid(ax, "kimech-auxiliary-connector:ground")
+    auxiliary = _artists_with_gid(ax, "kimech-auxiliary:ground")[0]
+    np.testing.assert_allclose(auxiliary.get_offsets(), [config.point_position(reference)])
+    plt.close(fig)
+
+
+def test_glyph_scale_ignores_remote_auxiliary_point_when_structural_scaffold_exists():
+    mechanism = Mechanism()
+    ground_a = mechanism.ground.add_point("A", (0.0, 0.0))
+    ground_b = mechanism.ground.add_point("B", (2.0, 0.0))
+    link = mechanism.add_link("bar")
+    point_a = link.add_point("A", (0.0, 0.0))
+    point_b = link.add_point("B", (2.0, 0.0))
+    mechanism.revolute(ground_a, point_a)
+    mechanism.revolute(point_b, ground_b)
+    config = Configuration(mechanism, [0.0, 0.0, 0.0])
+    baseline = _plot_scale(config, _body_render_specs(config))
+
+    link.add_point("far", (1000.0, 500.0))
+    with_auxiliary = _plot_scale(config, _body_render_specs(config))
+
+    assert with_auxiliary == pytest.approx(baseline)
+
+
+def test_glyph_scale_uses_auxiliary_points_for_single_joint_plate_fallback():
+    mechanism = Mechanism()
+    fixed = mechanism.ground.add_point("O", (0.0, 0.0))
+    plate = mechanism.add_link("plate")
+    pivot = plate.add_point("O", (0.0, 0.0))
+    plate.add_point("A", (-2.0, -1.0))
+    plate.add_point("B", (2.0, 1.0))
+    mechanism.revolute(fixed, pivot)
+    config = Configuration(mechanism, [0.0, 0.0, 0.0])
+
+    assert _plot_scale(config, _body_render_specs(config)) == pytest.approx(4.0)
+
+
+def test_glyph_scale_is_uniformly_scale_invariant():
+    def make(scale):
+        mechanism = Mechanism()
+        ground_a = mechanism.ground.add_point("A", (0.0, 0.0))
+        ground_b = mechanism.ground.add_point("B", (2.0 * scale, 0.0))
+        link = mechanism.add_link("bar")
+        point_a = link.add_point("A", (0.0, 0.0))
+        point_b = link.add_point("B", (2.0 * scale, 0.0))
+        mechanism.revolute(ground_a, point_a)
+        mechanism.revolute(point_b, ground_b)
+        config = Configuration(mechanism, [0.0, 0.0, 0.0])
+        return _plot_scale(config, _body_render_specs(config))
+
+    millimetre_scale = make(1000.0)
+    metre_scale = make(1.0)
+
+    assert millimetre_scale / metre_scale == pytest.approx(1000.0)

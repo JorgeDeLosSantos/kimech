@@ -13,32 +13,38 @@ from ..joints import PrismaticJoint, RevoluteJoint
 from ..model import Link, Point
 from ..solution import KinematicSolution
 from .plot import (
-    _auxiliary_points,
+    _auxiliary_connector_coordinates,
     _body_coordinates,
+    _body_render_specs,
+    _draw_auxiliary_connectors,
     _draw_auxiliary_points,
     _draw_body,
     _draw_prismatic_joint,
     _draw_revolute_joint,
     _link_color_cycle,
+    _coordinate_extent,
     _point_positions,
+    _scaffold_positions,
     _prismatic_geometry,
     _revolute_center,
-    _structural_points,
 )
 
 
 @dataclass
 class _AnimationArtists:
-    bodies: dict[Link, tuple[list[Point], object]]
-    auxiliary: dict[Link, tuple[list[Point], object]]
+    bodies: dict[Link, tuple[tuple[Point, ...], object]]
+    auxiliary: dict[Link, tuple[tuple[Point, ...], object]]
+    auxiliary_connectors: dict[Link, tuple[object, object]]
     revolute: dict[RevoluteJoint, object]
     prismatic: dict[PrismaticJoint, tuple[object, object, tuple[float, float]]]
+    traces: list[tuple[np.ndarray, object]]
 
 
 def animate(
     solution: KinematicSolution,
     *,
     fps: float = 30,
+    trace_points=None,
     ax=None,
 ) -> FuncAnimation:
     """Animate a kinematic solution and return Matplotlib's animation object."""
@@ -47,6 +53,11 @@ def animate(
     if len(solution) == 0:
         raise ValueError("solution must contain at least one configuration")
     fps_value = _validate_fps(fps)
+    normalized_trace_points = _normalize_trace_points(solution, trace_points)
+    trace_data = [
+        (point, solution.point_positions(point))
+        for point in normalized_trace_points
+    ]
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -58,8 +69,8 @@ def animate(
         for joint in solution.mechanism.joints
         if isinstance(joint, PrismaticJoint)
     }
-    scale, bounds = _solution_plot_geometry(solution, prismatic_ranges)
-    artists = _create_artists(solution[0], scale, prismatic_ranges, ax)
+    scale, bounds = _solution_plot_geometry(solution, prismatic_ranges, trace_data)
+    artists = _create_artists(solution[0], scale, prismatic_ranges, trace_data, ax)
     ax.set_xlim(bounds[0], bounds[1])
     ax.set_ylim(bounds[2], bounds[3])
     ax.set_aspect("equal", adjustable="box")
@@ -67,7 +78,7 @@ def animate(
     ax.set_ylabel("y")
 
     def update(index):
-        return _update_artists(solution[index], scale, artists)
+        return _update_artists(solution[index], scale, artists, index)
 
     return FuncAnimation(
         fig,
@@ -77,6 +88,32 @@ def animate(
         blit=False,
         repeat=True,
     )
+
+
+def _normalize_trace_points(
+    solution: KinematicSolution,
+    trace_points,
+) -> tuple[Point, ...]:
+    if trace_points is None:
+        return ()
+    if isinstance(trace_points, Point):
+        raise TypeError("trace_points must be a collection of Point objects")
+    try:
+        candidates = list(trace_points)
+    except TypeError as exc:
+        raise TypeError("trace_points must be a collection of Point objects") from exc
+
+    normalized: list[Point] = []
+    identities: set[int] = set()
+    for point in candidates:
+        if not isinstance(point, Point):
+            raise TypeError("trace_points must contain only Point objects")
+        solution.point_positions(point)
+        point_id = id(point)
+        if point_id not in identities:
+            normalized.append(point)
+            identities.add(point_id)
+    return tuple(normalized)
 
 
 def _validate_fps(value: object) -> float:
@@ -95,18 +132,24 @@ def _validate_fps(value: object) -> float:
 def _solution_plot_geometry(
     solution: KinematicSolution,
     prismatic_ranges: dict[PrismaticJoint, tuple[float, float]],
+    trace_data: list[tuple[Point, np.ndarray]],
 ) -> tuple[float, tuple[float, float, float, float]]:
     configurations = [solution[index] for index in range(len(solution))]
     point_positions = np.concatenate([_point_positions(config) for config in configurations])
-    if len(point_positions) == 0:
-        scale = 1.0
-    else:
-        point_min = np.min(point_positions, axis=0)
-        point_max = np.max(point_positions, axis=0)
-        extent = float(max(point_max - point_min))
-        scale = 1.0 if extent <= np.finfo(float).eps else extent
 
-    rendered_geometry = [point_positions]
+    scaffold_positions = np.concatenate(
+        [
+            _scaffold_positions(config, _body_render_specs(config))
+            for config in configurations
+        ]
+    )
+    scale = _coordinate_extent(scaffold_positions)
+    if scale <= np.finfo(float).eps:
+        scale = _coordinate_extent(point_positions)
+    if scale <= np.finfo(float).eps:
+        scale = 1.0
+
+    rendered_geometry = [point_positions, *[positions for _, positions in trace_data]]
     for config in configurations:
         for joint, guide_range in prismatic_ranges.items():
             start, end, vertices = _prismatic_geometry(
@@ -147,29 +190,56 @@ def _prismatic_range(
     return min(0.0, float(values.min())), max(0.0, float(values.max()))
 
 
-def _create_artists(config, scale: float, prismatic_ranges, ax) -> _AnimationArtists:
+def _create_artists(
+    config,
+    scale: float,
+    prismatic_ranges,
+    trace_data: list[tuple[Point, np.ndarray]],
+    ax,
+) -> _AnimationArtists:
     mechanism = config.mechanism
-    structural = _structural_points(config)
+    specs = _body_render_specs(config)
     body_artists = {}
     auxiliary_artists = {}
+    auxiliary_connector_artists = {}
     revolute_artists = {}
     prismatic_artists = {}
+    trace_artists = []
+    body_colors = {mechanism.ground: "0.4"}
 
-    _draw_body(config, mechanism.ground, structural[mechanism.ground], "0.4", ax)
+    ground_spec = specs[mechanism.ground]
+    _draw_body(config, mechanism.ground, ground_spec.scaffold_points, "0.4", ax)
+    _draw_auxiliary_connectors(config, mechanism.ground, ground_spec, "0.4", ax)
+    _draw_auxiliary_points(
+        config,
+        mechanism.ground,
+        list(ground_spec.auxiliary_points),
+        "0.4",
+        ax,
+    )
+
     color_cycle = _link_color_cycle()
     for link in mechanism.links:
         color = next(color_cycle)
-        points = structural[link][0]
-        artist = _draw_body(config, link, structural[link], color, ax)
+        body_colors[link] = color
+        spec = specs[link]
+        artist = _draw_body(config, link, spec.scaffold_points, color, ax)
         if artist is not None:
-            body_artists[link] = (points, artist)
-        auxiliary = _auxiliary_points(link, structural[link])
-        auxiliary_artist = _draw_auxiliary_points(config, link, auxiliary, color, ax)
-        if auxiliary_artist is not None:
-            auxiliary_artists[link] = (auxiliary, auxiliary_artist)
+            body_artists[link] = (spec.scaffold_points, artist)
 
-    ground_auxiliary = _auxiliary_points(mechanism.ground, structural[mechanism.ground])
-    _draw_auxiliary_points(config, mechanism.ground, ground_auxiliary, "0.4", ax)
+        connector_artist = _draw_auxiliary_connectors(config, link, spec, color, ax)
+        if connector_artist is not None:
+            auxiliary_connector_artists[link] = (spec, connector_artist)
+
+        auxiliary_artist = _draw_auxiliary_points(
+            config,
+            link,
+            list(spec.auxiliary_points),
+            color,
+            ax,
+        )
+        if auxiliary_artist is not None:
+            auxiliary_artists[link] = (spec.auxiliary_points, auxiliary_artist)
 
     for joint in mechanism.joints:
         if isinstance(joint, PrismaticJoint):
@@ -186,15 +256,36 @@ def _create_artists(config, scale: float, prismatic_ranges, ax) -> _AnimationArt
         if isinstance(joint, RevoluteJoint):
             revolute_artists[joint] = _draw_revolute_joint(config, joint, ax)
 
+    for point, positions in trace_data:
+        color = body_colors[point.body]
+        initial = positions[:1]
+        (artist,) = ax.plot(
+            initial[:, 0],
+            initial[:, 1],
+            color=color,
+            linewidth=1.2,
+            alpha=0.7,
+            zorder=1.25,
+        )
+        artist.set_gid(f"kimech-trace:{point.body.name}:{point.name}")
+        trace_artists.append((positions, artist))
+
     return _AnimationArtists(
         body_artists,
         auxiliary_artists,
+        auxiliary_connector_artists,
         revolute_artists,
         prismatic_artists,
+        trace_artists,
     )
 
 
-def _update_artists(config, scale: float, artists: _AnimationArtists) -> tuple[object, ...]:
+def _update_artists(
+    config,
+    scale: float,
+    artists: _AnimationArtists,
+    index: int,
+) -> tuple[object, ...]:
     modified = []
     for points, artist in artists.bodies.values():
         coordinates = _body_coordinates(config, points)
@@ -202,6 +293,14 @@ def _update_artists(config, scale: float, artists: _AnimationArtists) -> tuple[o
         modified.append(artist)
     for points, artist in artists.auxiliary.values():
         artist.set_offsets([config.point_position(point) for point in points])
+        modified.append(artist)
+    for spec, artist in artists.auxiliary_connectors.values():
+        coordinates = _auxiliary_connector_coordinates(
+            config,
+            spec.scaffold_points,
+            spec.connector_points,
+        )
+        artist.set_data(coordinates[:, 0], coordinates[:, 1])
         modified.append(artist)
     for joint, artist in artists.revolute.items():
         artist.set_offsets([_revolute_center(config, joint)])
@@ -216,4 +315,8 @@ def _update_artists(config, scale: float, artists: _AnimationArtists) -> tuple[o
         guide.set_data([start[0], end[0]], [start[1], end[1]])
         slider.set_xy(vertices)
         modified.extend((guide, slider))
+    for positions, artist in artists.traces:
+        visible = positions[: index + 1]
+        artist.set_data(visible[:, 0], visible[:, 1])
+        modified.append(artist)
     return tuple(modified)

@@ -22,7 +22,9 @@ from .plot import (
     _draw_prismatic_joint,
     _draw_revolute_joint,
     _link_color_cycle,
+    _coordinate_extent,
     _point_positions,
+    _scaffold_positions,
     _prismatic_geometry,
     _revolute_center,
 )
@@ -100,13 +102,18 @@ def _solution_plot_geometry(
 ) -> tuple[float, tuple[float, float, float, float]]:
     configurations = [solution[index] for index in range(len(solution))]
     point_positions = np.concatenate([_point_positions(config) for config in configurations])
-    if len(point_positions) == 0:
+
+    scaffold_positions = np.concatenate(
+        [
+            _scaffold_positions(config, _body_render_specs(config))
+            for config in configurations
+        ]
+    )
+    scale = _coordinate_extent(scaffold_positions)
+    if scale <= np.finfo(float).eps:
+        scale = _coordinate_extent(point_positions)
+    if scale <= np.finfo(float).eps:
         scale = 1.0
-    else:
-        point_min = np.min(point_positions, axis=0)
-        point_max = np.max(point_positions, axis=0)
-        extent = float(max(point_max - point_min))
-        scale = 1.0 if extent <= np.finfo(float).eps else extent
 
     rendered_geometry = [point_positions]
     for config in configurations:

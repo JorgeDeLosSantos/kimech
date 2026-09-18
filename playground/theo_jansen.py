@@ -332,11 +332,11 @@ def main():
         expected_foot,
     ) = analytical_geometry(values)
 
-    solved_upper = solution.point_path(upper_joint)
-    solved_lower = solution.point_path(lower_joint)
-    solved_side = solution.point_path(side_joint)
-    solved_connector = solution.point_path(connector_joint)
-    solved_foot = solution.point_path(foot)
+    solved_upper = solution.point_positions(upper_joint)
+    solved_lower = solution.point_positions(lower_joint)
+    solved_side = solution.point_positions(side_joint)
+    solved_connector = solution.point_positions(connector_joint)
+    solved_foot = solution.point_positions(foot)
 
     upper_error = np.max(
         np.linalg.norm(solved_upper - expected_upper, axis=1)

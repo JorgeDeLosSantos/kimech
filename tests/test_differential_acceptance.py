@@ -101,14 +101,14 @@ def test_four_bar_velocity_and_speed_acceleration_scale_with_input_rate():
         atol=1e-11,
     )
     np.testing.assert_allclose(
-        doubled.velocity(point_p),
-        2.0 * base.velocity(point_p),
+        doubled.point_velocity(point_p),
+        2.0 * base.point_velocity(point_p),
         rtol=1e-11,
         atol=1e-12,
     )
     np.testing.assert_allclose(
-        doubled.acceleration(point_p),
-        4.0 * base.acceleration(point_p),
+        doubled.point_acceleration(point_p),
+        4.0 * base.point_acceleration(point_p),
         rtol=1e-10,
         atol=1e-11,
     )

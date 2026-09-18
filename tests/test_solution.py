@@ -440,7 +440,7 @@ def test_configuration_prismatic_differential_queries_follow_natural_coordinate(
 
 
 def test_configuration_validates_differential_state_invariants():
-    mechanism, _, _ = _revolute_mechanism()
+    mechanism, _, joint = _revolute_mechanism()
 
     with pytest.raises(ValueError, match="requires coordinate_velocities"):
         Configuration(
@@ -452,6 +452,7 @@ def test_configuration_validates_differential_state_invariants():
         Configuration(
             mechanism,
             [0.0, 0.0, 0.0],
+            input_joint=joint,
             input_acceleration=1.0,
         )
     with pytest.raises(ValueError, match="shape"):

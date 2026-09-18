@@ -234,10 +234,10 @@ def main():
     expected_elbow, expected_knee, expected_hip, expected_foot = (
         analytical_geometry(values)
     )
-    solved_elbow = solution.point_path(elbow)
-    solved_knee = solution.point_path(knee)
-    solved_hip = solution.point_path(hip)
-    solved_foot = solution.point_path(foot)
+    solved_elbow = solution.point_positions(elbow)
+    solved_knee = solution.point_positions(knee)
+    solved_hip = solution.point_positions(hip)
+    solved_foot = solution.point_positions(foot)
 
     elbow_error = np.max(
         np.linalg.norm(solved_elbow - expected_elbow, axis=1)

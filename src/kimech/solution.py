@@ -161,11 +161,6 @@ class Configuration:
         return self._input_acceleration
 
     @property
-    def diagnostics(self) -> SolveDiagnostics | None:
-        """Return numerical solve diagnostics, if available."""
-        return self._diagnostics
-
-    @property
     def coordinates(self) -> np.ndarray:
         """Return a safe copy of the generalized coordinate vector."""
         return self._coordinates.copy()
@@ -470,6 +465,11 @@ class KinematicSolution:
         if self._input_accelerations is None:
             return None
         return self._input_accelerations.copy()
+
+    @property
+    def diagnostics(self) -> SolveDiagnostics | None:
+        """Return numerical solve diagnostics, if available."""
+        return self._diagnostics
 
     @property
     def coordinates(self) -> np.ndarray:

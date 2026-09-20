@@ -117,3 +117,23 @@ def _rank_array(value: object) -> np.ndarray:
     if np.any(result < 0):
         raise ValueError("ranks must contain only non-negative values")
     return result
+
+
+def _jacobian_metrics(matrix: object) -> tuple[float, float, int]:
+    """Return condition number, smallest singular value, and numerical rank."""
+    values = np.asarray(matrix, dtype=float)
+    if values.ndim != 2:
+        raise ValueError("matrix must be 2-dimensional")
+    if not np.all(np.isfinite(values)):
+        raise ValueError("matrix must contain only finite values")
+
+    singular_values = np.linalg.svd(values, compute_uv=False)
+    if singular_values.size == 0:
+        return float("inf"), 0.0, 0
+
+    sigma_max = float(singular_values[0])
+    sigma_min = float(singular_values[-1])
+    tolerance = max(values.shape) * np.finfo(float).eps * sigma_max
+    rank = int(np.count_nonzero(singular_values > tolerance))
+    condition = float("inf") if sigma_min == 0.0 else sigma_max / sigma_min
+    return condition, sigma_min, rank

@@ -265,3 +265,125 @@ def test_solver_rejects_malformed_or_nonfinite_candidates(monkeypatch, candidate
             input_position=[0.5],
             initial_guess={link: (0.0, 0.0, 0.5)},
         )
+
+
+def test_position_sweep_uses_input_tangent_predictor(monkeypatch):
+    mechanism, link, joint = _single_revolute()
+    guesses = []
+
+    def fake_solve_configuration(
+        mechanism_arg,
+        links,
+        joints,
+        input_joint,
+        input_value,
+        initial_q,
+        scaling,
+        *,
+        input_index=None,
+    ):
+        assert mechanism_arg is mechanism
+        guesses.append(initial_q.copy())
+        return np.array([0.0, 0.0, input_value])
+
+    def fake_input_tangent(
+        mechanism_arg,
+        links,
+        joints,
+        input_joint,
+        q,
+        input_value,
+        scaling,
+        *,
+        input_index=None,
+    ):
+        assert mechanism_arg is mechanism
+        return np.array([0.0, 0.0, 1.0])
+
+    monkeypatch.setattr("kimech.solver._solve_configuration", fake_solve_configuration)
+    monkeypatch.setattr("kimech.solver.solve_input_tangent", fake_input_tangent)
+
+    solution = solve(
+        mechanism,
+        input_joint=joint,
+        input_position=[0.5, 0.7],
+        initial_guess={link: (0.0, 0.0, 0.0)},
+    )
+
+    assert len(solution) == 2
+    np.testing.assert_allclose(guesses[0], [0.0, 0.0, 0.0])
+    np.testing.assert_allclose(guesses[1], [0.0, 0.0, 0.7])
+
+
+def test_position_sweep_retries_warm_start_when_predictor_corrector_fails(monkeypatch):
+    mechanism, link, joint = _single_revolute()
+    guesses = []
+
+    def fake_solve_configuration(
+        mechanism_arg,
+        links,
+        joints,
+        input_joint,
+        input_value,
+        initial_q,
+        scaling,
+        *,
+        input_index=None,
+    ):
+        guesses.append(initial_q.copy())
+        if input_index == 1 and initial_q[2] == pytest.approx(0.7):
+            raise KinematicSolveError("deliberate predictor failure")
+        return np.array([0.0, 0.0, input_value])
+
+    def fake_input_tangent(*args, **kwargs):
+        return np.array([0.0, 0.0, 1.0])
+
+    monkeypatch.setattr("kimech.solver._solve_configuration", fake_solve_configuration)
+    monkeypatch.setattr("kimech.solver.solve_input_tangent", fake_input_tangent)
+
+    solution = solve(
+        mechanism,
+        input_joint=joint,
+        input_position=[0.5, 0.7],
+        initial_guess={link: (0.0, 0.0, 0.0)},
+    )
+
+    assert len(solution) == 2
+    assert len(guesses) == 3
+    np.testing.assert_allclose(guesses[1], [0.0, 0.0, 0.7])
+    np.testing.assert_allclose(guesses[2], [0.0, 0.0, 0.5])
+
+
+def test_position_sweep_falls_back_to_warm_start_when_tangent_solve_fails(monkeypatch):
+    mechanism, link, joint = _single_revolute()
+    guesses = []
+
+    def fake_solve_configuration(
+        mechanism_arg,
+        links,
+        joints,
+        input_joint,
+        input_value,
+        initial_q,
+        scaling,
+        *,
+        input_index=None,
+    ):
+        guesses.append(initial_q.copy())
+        return np.array([0.0, 0.0, input_value])
+
+    def failed_input_tangent(*args, **kwargs):
+        raise KinematicSolveError("deliberate tangent failure")
+
+    monkeypatch.setattr("kimech.solver._solve_configuration", fake_solve_configuration)
+    monkeypatch.setattr("kimech.solver.solve_input_tangent", failed_input_tangent)
+
+    solution = solve(
+        mechanism,
+        input_joint=joint,
+        input_position=[0.5, 0.7],
+        initial_guess={link: (0.0, 0.0, 0.0)},
+    )
+
+    assert len(solution) == 2
+    np.testing.assert_allclose(guesses[1], [0.0, 0.0, 0.5])

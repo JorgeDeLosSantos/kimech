@@ -8,6 +8,7 @@ from collections.abc import Iterator, Sequence
 import numpy as np
 
 from ._geometry import perpendicular, rotation_matrix
+from .diagnostics import SolveDiagnostics
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Ground, Link, Mechanism, Point
 
@@ -160,6 +161,11 @@ class Configuration:
         return self._input_acceleration
 
     @property
+    def diagnostics(self) -> SolveDiagnostics | None:
+        """Return numerical solve diagnostics, if available."""
+        return self._diagnostics
+
+    @property
     def coordinates(self) -> np.ndarray:
         """Return a safe copy of the generalized coordinate vector."""
         return self._coordinates.copy()
@@ -306,6 +312,7 @@ class KinematicSolution:
         "_coordinate_accelerations",
         "_coordinate_velocities",
         "_coordinates",
+        "_diagnostics",
         "_input_accelerations",
         "_input_joint",
         "_input_positions",
@@ -325,6 +332,7 @@ class KinematicSolution:
         coordinate_accelerations: Sequence[Sequence[float]] | np.ndarray | None = None,
         input_velocities: Sequence[float] | np.ndarray | None = None,
         input_accelerations: Sequence[float] | np.ndarray | None = None,
+        diagnostics: SolveDiagnostics | None = None,
     ) -> None:
         _validate_mechanism(mechanism)
         self._initialize(
@@ -337,6 +345,7 @@ class KinematicSolution:
             coordinate_accelerations=coordinate_accelerations,
             input_velocities=input_velocities,
             input_accelerations=input_accelerations,
+            diagnostics=diagnostics,
         )
 
     @classmethod
@@ -352,6 +361,7 @@ class KinematicSolution:
         coordinate_accelerations: Sequence[Sequence[float]] | np.ndarray | None = None,
         input_velocities: Sequence[float] | np.ndarray | None = None,
         input_accelerations: Sequence[float] | np.ndarray | None = None,
+        diagnostics: SolveDiagnostics | None = None,
     ) -> KinematicSolution:
         solution = cls.__new__(cls)
         solution._initialize(
@@ -364,6 +374,7 @@ class KinematicSolution:
             coordinate_accelerations=coordinate_accelerations,
             input_velocities=input_velocities,
             input_accelerations=input_accelerations,
+            diagnostics=diagnostics,
         )
         return solution
 
@@ -379,6 +390,7 @@ class KinematicSolution:
         coordinate_accelerations: Sequence[Sequence[float]] | np.ndarray | None,
         input_velocities: Sequence[float] | np.ndarray | None,
         input_accelerations: Sequence[float] | np.ndarray | None,
+        diagnostics: SolveDiagnostics | None,
     ) -> None:
         _validate_mechanism(mechanism)
         _validate_joint(mechanism, links, input_joint)
@@ -413,6 +425,11 @@ class KinematicSolution:
             name="input_accelerations",
             shape=input_shape,
         )
+        if diagnostics is not None:
+            if not isinstance(diagnostics, SolveDiagnostics):
+                raise TypeError("diagnostics must be a SolveDiagnostics or None")
+            if len(diagnostics) != len(values):
+                raise ValueError("diagnostics length must match input_positions")
 
         self._mechanism = mechanism
         self._links = links
@@ -423,6 +440,7 @@ class KinematicSolution:
         self._coordinates = coordinate_array
         self._coordinate_velocities = velocity_array
         self._coordinate_accelerations = acceleration_array
+        self._diagnostics = diagnostics
 
     @property
     def mechanism(self) -> Mechanism:
@@ -514,6 +532,7 @@ class KinematicSolution:
                     if self._input_accelerations is None
                     else self._input_accelerations[index]
                 ),
+                diagnostics=(None if self._diagnostics is None else self._diagnostics[index]),
             )
 
         item = operator.index(index)

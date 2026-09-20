@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+import kimech._differential as differential
 from kimech import KinematicSolveError, Mechanism, solve
 
 
@@ -267,22 +268,25 @@ def test_slider_crank_prismatic_inverse_reconstructs_full_differential_state():
 
 def test_sweep_acceleration_failure_reports_stage_and_sample_index(monkeypatch):
     mechanism, input_joint, _, guess = _four_bar()
-    original_solve = np.linalg.solve
-    call_count = 0
+    original_linear_solve = differential._solve_linear_state
+    acceleration_call_count = 0
 
-    def fail_second_acceleration_solve(matrix, rhs):
-        nonlocal call_count
-        call_count += 1
-        # Three velocity solves occur first, then the acceleration phase begins.
-        if call_count == 5:
-            raise np.linalg.LinAlgError("deliberate indexed acceleration failure")
-        return original_solve(matrix, rhs)
+    def fail_second_acceleration_solve(matrix_hat, rhs_hat, **kwargs):
+        nonlocal acceleration_call_count
+        if kwargs["stage"] == "acceleration":
+            acceleration_call_count += 1
+            if acceleration_call_count == 2:
+                matrix_hat = np.zeros_like(matrix_hat)
+        return original_linear_solve(matrix_hat, rhs_hat, **kwargs)
 
-    monkeypatch.setattr("kimech._differential.np.linalg.solve", fail_second_acceleration_solve)
+    monkeypatch.setattr(
+        "kimech._differential._solve_linear_state",
+        fail_second_acceleration_solve,
+    )
 
     with pytest.raises(
         KinematicSolveError,
-        match=r"failed to solve acceleration at input index 1 .*deliberate indexed acceleration failure",
+        match=r"failed to solve acceleration at input index 1 .*linear solve failed",
     ):
         solve(
             mechanism,

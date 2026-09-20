@@ -10,6 +10,7 @@ from scipy import optimize
 from ._constraints import jacobian, residual
 from ._differential import solve_acceleration, solve_input_tangent, solve_velocity
 from ._scaling import NumericalScaling, build_numerical_scaling
+from .diagnostics import SolveDiagnostics, _jacobian_metrics
 from .errors import InvalidModelError, KinematicSolveError
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Link, Mechanism
@@ -125,6 +126,16 @@ def solve(
                 input_index=index,
             )
 
+    diagnostics = _build_solve_diagnostics(
+        mechanism,
+        links,
+        joints,
+        input_joint,
+        input_positions,
+        coordinates,
+        scaling,
+    )
+
     coordinate_velocities = None
     if input_velocities is not None:
         coordinate_velocities = np.empty_like(coordinates)
@@ -172,6 +183,7 @@ def solve(
         coordinate_accelerations=coordinate_accelerations,
         input_velocities=input_velocities,
         input_accelerations=input_accelerations,
+        diagnostics=diagnostics,
     )
 
 
@@ -210,6 +222,42 @@ def _predict_next_configuration(
     if predicted.shape != q.shape or not np.all(np.isfinite(predicted)):
         return q.copy()
     return predicted
+
+
+def _build_solve_diagnostics(
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    joints: tuple[_Joint, ...],
+    input_joint: _Joint,
+    input_positions: np.ndarray,
+    coordinates: np.ndarray,
+    scaling: NumericalScaling,
+) -> SolveDiagnostics:
+    count = len(input_positions)
+    condition_numbers = np.empty(count, dtype=float)
+    min_singular_values = np.empty(count, dtype=float)
+    ranks = np.empty(count, dtype=int)
+
+    for index, (input_value, q) in enumerate(zip(input_positions, coordinates)):
+        matrix = jacobian(
+            mechanism,
+            links,
+            joints,
+            input_joint,
+            q,
+            float(input_value),
+        )
+        matrix_hat = scaling.scale_jacobian(matrix)
+        condition, minimum, rank = _jacobian_metrics(matrix_hat)
+        condition_numbers[index] = condition
+        min_singular_values[index] = minimum
+        ranks[index] = rank
+
+    return SolveDiagnostics(
+        condition_numbers,
+        min_singular_values,
+        ranks,
+    )
 
 
 def _coerce_input_positions(input_position: object) -> tuple[np.ndarray, bool]:

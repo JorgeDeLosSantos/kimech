@@ -42,6 +42,36 @@ def solve_velocity(
     )
 
 
+def solve_input_tangent(
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    joints: tuple[_Joint, ...],
+    input_joint: _Joint,
+    q: np.ndarray,
+    input_value: float,
+    scaling: NumericalScaling,
+    *,
+    input_index: int | None = None,
+) -> np.ndarray:
+    """Solve the configuration tangent dq/du for continuation.
+
+    The differentiated constraint system is J(q) dq/du = e_driver because
+    the prescribed driver equation is c(q) - u = 0. The returned state
+    derivative is with respect to the input coordinate, not physical time.
+    """
+    matrix = jacobian(mechanism, links, joints, input_joint, q, input_value)
+    rhs = np.zeros(matrix.shape[0], dtype=float)
+    rhs[-1] = 1.0
+    return _solve_linear_state(
+        scaling.scale_jacobian(matrix),
+        scaling.scale_rhs(rhs),
+        scaling=scaling,
+        link_count=len(links),
+        stage="input tangent",
+        input_value=input_value,
+        input_index=input_index,
+    )
+
 def solve_acceleration(
     mechanism: Mechanism,
     links: tuple[Link, ...],

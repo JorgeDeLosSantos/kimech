@@ -2,6 +2,8 @@ import numpy as np
 import pytest
 
 from kimech import Configuration, KinematicSolution, KinematicSolveError, Mechanism, solve
+from kimech._differential import solve_input_tangent
+from kimech._scaling import build_numerical_scaling
 
 
 def _single_revolute():
@@ -246,3 +248,35 @@ def test_malformed_or_nonfinite_linear_candidates_are_rejected(monkeypatch, cand
             input_velocity=1.0,
             initial_guess=guess,
         )
+
+
+def test_input_tangent_is_derivative_with_respect_to_driver_coordinate():
+    mechanism, link, joint, guess = _single_revolute()
+    config = solve(
+        mechanism,
+        input_joint=joint,
+        input_position=0.7,
+        initial_guess=guess,
+    )[0]
+    links = mechanism.links
+    joints = mechanism.joints
+    scaling = build_numerical_scaling(
+        mechanism,
+        links,
+        joints,
+        joint,
+        np.array([0.7]),
+    )
+
+    tangent = solve_input_tangent(
+        mechanism,
+        links,
+        joints,
+        joint,
+        config.coordinates,
+        0.7,
+        scaling,
+    )
+
+    np.testing.assert_allclose(tangent, [0.0, 0.0, 1.0], atol=1e-12)
+    assert config.body_pose(link)[2] == pytest.approx(0.7)

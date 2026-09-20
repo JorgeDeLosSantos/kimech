@@ -8,7 +8,7 @@ import numpy as np
 from scipy import optimize
 
 from ._constraints import jacobian, residual
-from ._differential import solve_acceleration, solve_velocity
+from ._differential import solve_acceleration, solve_input_tangent, solve_velocity
 from ._scaling import NumericalScaling, build_numerical_scaling
 from .errors import InvalidModelError, KinematicSolveError
 from .joints import PrismaticJoint, RevoluteJoint
@@ -83,18 +83,47 @@ def solve(
     coordinates = np.empty((len(input_positions), coordinate_count), dtype=float)
     current_guess = initial_q
     for index, input_position_value in enumerate(input_positions):
-        accepted = _solve_configuration(
-            mechanism,
-            links,
-            joints,
-            input_joint,
-            float(input_position_value),
-            current_guess,
-            scaling,
-            input_index=index,
-        )
+        input_value = float(input_position_value)
+        fallback_guess = coordinates[index - 1] if index > 0 else None
+        try:
+            accepted = _solve_configuration(
+                mechanism,
+                links,
+                joints,
+                input_joint,
+                input_value,
+                current_guess,
+                scaling,
+                input_index=index,
+            )
+        except KinematicSolveError:
+            if fallback_guess is None or np.array_equal(current_guess, fallback_guess):
+                raise
+            accepted = _solve_configuration(
+                mechanism,
+                links,
+                joints,
+                input_joint,
+                input_value,
+                fallback_guess,
+                scaling,
+                input_index=index,
+            )
         coordinates[index] = accepted
-        current_guess = accepted
+
+        if index + 1 < len(input_positions):
+            next_input_value = float(input_positions[index + 1])
+            current_guess = _predict_next_configuration(
+                mechanism,
+                links,
+                joints,
+                input_joint,
+                accepted,
+                input_value,
+                next_input_value,
+                scaling,
+                input_index=index,
+            )
 
     coordinate_velocities = None
     if input_velocities is not None:
@@ -144,6 +173,43 @@ def solve(
         input_velocities=input_velocities,
         input_accelerations=input_accelerations,
     )
+
+
+def _predict_next_configuration(
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    joints: tuple[_Joint, ...],
+    input_joint: _Joint,
+    q: np.ndarray,
+    input_value: float,
+    next_input_value: float,
+    scaling: NumericalScaling,
+    *,
+    input_index: int | None = None,
+) -> np.ndarray:
+    """Return a first-order continuation predictor, falling back to warm start."""
+    delta_input = next_input_value - input_value
+    if delta_input == 0.0:
+        return q.copy()
+
+    try:
+        tangent = solve_input_tangent(
+            mechanism,
+            links,
+            joints,
+            input_joint,
+            q,
+            input_value,
+            scaling,
+            input_index=input_index,
+        )
+    except KinematicSolveError:
+        return q.copy()
+
+    predicted = q + delta_input * tangent
+    if predicted.shape != q.shape or not np.all(np.isfinite(predicted)):
+        return q.copy()
+    return predicted
 
 
 def _coerce_input_positions(input_position: object) -> tuple[np.ndarray, bool]:

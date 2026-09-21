@@ -31,10 +31,6 @@ jobs:
       - name: Run tests
         run: pytest
 
-      - name: Run branch continuity study
-        if: matrix.python-version == '3.12'
-        run: python playground/branch_continuity_study.py
-
 
   build:
     runs-on: ubuntu-latest

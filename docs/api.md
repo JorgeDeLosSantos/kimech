@@ -563,4 +563,4 @@ The test suite covers model/constraint behavior, position solving, differential 
 
 ## 17. Deliberately absent API
 
-`0.3.0` does not provide public abstractions for multiple inputs, motion laws, time histories, dynamics, forces, masses/inertias, adaptive continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. Development toward `0.4.0` adds descriptive scaled-Jacobian diagnostics without yet defining a universal near-singularity policy.
+`0.3.0` does not provide public abstractions for multiple inputs, motion laws, time histories, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. Development toward `0.4.0` adds descriptive scaled-Jacobian diagnostics and bounded internal adaptive subdivision without yet defining a universal near-singularity policy.

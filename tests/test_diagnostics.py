@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from kimech import Mechanism, SolveDiagnostics, solve
+from kimech.diagnostics import _jacobian_metrics
 
 
 def _single_revolute():
@@ -132,3 +133,19 @@ def test_manual_solution_may_omit_diagnostics():
     )
 
     assert solution.diagnostics is None
+
+
+def test_exactly_singular_scaled_jacobian_reports_infinite_condition_and_rank_loss():
+    matrix = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ]
+    )
+
+    condition, minimum, rank = _jacobian_metrics(matrix)
+
+    assert np.isinf(condition)
+    assert minimum == pytest.approx(0.0)
+    assert rank == 2

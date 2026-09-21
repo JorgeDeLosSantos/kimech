@@ -18,6 +18,7 @@ from .solution import Configuration, KinematicSolution
 
 _Joint = RevoluteJoint | PrismaticJoint
 _RESIDUAL_TOL = 1e-9
+_MAX_SUBDIVISION_DEPTH = 8
 
 
 def solve(
@@ -82,35 +83,28 @@ def solve(
     initial_q = _pack_initial_guess(mechanism, links, initial_guess)
 
     coordinates = np.empty((len(input_positions), coordinate_count), dtype=float)
+    subdivision_counts = np.zeros(len(input_positions), dtype=int)
     current_guess = initial_q
+    previous_input_value = None
+    previous_accepted = None
     for index, input_position_value in enumerate(input_positions):
         input_value = float(input_position_value)
-        fallback_guess = coordinates[index - 1] if index > 0 else None
-        try:
-            accepted = _solve_configuration(
-                mechanism,
-                links,
-                joints,
-                input_joint,
-                input_value,
-                current_guess,
-                scaling,
-                input_index=index,
-            )
-        except KinematicSolveError:
-            if fallback_guess is None or np.array_equal(current_guess, fallback_guess):
-                raise
-            accepted = _solve_configuration(
-                mechanism,
-                links,
-                joints,
-                input_joint,
-                input_value,
-                fallback_guess,
-                scaling,
-                input_index=index,
-            )
+        accepted, subdivision_count = _solve_requested_configuration(
+            mechanism,
+            links,
+            joints,
+            input_joint,
+            input_value,
+            current_guess,
+            scaling,
+            input_index=index,
+            previous_input_value=previous_input_value,
+            previous_accepted=previous_accepted,
+        )
         coordinates[index] = accepted
+        subdivision_counts[index] = subdivision_count
+        previous_input_value = input_value
+        previous_accepted = accepted
 
         if index + 1 < len(input_positions):
             next_input_value = float(input_positions[index + 1])
@@ -134,6 +128,7 @@ def solve(
         input_positions,
         coordinates,
         scaling,
+        subdivision_counts=subdivision_counts,
     )
 
     coordinate_velocities = None
@@ -187,6 +182,186 @@ def solve(
     )
 
 
+
+def _solve_requested_configuration(
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    joints: tuple[_Joint, ...],
+    input_joint: _Joint,
+    input_value: float,
+    preferred_guess: np.ndarray,
+    scaling: NumericalScaling,
+    *,
+    input_index: int,
+    previous_input_value: float | None,
+    previous_accepted: np.ndarray | None,
+) -> tuple[np.ndarray, int]:
+    """Solve one requested sample with warm-start and adaptive recovery."""
+    first_error: KinematicSolveError | None = None
+    try:
+        return (
+            _solve_configuration(
+                mechanism,
+                links,
+                joints,
+                input_joint,
+                input_value,
+                preferred_guess,
+                scaling,
+                input_index=input_index,
+            ),
+            0,
+        )
+    except KinematicSolveError as error:
+        first_error = error
+
+    if previous_accepted is None:
+        raise first_error
+
+    if not np.array_equal(preferred_guess, previous_accepted):
+        try:
+            return (
+                _solve_configuration(
+                    mechanism,
+                    links,
+                    joints,
+                    input_joint,
+                    input_value,
+                    previous_accepted,
+                    scaling,
+                    input_index=input_index,
+                ),
+                0,
+            )
+        except KinematicSolveError:
+            pass
+
+    if previous_input_value is None or input_value == previous_input_value:
+        raise first_error
+
+    try:
+        accepted, subdivision_count = _solve_with_subdivision(
+            mechanism,
+            links,
+            joints,
+            input_joint,
+            start_input_value=previous_input_value,
+            start_q=previous_accepted,
+            target_input_value=input_value,
+            scaling=scaling,
+            input_index=input_index,
+            depth=0,
+        )
+    except KinematicSolveError:
+        raise first_error
+    return accepted, subdivision_count
+
+
+def _solve_with_subdivision(
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    joints: tuple[_Joint, ...],
+    input_joint: _Joint,
+    *,
+    start_input_value: float,
+    start_q: np.ndarray,
+    target_input_value: float,
+    scaling: NumericalScaling,
+    input_index: int,
+    depth: int,
+) -> tuple[np.ndarray, int]:
+    """Recover a failed requested step by recursively bisecting its input interval."""
+    if depth >= _MAX_SUBDIVISION_DEPTH:
+        raise KinematicSolveError(
+            f"adaptive subdivision exhausted at input index {input_index} "
+            f"(target={target_input_value:.12g}, depth={depth})"
+        )
+
+    midpoint = 0.5 * (start_input_value + target_input_value)
+    if midpoint == start_input_value or midpoint == target_input_value:
+        raise KinematicSolveError(
+            f"adaptive subdivision reached floating-point step limit at input index "
+            f"{input_index} (target={target_input_value:.12g})"
+        )
+
+    midpoint_guess = _predict_next_configuration(
+        mechanism,
+        links,
+        joints,
+        input_joint,
+        start_q,
+        start_input_value,
+        midpoint,
+        scaling,
+        input_index=input_index,
+    )
+
+    try:
+        midpoint_q = _solve_configuration(
+            mechanism,
+            links,
+            joints,
+            input_joint,
+            midpoint,
+            midpoint_guess,
+            scaling,
+            input_index=input_index,
+        )
+    except KinematicSolveError:
+        midpoint_q, left_count = _solve_with_subdivision(
+            mechanism,
+            links,
+            joints,
+            input_joint,
+            start_input_value=start_input_value,
+            start_q=start_q,
+            target_input_value=midpoint,
+            scaling=scaling,
+            input_index=input_index,
+            depth=depth + 1,
+        )
+    else:
+        left_count = 0
+
+    target_guess = _predict_next_configuration(
+        mechanism,
+        links,
+        joints,
+        input_joint,
+        midpoint_q,
+        midpoint,
+        target_input_value,
+        scaling,
+        input_index=input_index,
+    )
+    try:
+        target_q = _solve_configuration(
+            mechanism,
+            links,
+            joints,
+            input_joint,
+            target_input_value,
+            target_guess,
+            scaling,
+            input_index=input_index,
+        )
+        return target_q, left_count + 1
+    except KinematicSolveError:
+        target_q, right_count = _solve_with_subdivision(
+            mechanism,
+            links,
+            joints,
+            input_joint,
+            start_input_value=midpoint,
+            start_q=midpoint_q,
+            target_input_value=target_input_value,
+            scaling=scaling,
+            input_index=input_index,
+            depth=depth + 1,
+        )
+        return target_q, left_count + 1 + right_count
+
+
 def _predict_next_configuration(
     mechanism: Mechanism,
     links: tuple[Link, ...],
@@ -232,6 +407,8 @@ def _build_solve_diagnostics(
     input_positions: np.ndarray,
     coordinates: np.ndarray,
     scaling: NumericalScaling,
+    *,
+    subdivision_counts: np.ndarray | None = None,
 ) -> SolveDiagnostics:
     count = len(input_positions)
     condition_numbers = np.empty(count, dtype=float)
@@ -257,6 +434,7 @@ def _build_solve_diagnostics(
         condition_numbers,
         min_singular_values,
         ranks,
+        subdivision_counts=subdivision_counts,
     )
 
 

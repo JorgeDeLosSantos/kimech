@@ -411,12 +411,7 @@ def test_adaptive_subdivision_recovers_failed_requested_step(monkeypatch):
         return np.array([0.0, 0.0, input_value])
 
     def fake_predict(*args, **kwargs):
-        q = args[4]
-        start = args[5]
-        target = args[6]
-        predicted = q.copy()
-        predicted[2] += target - start
-        return predicted
+        return args[4].copy()
 
     monkeypatch.setattr("kimech.solver._solve_configuration", fake_solve_configuration)
     monkeypatch.setattr("kimech.solver._predict_next_configuration", fake_predict)
@@ -458,7 +453,7 @@ def test_adaptive_subdivision_hides_internal_samples(monkeypatch):
     monkeypatch.setattr(
         "kimech.solver._predict_next_configuration",
         lambda mechanism_arg, links, joints, input_joint, q, input_value, next_input_value, scaling, input_index=None:
-            np.array([0.0, 0.0, next_input_value]),
+            q.copy(),
     )
 
     solution = solve(

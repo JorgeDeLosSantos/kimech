@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import operator
-
 import numpy as np
 
 
@@ -59,20 +57,15 @@ class SolveDiagnostics:
     def __len__(self) -> int:
         return len(self._condition_numbers)
 
-    def __getitem__(self, index: int | slice):
-        if isinstance(index, slice):
-            return SolveDiagnostics(
-                self._condition_numbers[index],
-                self._min_singular_values[index],
-                self._ranks[index],
-            )
-
-        item = operator.index(index)
-        return {
-            "condition_number": float(self._condition_numbers[item]),
-            "min_singular_value": float(self._min_singular_values[item]),
-            "rank": int(self._ranks[item]),
-        }
+    def _slice(self, index: slice) -> SolveDiagnostics:
+        """Return a sliced diagnostics history for result-container internals."""
+        if not isinstance(index, slice):
+            raise TypeError("index must be a slice")
+        return SolveDiagnostics(
+            self._condition_numbers[index],
+            self._min_singular_values[index],
+            self._ranks[index],
+        )
 
 
 def _condition_array(value: object) -> np.ndarray:

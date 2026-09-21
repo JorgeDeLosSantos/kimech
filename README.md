@@ -85,6 +85,20 @@ accelerations = solution.point_accelerations(point_p)
 
 Position-only solving remains valid by omitting the differential inputs. Position sweeps use predictor-corrector continuation with warm-start fallback and bounded adaptive subdivision when recovery is needed. Solutions also expose structured numerical diagnostics through `solution.diagnostics`.
 
+For example:
+
+```python
+diagnostics = solution.diagnostics
+
+condition = diagnostics.condition_numbers
+sigma_min = diagnostics.min_singular_values
+strategies = diagnostics.strategies
+subdivisions = diagnostics.subdivision_counts
+residuals = diagnostics.residual_norms
+```
+
+These diagnostics describe the selected driven solve formulation. A configuration may therefore be regular for one chosen input and singular for another.
+
 ## Visualization
 
 Visualization remains presentation-only and does not define physical time:

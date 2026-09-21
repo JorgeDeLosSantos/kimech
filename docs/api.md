@@ -1,6 +1,6 @@
 # Kimech — Package structure and public API
 
-> Status: implemented API after the `0.4.0` solver-robustness work.
+> Status: current API for `0.4.0`.
 >
 > Kimech remains a young project, and this API may evolve in future versions. [`design.md`](design.md) records the `0.1.0` position-kinematics baseline, [`design-0.2.0.md`](design-0.2.0.md) the differential-kinematics baseline, and [`design-0.4.0.md`](design-0.4.0.md) the solver-robustness design baseline.
 
@@ -44,6 +44,7 @@ src/
     ├── model.py
     ├── joints.py
     ├── solution.py
+    ├── diagnostics.py
     ├── solver.py
     ├── validation.py
     ├── errors.py
@@ -57,7 +58,7 @@ src/
         └── animation.py
 ```
 
-The package remains intentionally flat. Mechanism-specific solver classes, backend registries, and plugin systems are not part of `0.3.0`.
+The package remains intentionally flat. Mechanism-specific solver classes, backend registries, and plugin systems are not part of `0.4.0`.
 
 ### Module responsibilities
 
@@ -69,6 +70,7 @@ The package remains intentionally flat. Mechanism-specific solver classes, backe
 - `_scaling.py` constructs private dimensionless numerical scaling used consistently by position, velocity, and acceleration solves.
 - `solver.py` validates and normalizes the solve problem, performs complete position continuation first, then optional velocity and acceleration phases, and returns result objects.
 - `solution.py` owns solver-independent kinematic state and derived entity queries through `Configuration` and `KinematicSolution`.
+- `diagnostics.py` owns structured numerical histories exposed through `SolveDiagnostics`.
 - `validation.py` provides lightweight structural validation and mobility estimation.
 - `errors.py` defines the public Kimech exception hierarchy.
 - `visualization` renders configurations and solutions with Matplotlib without mutating them.
@@ -92,6 +94,7 @@ from kimech import (
     Point,
     PrismaticJoint,
     RevoluteJoint,
+    SolveDiagnostics,
     ValidationReport,
     solve,
 )
@@ -562,12 +565,14 @@ examples/
 ├── four_bar.py
 ├── four_bar_analysis.py
 ├── slider_crank.py
-└── slider_crank_analysis.py
+├── slider_crank_analysis.py
+└── slider_crank_analysis_comparison.py
 ```
 
 - `four_bar.py` and `slider_crank.py` focus on position solving and animation.
 - `four_bar_analysis.py` plots rocker angle, angular velocity, angular acceleration, and coupler-point differential magnitudes versus prescribed crank angle.
 - `slider_crank_analysis.py` plots slider displacement, velocity, and acceleration versus crank angle and demonstrates equivalent prismatic-input reconstruction.
+- `slider_crank_analysis_comparison.py` compares position, velocity, and acceleration with an independent closed-form slider-crank solution.
 
 The test suite covers model/constraint behavior, position solving, differential result state, velocity and acceleration solves, analytic second-order terms, four-bar and slider-crank acceptance, prismatically driven inverse analysis, visualization, and package metadata.
 

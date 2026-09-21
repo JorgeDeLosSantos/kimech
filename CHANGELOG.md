@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.4.0
+
+Kimech `0.4.0` strengthens continuation robustness and adds structured numerical diagnostics without changing the public `solve()` signature.
+
+### Added
+
+- first-order predictor-corrector continuation using the local input tangent `dq/du`;
+- warm-start retry when a predicted nonlinear correction fails;
+- bounded adaptive subdivision for recoverable large requested input steps;
+- public `SolveDiagnostics` attached to solve-generated `KinematicSolution` objects;
+- scaled-Jacobian condition numbers, minimum singular values, and numerical ranks;
+- per-sample subdivision counts, accepted solve strategies, nonlinear corrector-attempt counts, and final scaled residual norms;
+- singularity/toggle study documenting driver-dependent driven-solve singularities;
+- branch-continuity study over Archimedes trammel, Whitworth, Watt II, Klann, and Theo Jansen mechanisms;
+- end-to-end acceptance coverage for forward/reverse branch consistency and driver-dependent dead-center diagnostics;
+- `docs/design-0.4.0.md` as the solver-robustness design baseline.
+
+### Changed
+
+- position sweeps now prefer tangent prediction before the nonlinear corrector while preserving warm-start behavior as a fallback;
+- failed requested steps may be recovered internally through hidden midpoint solves without changing the returned requested-sample history;
+- solve diagnostics are computed from the dimensionless scaled driven Jacobian rather than the raw dimensional Jacobian;
+- exact rank loss, conditioning, and minimum singular value are treated as descriptive properties of the selected driven formulation rather than as a universal physical-singularity classification;
+- diagnostics are preserved when slicing a `KinematicSolution`.
+
+### Design limits
+
+- adaptive subdivision does not make unreachable targets solvable and cannot cross folds where the selected input coordinate ceases to parameterize the branch;
+- no universal near-singularity threshold or public `is_singular` flag is defined;
+- no global assembly-mode identifier or automatic branch enumeration is introduced;
+- pseudo-arclength continuation remains deferred;
+- SciPy-specific counters such as `nfev` and `njev` are not part of the public diagnostics API;
+- multiple prescribed inputs, automatic initial-guess generation, dynamics, forces, masses, and inertias remain out of scope.
+
+
 ## 0.3.0
 
 Kimech `0.3.0` consolidates numerical robustness and simplifies the public solve API.

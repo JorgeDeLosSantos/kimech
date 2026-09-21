@@ -422,6 +422,7 @@ diagnostics = solution.diagnostics
 condition = diagnostics.condition_numbers
 sigma_min = diagnostics.min_singular_values
 rank = diagnostics.ranks
+subdivisions = diagnostics.subdivision_counts
 ```
 
 These histories have shape `(N,)`, one value for each accepted configuration.
@@ -440,13 +441,27 @@ The initial diagnostics are deliberately descriptive rather than prescriptive:
 
 - `condition_numbers` reports the 2-norm condition number of the scaled Jacobian;
 - `min_singular_values` reports its smallest singular value;
-- `ranks` reports numerical rank using the standard floating-point SVD tolerance.
+- `ranks` reports numerical rank using the standard floating-point SVD tolerance;
+- `subdivision_counts` reports how many internal accepted continuation points were required to recover each requested sample. A value of zero means no adaptive subdivision was needed.
 
 An exactly rank-deficient Jacobian can therefore appear as `condition_number = inf`, `min_singular_value = 0`, and a reduced rank. Kimech does not yet apply a universal threshold for declaring a configuration "near singular".
 
 Diagnostics are preserved when slicing a `KinematicSolution`. Manually constructed `KinematicSolution` objects may omit diagnostics, in which case `solution.diagnostics is None`.
 
-## 11. Errors
+## 11. Adaptive subdivision
+
+Position sweeps use predictor-corrector continuation. If a requested sample cannot be solved from the predictor, Kimech retries from the previous accepted configuration. If both attempts fail and there is a previous accepted sample, Kimech may recursively bisect the input interval and solve internal intermediate configurations.
+
+The subdivision is an internal recovery mechanism:
+
+- user-supplied `input_positions` are never expanded in the returned solution;
+- internal intermediate configurations are discarded after they help reach the requested target;
+- subdivision depth is bounded internally;
+- if recovery fails, the original requested-target `KinematicSolveError` is preserved.
+
+Adaptive subdivision does not make unreachable targets solvable and does not cross folds where the selected `input_joint` ceases to be a valid local parameter. See `docs/study-0.4.0-singularity-diagnostics.md` for examples involving slider-crank dead-centers and four-bar rocker toggles.
+
+## 12. Errors
 
 Public exception hierarchy:
 
@@ -462,7 +477,7 @@ KimechError
 
 No public singularity exception or condition-number policy exists in `0.3.0`.
 
-## 12. Validation
+## 13. Validation
 
 ```python
 report = mechanism.validate()
@@ -479,7 +494,7 @@ report.is_valid
 
 The mobility value is the planar lower-pair structural estimate. Validation does not promise complete detection of redundant constraints, special geometric degeneracies, toggles, or singularities.
 
-## 13. Visualization
+## 14. Visualization
 
 Visualization requires `[viz]` and remains Matplotlib-only.
 
@@ -520,7 +535,7 @@ GIF output can be delegated to Matplotlib/Pillow:
 animation.save("mechanism.gif", writer="pillow")
 ```
 
-## 14. Result snapshot semantics
+## 15. Result snapshot semantics
 
 Public `Configuration` and `KinematicSolution` constructors validate the structure, shape, finiteness, and entity compatibility of supplied state. They do not certify that manually supplied coordinates satisfy the mechanism constraints. Results returned by `solve()` contain states accepted by the solver.
 
@@ -528,7 +543,7 @@ For `Configuration`, any prescribed-input metadata (`input_position`, `input_vel
 
 Result objects retain the link layout captured when they are constructed or solved. This keeps the mapping between links and generalized state stable even if the mechanism object is later extended. Queries require entities compatible with that retained snapshot.
 
-## 15. Examples and tests
+## 16. Examples and tests
 
 The examples deliberately separate geometric motion/animation from quantitative differential analysis:
 
@@ -546,6 +561,6 @@ examples/
 
 The test suite covers model/constraint behavior, position solving, differential result state, velocity and acceleration solves, analytic second-order terms, four-bar and slider-crank acceptance, prismatically driven inverse analysis, visualization, and package metadata.
 
-## 16. Deliberately absent API
+## 17. Deliberately absent API
 
-`0.3.0` does not provide public abstractions for multiple inputs, motion laws, time histories, dynamics, forces, masses/inertias, adaptive continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. Development toward `0.4.0` adds descriptive scaled-Jacobian diagnostics without yet defining a universal near-singularity policy.
+`0.3.0` does not provide public abstractions for multiple inputs, motion laws, time histories, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. Development toward `0.4.0` adds descriptive scaled-Jacobian diagnostics and bounded internal adaptive subdivision without yet defining a universal near-singularity policy.

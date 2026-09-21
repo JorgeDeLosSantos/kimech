@@ -313,6 +313,14 @@ def test_position_sweep_uses_input_tangent_predictor(monkeypatch):
     assert len(solution) == 2
     np.testing.assert_allclose(guesses[0], [0.0, 0.0, 0.0])
     np.testing.assert_allclose(guesses[1], [0.0, 0.0, 0.7])
+    np.testing.assert_array_equal(
+        solution.diagnostics.strategies,
+        ["initial_guess", "predictor"],
+    )
+    np.testing.assert_array_equal(
+        solution.diagnostics.corrector_attempts,
+        [1, 1],
+    )
 
 
 def test_position_sweep_retries_warm_start_when_predictor_corrector_fails(monkeypatch):
@@ -352,6 +360,8 @@ def test_position_sweep_retries_warm_start_when_predictor_corrector_fails(monkey
     assert len(guesses) == 3
     np.testing.assert_allclose(guesses[1], [0.0, 0.0, 0.7])
     np.testing.assert_allclose(guesses[2], [0.0, 0.0, 0.5])
+    assert solution.diagnostics.strategies[1] == "warm_start"
+    assert solution.diagnostics.corrector_attempts[1] == 2
 
 
 def test_position_sweep_falls_back_to_warm_start_when_tangent_solve_fails(monkeypatch):
@@ -387,6 +397,8 @@ def test_position_sweep_falls_back_to_warm_start_when_tangent_solve_fails(monkey
 
     assert len(solution) == 2
     np.testing.assert_allclose(guesses[1], [0.0, 0.0, 0.5])
+    assert solution.diagnostics.strategies[1] == "warm_start"
+    assert solution.diagnostics.corrector_attempts[1] == 1
 
 
 def test_adaptive_subdivision_recovers_failed_requested_step(monkeypatch):
@@ -427,6 +439,8 @@ def test_adaptive_subdivision_recovers_failed_requested_step(monkeypatch):
     np.testing.assert_allclose(solution.coordinates[:, 2], [0.0, 0.2])
     assert solution.diagnostics is not None
     np.testing.assert_array_equal(solution.diagnostics.subdivision_counts, [0, 1])
+    assert solution.diagnostics.strategies[1] == "subdivision"
+    assert solution.diagnostics.corrector_attempts[1] == 3
     assert 0.1 in calls
 
 
@@ -466,6 +480,8 @@ def test_adaptive_subdivision_hides_internal_samples(monkeypatch):
     assert len(solution) == 2
     np.testing.assert_array_equal(solution.input_positions, [0.0, 0.2])
     assert solution.diagnostics.subdivision_counts[1] == 3
+    assert solution.diagnostics.strategies[1] == "subdivision"
+    assert solution.diagnostics.corrector_attempts[1] == 7
 
 
 def test_impossible_target_preserves_original_failure_after_subdivision(monkeypatch):

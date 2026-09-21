@@ -84,12 +84,14 @@ def solve(
 
     coordinates = np.empty((len(input_positions), coordinate_count), dtype=float)
     subdivision_counts = np.zeros(len(input_positions), dtype=int)
+    strategies = np.empty(len(input_positions), dtype="<U16")
+    corrector_attempts = np.zeros(len(input_positions), dtype=int)
     current_guess = initial_q
     previous_input_value = None
     previous_accepted = None
     for index, input_position_value in enumerate(input_positions):
         input_value = float(input_position_value)
-        accepted, subdivision_count = _solve_requested_configuration(
+        accepted, subdivision_count, strategy, attempts = _solve_requested_configuration(
             mechanism,
             links,
             joints,
@@ -103,6 +105,8 @@ def solve(
         )
         coordinates[index] = accepted
         subdivision_counts[index] = subdivision_count
+        strategies[index] = strategy
+        corrector_attempts[index] = attempts
         previous_input_value = input_value
         previous_accepted = accepted
 
@@ -129,6 +133,8 @@ def solve(
         coordinates,
         scaling,
         subdivision_counts=subdivision_counts,
+        strategies=strategies,
+        corrector_attempts=corrector_attempts,
     )
 
     coordinate_velocities = None
@@ -195,23 +201,33 @@ def _solve_requested_configuration(
     input_index: int,
     previous_input_value: float | None,
     previous_accepted: np.ndarray | None,
-) -> tuple[np.ndarray, int]:
-    """Solve one requested sample with warm-start and adaptive recovery."""
+) -> tuple[np.ndarray, int, str, int]:
+    """Solve one requested sample and report its accepted recovery path."""
+    attempt_counter = [0]
     first_error: KinematicSolveError | None = None
-    try:
-        return (
-            _solve_configuration(
-                mechanism,
-                links,
-                joints,
-                input_joint,
-                input_value,
-                preferred_guess,
-                scaling,
-                input_index=input_index,
-            ),
-            0,
+    preferred_strategy = (
+        "initial_guess"
+        if previous_accepted is None
+        else (
+            "warm_start"
+            if np.array_equal(preferred_guess, previous_accepted)
+            else "predictor"
         )
+    )
+
+    try:
+        accepted = _attempt_configuration(
+            attempt_counter,
+            mechanism,
+            links,
+            joints,
+            input_joint,
+            input_value,
+            preferred_guess,
+            scaling,
+            input_index=input_index,
+        )
+        return accepted, 0, preferred_strategy, attempt_counter[0]
     except KinematicSolveError as error:
         first_error = error
 
@@ -220,19 +236,18 @@ def _solve_requested_configuration(
 
     if not np.array_equal(preferred_guess, previous_accepted):
         try:
-            return (
-                _solve_configuration(
-                    mechanism,
-                    links,
-                    joints,
-                    input_joint,
-                    input_value,
-                    previous_accepted,
-                    scaling,
-                    input_index=input_index,
-                ),
-                0,
+            accepted = _attempt_configuration(
+                attempt_counter,
+                mechanism,
+                links,
+                joints,
+                input_joint,
+                input_value,
+                previous_accepted,
+                scaling,
+                input_index=input_index,
             )
+            return accepted, 0, "warm_start", attempt_counter[0]
         except KinematicSolveError:
             pass
 
@@ -251,10 +266,36 @@ def _solve_requested_configuration(
             scaling=scaling,
             input_index=input_index,
             depth=0,
+            attempt_counter=attempt_counter,
         )
     except KinematicSolveError:
         raise first_error
-    return accepted, subdivision_count
+    return accepted, subdivision_count, "subdivision", attempt_counter[0]
+
+def _attempt_configuration(
+    attempt_counter: list[int],
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    joints: tuple[_Joint, ...],
+    input_joint: _Joint,
+    input_value: float,
+    initial_q: np.ndarray,
+    scaling: NumericalScaling,
+    *,
+    input_index: int,
+) -> np.ndarray:
+    """Call the nonlinear corrector while recording one attempted solve."""
+    attempt_counter[0] += 1
+    return _solve_configuration(
+        mechanism,
+        links,
+        joints,
+        input_joint,
+        input_value,
+        initial_q,
+        scaling,
+        input_index=input_index,
+    )
 
 
 def _solve_step_from_accepted(
@@ -268,6 +309,7 @@ def _solve_step_from_accepted(
     target_input_value: float,
     scaling: NumericalScaling,
     input_index: int,
+    attempt_counter: list[int],
 ) -> np.ndarray:
     """Attempt one continuation step using predictor first, then warm start."""
     predicted = _predict_next_configuration(
@@ -282,7 +324,8 @@ def _solve_step_from_accepted(
         input_index=input_index,
     )
     try:
-        return _solve_configuration(
+        return _attempt_configuration(
+            attempt_counter,
             mechanism,
             links,
             joints,
@@ -295,7 +338,8 @@ def _solve_step_from_accepted(
     except KinematicSolveError:
         if np.array_equal(predicted, start_q):
             raise
-        return _solve_configuration(
+        return _attempt_configuration(
+            attempt_counter,
             mechanism,
             links,
             joints,
@@ -319,6 +363,7 @@ def _solve_with_subdivision(
     scaling: NumericalScaling,
     input_index: int,
     depth: int,
+    attempt_counter: list[int],
 ) -> tuple[np.ndarray, int]:
     """Recover a failed requested step by recursively bisecting its input interval."""
     if depth >= _MAX_SUBDIVISION_DEPTH:
@@ -345,6 +390,7 @@ def _solve_with_subdivision(
             target_input_value=midpoint,
             scaling=scaling,
             input_index=input_index,
+            attempt_counter=attempt_counter,
         )
     except KinematicSolveError:
         midpoint_q, left_count = _solve_with_subdivision(
@@ -358,6 +404,7 @@ def _solve_with_subdivision(
             scaling=scaling,
             input_index=input_index,
             depth=depth + 1,
+            attempt_counter=attempt_counter,
         )
     else:
         left_count = 0
@@ -373,6 +420,7 @@ def _solve_with_subdivision(
             target_input_value=target_input_value,
             scaling=scaling,
             input_index=input_index,
+            attempt_counter=attempt_counter,
         )
         return target_q, left_count + 1
     except KinematicSolveError:
@@ -387,6 +435,7 @@ def _solve_with_subdivision(
             scaling=scaling,
             input_index=input_index,
             depth=depth + 1,
+            attempt_counter=attempt_counter,
         )
         return target_q, left_count + 1 + right_count
 
@@ -438,11 +487,14 @@ def _build_solve_diagnostics(
     scaling: NumericalScaling,
     *,
     subdivision_counts: np.ndarray | None = None,
+    strategies: np.ndarray | None = None,
+    corrector_attempts: np.ndarray | None = None,
 ) -> SolveDiagnostics:
     count = len(input_positions)
     condition_numbers = np.empty(count, dtype=float)
     min_singular_values = np.empty(count, dtype=float)
     ranks = np.empty(count, dtype=int)
+    residual_norms = np.empty(count, dtype=float)
 
     for index, (input_value, q) in enumerate(zip(input_positions, coordinates)):
         matrix = jacobian(
@@ -452,6 +504,17 @@ def _build_solve_diagnostics(
             input_joint,
             q,
             float(input_value),
+        )
+        phi = residual(
+            mechanism,
+            links,
+            joints,
+            input_joint,
+            q,
+            float(input_value),
+        )
+        residual_norms[index] = float(
+            np.linalg.norm(scaling.scale_residual(phi), ord=np.inf)
         )
         matrix_hat = scaling.scale_jacobian(matrix)
         condition, minimum, rank = _jacobian_metrics(matrix_hat)
@@ -464,6 +527,9 @@ def _build_solve_diagnostics(
         min_singular_values,
         ranks,
         subdivision_counts=subdivision_counts,
+        strategies=strategies,
+        corrector_attempts=corrector_attempts,
+        residual_norms=residual_norms,
     )
 
 

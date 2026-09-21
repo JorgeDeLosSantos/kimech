@@ -31,6 +31,12 @@ jobs:
       - name: Run tests
         run: pytest
 
+      - name: Run 0.4 release studies
+        if: matrix.python-version == '3.12'
+        run: |
+          python playground/singularity_diagnostics_study.py
+          python playground/branch_continuity_study.py
+
 
   build:
     runs-on: ubuntu-latest

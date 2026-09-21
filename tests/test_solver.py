@@ -387,3 +387,121 @@ def test_position_sweep_falls_back_to_warm_start_when_tangent_solve_fails(monkey
 
     assert len(solution) == 2
     np.testing.assert_allclose(guesses[1], [0.0, 0.0, 0.5])
+
+
+def test_adaptive_subdivision_recovers_failed_requested_step(monkeypatch):
+    mechanism, link, joint = _single_revolute()
+    calls = []
+
+    def fake_solve_configuration(
+        mechanism_arg,
+        links,
+        joints,
+        input_joint,
+        input_value,
+        initial_q,
+        scaling,
+        *,
+        input_index=None,
+    ):
+        calls.append(float(input_value))
+        current = float(initial_q[2])
+        if abs(input_value - current) > 0.11:
+            raise KinematicSolveError("step too large")
+        return np.array([0.0, 0.0, input_value])
+
+    def fake_predict(*args, **kwargs):
+        q = args[4]
+        start = args[5]
+        target = args[6]
+        predicted = q.copy()
+        predicted[2] += target - start
+        return predicted
+
+    monkeypatch.setattr("kimech.solver._solve_configuration", fake_solve_configuration)
+    monkeypatch.setattr("kimech.solver._predict_next_configuration", fake_predict)
+
+    solution = solve(
+        mechanism,
+        input_joint=joint,
+        input_position=[0.0, 0.2],
+        initial_guess={link: (0.0, 0.0, 0.0)},
+    )
+
+    np.testing.assert_array_equal(solution.input_positions, [0.0, 0.2])
+    np.testing.assert_allclose(solution.coordinates[:, 2], [0.0, 0.2])
+    assert solution.diagnostics is not None
+    np.testing.assert_array_equal(solution.diagnostics.subdivision_counts, [0, 1])
+    assert 0.1 in calls
+
+
+def test_adaptive_subdivision_hides_internal_samples(monkeypatch):
+    mechanism, link, joint = _single_revolute()
+
+    def fake_solve_configuration(
+        mechanism_arg,
+        links,
+        joints,
+        input_joint,
+        input_value,
+        initial_q,
+        scaling,
+        *,
+        input_index=None,
+    ):
+        current = float(initial_q[2])
+        if abs(input_value - current) > 0.06:
+            raise KinematicSolveError("step too large")
+        return np.array([0.0, 0.0, input_value])
+
+    monkeypatch.setattr("kimech.solver._solve_configuration", fake_solve_configuration)
+    monkeypatch.setattr(
+        "kimech.solver._predict_next_configuration",
+        lambda mechanism_arg, links, joints, input_joint, q, input_value, next_input_value, scaling, input_index=None:
+            np.array([0.0, 0.0, next_input_value]),
+    )
+
+    solution = solve(
+        mechanism,
+        input_joint=joint,
+        input_position=[0.0, 0.2],
+        initial_guess={link: (0.0, 0.0, 0.0)},
+    )
+
+    assert len(solution) == 2
+    np.testing.assert_array_equal(solution.input_positions, [0.0, 0.2])
+    assert solution.diagnostics.subdivision_counts[1] == 3
+
+
+def test_impossible_target_preserves_original_failure_after_subdivision(monkeypatch):
+    mechanism, link, joint = _single_revolute()
+
+    def fake_solve_configuration(
+        mechanism_arg,
+        links,
+        joints,
+        input_joint,
+        input_value,
+        initial_q,
+        scaling,
+        *,
+        input_index=None,
+    ):
+        if input_value > 0.1:
+            raise KinematicSolveError(f"unreachable target {input_value}")
+        return np.array([0.0, 0.0, input_value])
+
+    monkeypatch.setattr("kimech.solver._solve_configuration", fake_solve_configuration)
+    monkeypatch.setattr(
+        "kimech.solver._predict_next_configuration",
+        lambda mechanism_arg, links, joints, input_joint, q, input_value, next_input_value, scaling, input_index=None:
+            q.copy(),
+    )
+
+    with pytest.raises(KinematicSolveError, match=r"unreachable target 0\.2"):
+        solve(
+            mechanism,
+            input_joint=joint,
+            input_position=[0.0, 0.2],
+            initial_guess={link: (0.0, 0.0, 0.0)},
+        )

@@ -1,8 +1,8 @@
 # Kimech — Package structure and public API
 
-> Status: current API for `0.3.0`.
+> Status: implemented API after the `0.4.0` solver-robustness work.
 >
-> Kimech remains a young project, and this API may evolve in future versions. [`design.md`](design.md) records the `0.1.0` position-kinematics baseline and [`design-0.2.0.md`](design-0.2.0.md) records the differential-kinematics design baseline.
+> Kimech remains a young project, and this API may evolve in future versions. [`design.md`](design.md) records the `0.1.0` position-kinematics baseline, [`design-0.2.0.md`](design-0.2.0.md) the differential-kinematics baseline, and [`design-0.4.0.md`](design-0.4.0.md) the solver-robustness design baseline.
 
 ## 1. Overview
 
@@ -485,7 +485,7 @@ KimechError
 
 `KinematicSolveError` reports numerical failures at position, velocity, or acceleration level. Differential failures identify the stage and, for sweeps, the input index/value when available. Kimech independently verifies accepted residuals rather than trusting the underlying numerical routine alone.
 
-No public singularity exception or condition-number policy exists in `0.3.0`.
+No public singularity exception or condition-number policy exists in `0.4.0`.
 
 ## 13. Validation
 
@@ -573,4 +573,4 @@ The test suite covers model/constraint behavior, position solving, differential 
 
 ## 17. Deliberately absent API
 
-`0.3.0` does not provide public abstractions for multiple inputs, motion laws, time histories, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. Development toward `0.4.0` adds descriptive scaled-Jacobian diagnostics and bounded internal adaptive subdivision without yet defining a universal near-singularity policy.
+`0.4.0` does not provide public abstractions for multiple inputs, motion laws, time histories, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. The release adds descriptive scaled-Jacobian and solve-process diagnostics plus bounded internal adaptive subdivision without defining a universal near-singularity policy.

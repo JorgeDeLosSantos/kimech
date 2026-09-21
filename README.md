@@ -4,7 +4,7 @@ Kimech is a small Python library for modeling and solving the kinematics of plan
 
 It provides declarative rigid-body models with revolute and prismatic joints, position solving with warm-start continuation, analytic velocity and acceleration kinematics, result queries, and schematic plotting and animation.
 
-Kimech supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms with one prescribed joint coordinate. The `0.1.0` position-kinematics baseline is recorded in [`docs/design.md`](docs/design.md), the `0.2.0` differential-kinematics baseline in [`docs/design-0.2.0.md`](docs/design-0.2.0.md), and [`docs/api.md`](docs/api.md) documents the current API for `0.3.0`.
+Kimech supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms with one prescribed joint coordinate. The `0.1.0` position-kinematics baseline is recorded in [`docs/design.md`](docs/design.md), the `0.2.0` differential-kinematics baseline in [`docs/design-0.2.0.md`](docs/design-0.2.0.md), and the solver-robustness design for `0.4.0` in [`docs/design-0.4.0.md`](docs/design-0.4.0.md). [`docs/api.md`](docs/api.md) documents the implemented public API.
 
 ## Installation
 
@@ -83,7 +83,7 @@ accelerations = solution.point_accelerations(point_p)
 
 `input_position` is the prescribed natural coordinate of `input_joint`: relative angle for a revolute joint and signed displacement for a prismatic joint. It may be a scalar or a one-dimensional sequence. `solve()` always returns a `KinematicSolution`; a scalar input therefore produces a solution of length one and `solution[0]` returns its `Configuration`. Differential inputs are physical derivatives with respect to a common external time variable, and scalar differential inputs are broadcast across sweeps.
 
-Position-only solving remains valid by omitting the differential inputs.
+Position-only solving remains valid by omitting the differential inputs. Position sweeps use predictor-corrector continuation with warm-start fallback and bounded adaptive subdivision when recovery is needed. Solutions also expose structured numerical diagnostics through `solution.diagnostics`.
 
 ## Visualization
 

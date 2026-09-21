@@ -257,6 +257,56 @@ def _solve_requested_configuration(
     return accepted, subdivision_count
 
 
+def _solve_step_from_accepted(
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    joints: tuple[_Joint, ...],
+    input_joint: _Joint,
+    *,
+    start_input_value: float,
+    start_q: np.ndarray,
+    target_input_value: float,
+    scaling: NumericalScaling,
+    input_index: int,
+) -> np.ndarray:
+    """Attempt one continuation step using predictor first, then warm start."""
+    predicted = _predict_next_configuration(
+        mechanism,
+        links,
+        joints,
+        input_joint,
+        start_q,
+        start_input_value,
+        target_input_value,
+        scaling,
+        input_index=input_index,
+    )
+    try:
+        return _solve_configuration(
+            mechanism,
+            links,
+            joints,
+            input_joint,
+            target_input_value,
+            predicted,
+            scaling,
+            input_index=input_index,
+        )
+    except KinematicSolveError:
+        if np.array_equal(predicted, start_q):
+            raise
+        return _solve_configuration(
+            mechanism,
+            links,
+            joints,
+            input_joint,
+            target_input_value,
+            start_q,
+            scaling,
+            input_index=input_index,
+        )
+
+
 def _solve_with_subdivision(
     mechanism: Mechanism,
     links: tuple[Link, ...],
@@ -284,27 +334,16 @@ def _solve_with_subdivision(
             f"{input_index} (target={target_input_value:.12g})"
         )
 
-    midpoint_guess = _predict_next_configuration(
-        mechanism,
-        links,
-        joints,
-        input_joint,
-        start_q,
-        start_input_value,
-        midpoint,
-        scaling,
-        input_index=input_index,
-    )
-
     try:
-        midpoint_q = _solve_configuration(
+        midpoint_q = _solve_step_from_accepted(
             mechanism,
             links,
             joints,
             input_joint,
-            midpoint,
-            midpoint_guess,
-            scaling,
+            start_input_value=start_input_value,
+            start_q=start_q,
+            target_input_value=midpoint,
+            scaling=scaling,
             input_index=input_index,
         )
     except KinematicSolveError:
@@ -323,26 +362,16 @@ def _solve_with_subdivision(
     else:
         left_count = 0
 
-    target_guess = _predict_next_configuration(
-        mechanism,
-        links,
-        joints,
-        input_joint,
-        midpoint_q,
-        midpoint,
-        target_input_value,
-        scaling,
-        input_index=input_index,
-    )
     try:
-        target_q = _solve_configuration(
+        target_q = _solve_step_from_accepted(
             mechanism,
             links,
             joints,
             input_joint,
-            target_input_value,
-            target_guess,
-            scaling,
+            start_input_value=midpoint,
+            start_q=midpoint_q,
+            target_input_value=target_input_value,
+            scaling=scaling,
             input_index=input_index,
         )
         return target_q, left_count + 1

@@ -423,6 +423,9 @@ condition = diagnostics.condition_numbers
 sigma_min = diagnostics.min_singular_values
 rank = diagnostics.ranks
 subdivisions = diagnostics.subdivision_counts
+strategies = diagnostics.strategies
+attempts = diagnostics.corrector_attempts
+residuals = diagnostics.residual_norms
 ```
 
 These histories have shape `(N,)`, one value for each accepted configuration.
@@ -442,11 +445,18 @@ The initial diagnostics are deliberately descriptive rather than prescriptive:
 - `condition_numbers` reports the 2-norm condition number of the scaled Jacobian;
 - `min_singular_values` reports its smallest singular value;
 - `ranks` reports numerical rank using the standard floating-point SVD tolerance;
-- `subdivision_counts` reports how many internal accepted continuation points were required to recover each requested sample. A value of zero means no adaptive subdivision was needed.
+- `subdivision_counts` reports how many internal accepted continuation points were required to recover each requested sample. A value of zero means no adaptive subdivision was needed;
+- `strategies` reports the path that produced each requested position sample: `"initial_guess"`, `"predictor"`, `"warm_start"`, or `"subdivision"`;
+- `corrector_attempts` reports how many nonlinear position-corrector calls were made while obtaining that requested sample, including failed recovery attempts and internal subdivision solves;
+- `residual_norms` reports the final infinity norm of the dimensionless scaled position residual for each accepted requested sample.
 
 An exactly rank-deficient Jacobian can therefore appear as `condition_number = inf`, `min_singular_value = 0`, and a reduced rank. Kimech does not yet apply a universal threshold for declaring a configuration "near singular".
 
 Diagnostics are preserved when slicing a `KinematicSolution`. Manually constructed `KinematicSolution` objects may omit diagnostics, in which case `solution.diagnostics is None`.
+
+The strategy names describe continuation behavior rather than a numerical backend. `"predictor"` means a first-order tangent prediction was accepted by the nonlinear corrector. `"warm_start"` means the previous accepted configuration was used directly; this includes cases where tangent prediction was unavailable and therefore collapsed to the previous state. `"subdivision"` means one or more hidden intermediate input positions were needed before the requested sample could be reached.
+
+Kimech deliberately does not expose SciPy-specific counters such as `nfev` or `njev` as part of `SolveDiagnostics`. Process diagnostics are intended to remain meaningful if the nonlinear backend changes.
 
 ## 11. Adaptive subdivision
 

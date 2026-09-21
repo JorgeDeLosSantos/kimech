@@ -18,6 +18,9 @@ class SolveDiagnostics:
         "_min_singular_values",
         "_ranks",
         "_subdivision_counts",
+        "_strategies",
+        "_corrector_attempts",
+        "_residual_norms",
     )
 
     def __init__(
@@ -27,6 +30,9 @@ class SolveDiagnostics:
         ranks,
         *,
         subdivision_counts=None,
+        strategies=None,
+        corrector_attempts=None,
+        residual_norms=None,
     ) -> None:
         condition = _condition_array(condition_numbers)
         minimum = _finite_float_array(
@@ -42,16 +48,41 @@ class SolveDiagnostics:
                 name="subdivision_counts",
             )
         )
+        strategy = (
+            None
+            if strategies is None
+            else _strategy_array(strategies)
+        )
+        attempts = (
+            None
+            if corrector_attempts is None
+            else _nonnegative_int_array(
+                corrector_attempts,
+                name="corrector_attempts",
+            )
+        )
+        residual_history = (
+            None
+            if residual_norms is None
+            else _finite_float_array(
+                residual_norms,
+                name="residual_norms",
+            )
+        )
 
         if minimum.shape != condition.shape or rank.shape != condition.shape:
             raise ValueError("all diagnostic histories must have the same shape")
-        if subdivisions is not None and subdivisions.shape != condition.shape:
-            raise ValueError("all diagnostic histories must have the same shape")
+        for optional in (subdivisions, strategy, attempts, residual_history):
+            if optional is not None and optional.shape != condition.shape:
+                raise ValueError("all diagnostic histories must have the same shape")
 
         self._condition_numbers = condition
         self._min_singular_values = minimum
         self._ranks = rank
         self._subdivision_counts = subdivisions
+        self._strategies = strategy
+        self._corrector_attempts = attempts
+        self._residual_norms = residual_history
 
     @property
     def condition_numbers(self) -> np.ndarray:
@@ -75,6 +106,27 @@ class SolveDiagnostics:
             return None
         return self._subdivision_counts.copy()
 
+    @property
+    def strategies(self) -> np.ndarray | None:
+        """Return the accepted position-solve strategy for each requested sample."""
+        if self._strategies is None:
+            return None
+        return self._strategies.copy()
+
+    @property
+    def corrector_attempts(self) -> np.ndarray | None:
+        """Return nonlinear position-corrector attempts per requested sample."""
+        if self._corrector_attempts is None:
+            return None
+        return self._corrector_attempts.copy()
+
+    @property
+    def residual_norms(self) -> np.ndarray | None:
+        """Return final scaled position residual infinity norms."""
+        if self._residual_norms is None:
+            return None
+        return self._residual_norms.copy()
+
     def __len__(self) -> int:
         return len(self._condition_numbers)
 
@@ -90,6 +142,21 @@ class SolveDiagnostics:
                 None
                 if self._subdivision_counts is None
                 else self._subdivision_counts[index]
+            ),
+            strategies=(
+                None
+                if self._strategies is None
+                else self._strategies[index]
+            ),
+            corrector_attempts=(
+                None
+                if self._corrector_attempts is None
+                else self._corrector_attempts[index]
+            ),
+            residual_norms=(
+                None
+                if self._residual_norms is None
+                else self._residual_norms[index]
             ),
         )
 
@@ -153,6 +220,24 @@ def _nonnegative_int_array(value: object, *, name: str) -> np.ndarray:
     if np.any(result < 0):
         raise ValueError(f"{name} must contain only non-negative values")
     return result
+
+
+_ALLOWED_STRATEGIES = frozenset(
+    {"initial_guess", "predictor", "warm_start", "subdivision"}
+)
+
+
+def _strategy_array(value: object) -> np.ndarray:
+    try:
+        array = np.asarray(value, dtype=str)
+    except (TypeError, ValueError) as error:
+        raise TypeError("strategies must be string-valued") from error
+    if array.ndim != 1:
+        raise ValueError("strategies must be 1-dimensional")
+    if not all(item in _ALLOWED_STRATEGIES for item in array):
+        allowed = ", ".join(sorted(_ALLOWED_STRATEGIES))
+        raise ValueError(f"strategies must contain only: {allowed}")
+    return array.copy()
 
 def _jacobian_metrics(matrix: object) -> tuple[float, float, int]:
     """Return condition number, smallest singular value, and numerical rank."""

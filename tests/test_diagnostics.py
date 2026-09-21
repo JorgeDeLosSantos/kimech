@@ -81,6 +81,10 @@ def test_diagnostics_follow_solution_slicing():
         subset.diagnostics.ranks,
         solution.diagnostics.ranks[1:],
     )
+    np.testing.assert_array_equal(
+        subset.diagnostics.subdivision_counts,
+        solution.diagnostics.subdivision_counts[1:],
+    )
 
 
 @pytest.mark.parametrize("scale", [1e-3, 1.0, 1e3])

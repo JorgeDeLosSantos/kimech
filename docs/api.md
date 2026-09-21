@@ -412,7 +412,41 @@ KinematicSolution.link_poses()
 
 See [`CHANGELOG.md`](../CHANGELOG.md).
 
-## 10. Errors
+## 10. Solve diagnostics
+
+Solutions returned by `solve()` include structured numerical diagnostics:
+
+```python
+diagnostics = solution.diagnostics
+
+condition = diagnostics.condition_numbers
+sigma_min = diagnostics.min_singular_values
+rank = diagnostics.ranks
+```
+
+These histories have shape `(N,)`, one value for each accepted configuration.
+
+The metrics are evaluated from Kimech's **dimensionless scaled solve Jacobian**,
+
+\[
+\hat J = D_\Phi^{-1} J D_q,
+\]
+
+rather than from the raw dimensional Jacobian. Consequently, the diagnostics are intended to remain comparable when a mechanism is expressed in different but consistent linear units.
+
+The reported matrix is the Jacobian of the complete driven position problem: all joint-constraint rows plus the prescribed-input row. Therefore these quantities diagnose the conditioning and rank of the **chosen solve formulation**. They may depend on which joint is selected as `input_joint` and should not be interpreted as a driver-independent classification of the mechanism.
+
+The initial diagnostics are deliberately descriptive rather than prescriptive:
+
+- `condition_numbers` reports the 2-norm condition number of the scaled Jacobian;
+- `min_singular_values` reports its smallest singular value;
+- `ranks` reports numerical rank using the standard floating-point SVD tolerance.
+
+An exactly rank-deficient Jacobian can therefore appear as `condition_number = inf`, `min_singular_value = 0`, and a reduced rank. Kimech does not yet apply a universal threshold for declaring a configuration "near singular".
+
+Diagnostics are preserved when slicing a `KinematicSolution`. Manually constructed `KinematicSolution` objects may omit diagnostics, in which case `solution.diagnostics is None`.
+
+## 11. Errors
 
 Public exception hierarchy:
 
@@ -428,7 +462,7 @@ KimechError
 
 No public singularity exception or condition-number policy exists in `0.3.0`.
 
-## 11. Validation
+## 12. Validation
 
 ```python
 report = mechanism.validate()
@@ -445,7 +479,7 @@ report.is_valid
 
 The mobility value is the planar lower-pair structural estimate. Validation does not promise complete detection of redundant constraints, special geometric degeneracies, toggles, or singularities.
 
-## 12. Visualization
+## 13. Visualization
 
 Visualization requires `[viz]` and remains Matplotlib-only.
 
@@ -486,7 +520,7 @@ GIF output can be delegated to Matplotlib/Pillow:
 animation.save("mechanism.gif", writer="pillow")
 ```
 
-## 13. Result snapshot semantics
+## 14. Result snapshot semantics
 
 Public `Configuration` and `KinematicSolution` constructors validate the structure, shape, finiteness, and entity compatibility of supplied state. They do not certify that manually supplied coordinates satisfy the mechanism constraints. Results returned by `solve()` contain states accepted by the solver.
 
@@ -494,7 +528,7 @@ For `Configuration`, any prescribed-input metadata (`input_position`, `input_vel
 
 Result objects retain the link layout captured when they are constructed or solved. This keeps the mapping between links and generalized state stable even if the mechanism object is later extended. Queries require entities compatible with that retained snapshot.
 
-## 14. Examples and tests
+## 15. Examples and tests
 
 The examples deliberately separate geometric motion/animation from quantitative differential analysis:
 
@@ -512,6 +546,6 @@ examples/
 
 The test suite covers model/constraint behavior, position solving, differential result state, velocity and acceleration solves, analytic second-order terms, four-bar and slider-crank acceptance, prismatically driven inverse analysis, visualization, and package metadata.
 
-## 15. Deliberately absent API
+## 16. Deliberately absent API
 
-`0.3.0` does not provide public abstractions for multiple inputs, motion laws, time histories, dynamics, forces, masses/inertias, formal singularity diagnostics, adaptive continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes.
+`0.3.0` does not provide public abstractions for multiple inputs, motion laws, time histories, dynamics, forces, masses/inertias, adaptive continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. Development toward `0.4.0` adds descriptive scaled-Jacobian diagnostics without yet defining a universal near-singularity policy.

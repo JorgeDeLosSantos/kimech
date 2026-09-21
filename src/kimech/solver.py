@@ -203,7 +203,7 @@ def _solve_requested_configuration(
     previous_accepted: np.ndarray | None,
 ) -> tuple[np.ndarray, int, str, int]:
     """Solve one requested sample and report its accepted recovery path."""
-    attempts = 0
+    attempt_counter = [0]
     first_error: KinematicSolveError | None = None
     preferred_strategy = (
         "initial_guess"
@@ -215,9 +215,9 @@ def _solve_requested_configuration(
         )
     )
 
-    attempts += 1
     try:
-        accepted = _solve_configuration(
+        accepted = _attempt_configuration(
+            attempt_counter,
             mechanism,
             links,
             joints,
@@ -227,7 +227,7 @@ def _solve_requested_configuration(
             scaling,
             input_index=input_index,
         )
-        return accepted, 0, preferred_strategy, attempts
+        return accepted, 0, preferred_strategy, attempt_counter[0]
     except KinematicSolveError as error:
         first_error = error
 
@@ -235,9 +235,9 @@ def _solve_requested_configuration(
         raise first_error
 
     if not np.array_equal(preferred_guess, previous_accepted):
-        attempts += 1
         try:
-            accepted = _solve_configuration(
+            accepted = _attempt_configuration(
+                attempt_counter,
                 mechanism,
                 links,
                 joints,
@@ -247,7 +247,7 @@ def _solve_requested_configuration(
                 scaling,
                 input_index=input_index,
             )
-            return accepted, 0, "warm_start", attempts
+            return accepted, 0, "warm_start", attempt_counter[0]
         except KinematicSolveError:
             pass
 
@@ -255,7 +255,7 @@ def _solve_requested_configuration(
         raise first_error
 
     try:
-        accepted, subdivision_count, subdivision_attempts = _solve_with_subdivision(
+        accepted, subdivision_count = _solve_with_subdivision(
             mechanism,
             links,
             joints,
@@ -266,15 +266,37 @@ def _solve_requested_configuration(
             scaling=scaling,
             input_index=input_index,
             depth=0,
+            attempt_counter=attempt_counter,
         )
     except KinematicSolveError:
         raise first_error
-    return (
-        accepted,
-        subdivision_count,
-        "subdivision",
-        attempts + subdivision_attempts,
+    return accepted, subdivision_count, "subdivision", attempt_counter[0]
+
+def _attempt_configuration(
+    attempt_counter: list[int],
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    joints: tuple[_Joint, ...],
+    input_joint: _Joint,
+    input_value: float,
+    initial_q: np.ndarray,
+    scaling: NumericalScaling,
+    *,
+    input_index: int,
+) -> np.ndarray:
+    """Call the nonlinear corrector while recording one attempted solve."""
+    attempt_counter[0] += 1
+    return _solve_configuration(
+        mechanism,
+        links,
+        joints,
+        input_joint,
+        input_value,
+        initial_q,
+        scaling,
+        input_index=input_index,
     )
+
 
 def _solve_step_from_accepted(
     mechanism: Mechanism,
@@ -287,8 +309,9 @@ def _solve_step_from_accepted(
     target_input_value: float,
     scaling: NumericalScaling,
     input_index: int,
-) -> tuple[np.ndarray, int]:
-    """Attempt one continuation step and return accepted state plus attempts."""
+    attempt_counter: list[int],
+) -> np.ndarray:
+    """Attempt one continuation step using predictor first, then warm start."""
     predicted = _predict_next_configuration(
         mechanism,
         links,
@@ -301,7 +324,8 @@ def _solve_step_from_accepted(
         input_index=input_index,
     )
     try:
-        accepted = _solve_configuration(
+        return _attempt_configuration(
+            attempt_counter,
             mechanism,
             links,
             joints,
@@ -311,11 +335,11 @@ def _solve_step_from_accepted(
             scaling,
             input_index=input_index,
         )
-        return accepted, 1
     except KinematicSolveError:
         if np.array_equal(predicted, start_q):
             raise
-        accepted = _solve_configuration(
+        return _attempt_configuration(
+            attempt_counter,
             mechanism,
             links,
             joints,
@@ -325,7 +349,6 @@ def _solve_step_from_accepted(
             scaling,
             input_index=input_index,
         )
-        return accepted, 2
 
 
 def _solve_with_subdivision(
@@ -340,8 +363,9 @@ def _solve_with_subdivision(
     scaling: NumericalScaling,
     input_index: int,
     depth: int,
-) -> tuple[np.ndarray, int, int]:
-    """Recover a failed step and report internal points plus corrector attempts."""
+    attempt_counter: list[int],
+) -> tuple[np.ndarray, int]:
+    """Recover a failed requested step by recursively bisecting its input interval."""
     if depth >= _MAX_SUBDIVISION_DEPTH:
         raise KinematicSolveError(
             f"adaptive subdivision exhausted at input index {input_index} "
@@ -356,7 +380,7 @@ def _solve_with_subdivision(
         )
 
     try:
-        midpoint_q, midpoint_attempts = _solve_step_from_accepted(
+        midpoint_q = _solve_step_from_accepted(
             mechanism,
             links,
             joints,
@@ -366,9 +390,10 @@ def _solve_with_subdivision(
             target_input_value=midpoint,
             scaling=scaling,
             input_index=input_index,
+            attempt_counter=attempt_counter,
         )
     except KinematicSolveError:
-        midpoint_q, left_count, left_attempts = _solve_with_subdivision(
+        midpoint_q, left_count = _solve_with_subdivision(
             mechanism,
             links,
             joints,
@@ -379,13 +404,13 @@ def _solve_with_subdivision(
             scaling=scaling,
             input_index=input_index,
             depth=depth + 1,
+            attempt_counter=attempt_counter,
         )
     else:
         left_count = 0
-        left_attempts = midpoint_attempts
 
     try:
-        target_q, target_attempts = _solve_step_from_accepted(
+        target_q = _solve_step_from_accepted(
             mechanism,
             links,
             joints,
@@ -395,10 +420,11 @@ def _solve_with_subdivision(
             target_input_value=target_input_value,
             scaling=scaling,
             input_index=input_index,
+            attempt_counter=attempt_counter,
         )
-        return target_q, left_count + 1, left_attempts + target_attempts
+        return target_q, left_count + 1
     except KinematicSolveError:
-        target_q, right_count, right_attempts = _solve_with_subdivision(
+        target_q, right_count = _solve_with_subdivision(
             mechanism,
             links,
             joints,
@@ -409,12 +435,9 @@ def _solve_with_subdivision(
             scaling=scaling,
             input_index=input_index,
             depth=depth + 1,
+            attempt_counter=attempt_counter,
         )
-        return (
-            target_q,
-            left_count + 1 + right_count,
-            left_attempts + right_attempts,
-        )
+        return target_q, left_count + 1 + right_count
 
 
 def _predict_next_configuration(

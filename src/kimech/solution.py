@@ -532,7 +532,7 @@ class KinematicSolution:
                     if self._input_accelerations is None
                     else self._input_accelerations[index]
                 ),
-                diagnostics=(None if self._diagnostics is None else self._diagnostics[index]),
+                diagnostics=(None if self._diagnostics is None else self._diagnostics._slice(index)),
             )
 
         item = operator.index(index)

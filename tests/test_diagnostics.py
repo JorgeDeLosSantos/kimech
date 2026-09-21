@@ -59,6 +59,12 @@ def test_solve_returns_structured_full_rank_diagnostics():
     np.testing.assert_allclose(diagnostics.condition_numbers, np.ones(3))
     np.testing.assert_allclose(diagnostics.min_singular_values, np.ones(3))
     np.testing.assert_array_equal(diagnostics.ranks, np.full(3, 3))
+    np.testing.assert_array_equal(
+        diagnostics.strategies,
+        ["initial_guess", "predictor", "predictor"],
+    )
+    np.testing.assert_array_equal(diagnostics.corrector_attempts, [1, 1, 1])
+    assert np.all(diagnostics.residual_norms <= 1e-9)
 
 
 def test_diagnostics_follow_solution_slicing():
@@ -84,6 +90,18 @@ def test_diagnostics_follow_solution_slicing():
     np.testing.assert_array_equal(
         subset.diagnostics.subdivision_counts,
         solution.diagnostics.subdivision_counts[1:],
+    )
+    np.testing.assert_array_equal(
+        subset.diagnostics.strategies,
+        solution.diagnostics.strategies[1:],
+    )
+    np.testing.assert_array_equal(
+        subset.diagnostics.corrector_attempts,
+        solution.diagnostics.corrector_attempts[1:],
+    )
+    np.testing.assert_array_equal(
+        subset.diagnostics.residual_norms,
+        solution.diagnostics.residual_norms[1:],
     )
 
 

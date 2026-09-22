@@ -149,22 +149,43 @@ def test_parallel_joints_get_distinct_curves_without_collapsing_identity():
 
 
 def test_layout_is_independent_of_physical_point_coordinates():
-    mechanism_a = _four_bar()
-    mechanism_b = _four_bar()
+    mechanism_a = Mechanism("first")
+    mechanism_b = Mechanism("second")
 
-    for body in (mechanism_b.ground, *mechanism_b.links):
-        for point in body.points:
-            object.__setattr__(
-                point,
-                "_coordinates",
-                (1000.0 * point._coordinates[0], -50.0 + 1000.0 * point._coordinates[1]),
-            )
+    def populate(mechanism, scale, offset):
+        ground_a = mechanism.ground.add_point("A", offset)
+        ground_d = mechanism.ground.add_point(
+            "D",
+            (offset[0] + 0.30 * scale, offset[1]),
+        )
 
-    layout_a = _topology_layout(mechanism_a.topology())
-    layout_b = _topology_layout(mechanism_b.topology())
+        crank = mechanism.add_link("crank")
+        crank_a = crank.add_point("A", (0.0, 0.0))
+        crank_b = crank.add_point("B", (0.08 * scale, 0.0))
 
-    positions_a = np.asarray([layout_a[body] for body in mechanism_a.topology().bodies])
-    positions_b = np.asarray([layout_b[body] for body in mechanism_b.topology().bodies])
+        coupler = mechanism.add_link("coupler")
+        coupler_b = coupler.add_point("B", (0.0, 0.0))
+        coupler_c = coupler.add_point("C", (0.22 * scale, 0.0))
+
+        rocker = mechanism.add_link("rocker")
+        rocker_c = rocker.add_point("C", (0.0, 0.0))
+        rocker_d = rocker.add_point("D", (0.18 * scale, 0.0))
+
+        mechanism.revolute(ground_a, crank_a)
+        mechanism.revolute(crank_b, coupler_b)
+        mechanism.revolute(coupler_c, rocker_c)
+        mechanism.revolute(rocker_d, ground_d)
+
+    populate(mechanism_a, 1.0, (0.0, 0.0))
+    populate(mechanism_b, 1000.0, (50.0, -20.0))
+
+    topology_a = mechanism_a.topology()
+    topology_b = mechanism_b.topology()
+    layout_a = _topology_layout(topology_a)
+    layout_b = _topology_layout(topology_b)
+
+    positions_a = np.asarray([layout_a[body] for body in topology_a.bodies])
+    positions_b = np.asarray([layout_b[body] for body in topology_b.bodies])
     np.testing.assert_allclose(positions_a, positions_b)
 
 

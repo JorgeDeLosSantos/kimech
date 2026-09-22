@@ -6,6 +6,7 @@ from .joints import PrismaticJoint, RevoluteJoint
 from .model import Ground, Link, Mechanism, Point
 from .solver import solve
 from .solution import Configuration, KinematicSolution
+from .topology import MechanismTopology
 from .validation import ValidationReport
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     "KinematicSolution",
     "Link",
     "Mechanism",
+    "MechanismTopology",
     "Point",
     "PrismaticJoint",
     "RevoluteJoint",

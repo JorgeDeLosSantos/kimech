@@ -43,6 +43,7 @@ src/
     ├── __init__.py
     ├── model.py
     ├── joints.py
+    ├── topology.py
     ├── solution.py
     ├── diagnostics.py
     ├── solver.py
@@ -64,6 +65,7 @@ The package remains intentionally flat. Mechanism-specific solver classes, backe
 
 - `model.py` owns `Mechanism`, `Link`, `Ground`, and `Point`, including topology and local point geometry. Models do not store solved state or perform numerical solves.
 - `joints.py` owns immutable `RevoluteJoint` and `PrismaticJoint` domain objects.
+- `topology.py` owns immutable-from-the-caller's-perspective structural topology snapshots through `MechanismTopology`.
 - `_geometry.py` contains private planar numerical helpers.
 - `_constraints.py` assembles private residual, Jacobian, and analytic second-order constraint contributions.
 - `_differential.py` solves private velocity and acceleration linear systems and independently verifies their residuals.
@@ -91,6 +93,7 @@ from kimech import (
     KinematicSolveError,
     Link,
     Mechanism,
+    MechanismTopology,
     Point,
     PrismaticJoint,
     RevoluteJoint,
@@ -141,6 +144,7 @@ class Mechanism:
     def add_link(self, name: str) -> Link: ...
     def revolute(...) -> RevoluteJoint: ...
     def prismatic(...) -> PrismaticJoint: ...
+    def topology(self) -> MechanismTopology: ...
     def mobility(self) -> int: ...
     def validate(self) -> ValidationReport: ...
     def __getitem__(self, name: str) -> Link: ...
@@ -165,6 +169,38 @@ A `Point` exposes `name`, `body`, and `local`. `local` returns a safe NumPy copy
 `RevoluteJoint` stores `point_a`, `point_b`, and optional `name`.
 
 `PrismaticJoint` additionally stores normalized local `axis_a` and `axis_b`. `axis_a` defines the sign of the natural prismatic coordinate and its derivatives.
+
+
+### Structural topology
+
+```python
+topology = mechanism.topology()
+```
+
+`MechanismTopology` is a structural snapshot of the mechanism modeled semantically as an undirected body-joint multigraph. Bodies are vertices and joints are edges; parallel joints between the same pair of bodies retain their identities.
+
+The snapshot exposes:
+
+```python
+topology.mechanism
+topology.bodies
+topology.joints
+
+topology.incident_joints(body)
+topology.adjacent_bodies(body)
+topology.joints_between(body_a, body_b)
+topology.degree(body)
+
+topology.connected_components
+topology.is_connected
+topology.cycle_rank
+```
+
+Ordering is deterministic. `bodies` contains ground first and then mobile links in creation order; joint-valued queries preserve joint creation order. `degree(body)` counts incident joints rather than unique neighboring bodies.
+
+`cycle_rank` is the undirected multigraph quantity `E - V + C`. It is purely structural and is not mobility, constraint rank, or an assembly-mode count.
+
+Topology objects use snapshot semantics: extending the source mechanism later does not change an existing `MechanismTopology`. Calling `mechanism.topology()` again produces a fresh structural snapshot.
 
 ## 5. Solving
 

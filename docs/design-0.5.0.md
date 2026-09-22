@@ -77,6 +77,12 @@ Potential capabilities include:
 The API should remain domain-focused and should not require NetworkX as a core
 dependency unless a concrete need appears.
 
+The initial topology study recommends a dedicated public
+`MechanismTopology` snapshot, discoverable through `Mechanism.topology()`.
+Its structural semantics are those of an undirected body-joint multigraph so
+that joint identity and parallel connections are preserved. See
+[`study-0.5.0-topology.md`](study-0.5.0-topology.md).
+
 #### Acceptance direction
 
 - topology information is deterministic and immutable from the caller's point
@@ -290,22 +296,34 @@ Kimech 0.5.0 should be considered complete only if:
 - documentation clearly separates structural topology, physical configuration,
   and driven-solve diagnostics.
 
-## 10. Open design questions
+## 10. Design questions
 
-The first exploration should answer:
+### Resolved for topology
 
-1. Should topology be exposed as methods on `Mechanism`, as a dedicated
-   immutable `MechanismTopology` object, or through a small analysis module?
-2. Which topology concepts are sufficiently well-defined to make public now?
-3. Should structured failure data live directly on `KinematicSolveError` or
+The initial topology study resolves the first two planning questions:
+
+1. topology should use a dedicated immutable-from-the-caller's-perspective
+   `MechanismTopology` snapshot, discoverable through `Mechanism.topology()`;
+2. the first public concepts should be body/joint snapshots, incident joints,
+   adjacent bodies, joints between bodies, multigraph degree, connected
+   components, connectivity, and cycle rank.
+
+Loop enumeration, a canonical cycle basis, matrices, generic traversal APIs,
+and graph-library objects remain deferred.
+
+See [`study-0.5.0-topology.md`](study-0.5.0-topology.md).
+
+### Still open
+
+1. Should structured failure data live directly on `KinematicSolveError` or
    in a dedicated immutable context object?
-4. Should diagnostic summaries be methods/properties of `SolveDiagnostics`
+2. Should diagnostic summaries be methods/properties of `SolveDiagnostics`
    or remain user-computed NumPy operations?
-5. Should `dq/du` be stored in every `KinematicSolution` or computed lazily
+3. Should `dq/du` be stored in every `KinematicSolution` or computed lazily
    on request?
-6. Which sensitivity queries belong in 0.5.0 without overcommitting the future
+4. Which sensitivity queries belong in 0.5.0 without overcommitting the future
    multi-DOF API?
-7. Which complex mechanisms should become permanent acceptance tests rather
+5. Which complex mechanisms should become permanent acceptance tests rather
    than remain reproducible studies?
 
-These questions define the initial 0.5.0 design phase.
+These questions define the remaining initial 0.5.0 design phase.

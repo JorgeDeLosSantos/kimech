@@ -106,7 +106,7 @@ from kimech import (
 Visualization is imported separately:
 
 ```python
-from kimech.visualization import animate, plot
+from kimech.visualization import animate, plot, plot_topology
 ```
 
 The core dependencies are NumPy and SciPy. Visualization is an optional extra containing Matplotlib and Pillow:
@@ -557,6 +557,18 @@ fig.savefig("mechanism.svg")
 Kimech renders a schematic rigid-body scaffold rather than physical/CAD geometry. Structural joint points define the primary scaffold. Mobile links with fewer than two structural points fall back to their declared body points so plate-like bodies remain visually coherent. Auxiliary points on an already-defined scaffold remain markers and receive lightweight visual connectors to that scaffold. Ground does not use this fallback.
 
 Joint glyph sizes are scaled from effective body scaffolds rather than arbitrary remote auxiliary points. The plot bounds still include all rendered geometry.
+
+### Topology plotting
+
+```python
+fig, ax = plot_topology(mechanism)
+# or:
+fig, ax = plot_topology(mechanism.topology())
+```
+
+`plot_topology()` renders the structural body/joint multigraph rather than physical mechanism geometry. Body-node positions are deterministic display coordinates and do not encode link dimensions, local point coordinates, or a solved configuration.
+
+Ground and mobile bodies are visually distinct. Revolute and prismatic joints use different glyphs, and multiple joints between the same two bodies are rendered as separate curved connections so joint identity is preserved. Disconnected components are laid out separately.
 
 ### Animation
 

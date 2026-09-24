@@ -2,7 +2,26 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
+
+
+@dataclass(frozen=True, slots=True)
+class SolveDiagnosticSummary:
+    """Compact descriptive summary of a solve-diagnostics history."""
+
+    sample_count: int
+    worst_condition_index: int | None
+    worst_condition_number: float | None
+    minimum_singular_value_index: int | None
+    minimum_singular_value: float | None
+    minimum_rank: int | None
+    max_subdivision_index: int | None
+    max_subdivision_count: int | None
+    max_corrector_attempt_index: int | None
+    max_corrector_attempts: int | None
+    strategy_counts: tuple[tuple[str, int], ...]
 
 
 class SolveDiagnostics:
@@ -130,6 +149,72 @@ class SolveDiagnostics:
     def __len__(self) -> int:
         return len(self._condition_numbers)
 
+    def summary(self) -> SolveDiagnosticSummary:
+        """Return descriptive extrema and solve-effort counts for this history."""
+        count = len(self)
+        if count == 0:
+            return SolveDiagnosticSummary(
+                sample_count=0,
+                worst_condition_index=None,
+                worst_condition_number=None,
+                minimum_singular_value_index=None,
+                minimum_singular_value=None,
+                minimum_rank=None,
+                max_subdivision_index=None,
+                max_subdivision_count=None,
+                max_corrector_attempt_index=None,
+                max_corrector_attempts=None,
+                strategy_counts=(),
+            )
+
+        worst_condition_index = int(np.argmax(self._condition_numbers))
+        minimum_singular_value_index = int(np.argmin(self._min_singular_values))
+
+        if self._subdivision_counts is None:
+            max_subdivision_index = None
+            max_subdivision_count = None
+        else:
+            max_subdivision_index = int(np.argmax(self._subdivision_counts))
+            max_subdivision_count = int(
+                self._subdivision_counts[max_subdivision_index]
+            )
+
+        if self._corrector_attempts is None:
+            max_corrector_attempt_index = None
+            max_corrector_attempts = None
+        else:
+            max_corrector_attempt_index = int(np.argmax(self._corrector_attempts))
+            max_corrector_attempts = int(
+                self._corrector_attempts[max_corrector_attempt_index]
+            )
+
+        if self._strategies is None:
+            strategy_counts: tuple[tuple[str, int], ...] = ()
+        else:
+            strategy_counts = tuple(
+                (strategy, int(np.count_nonzero(self._strategies == strategy)))
+                for strategy in _STRATEGY_ORDER
+                if np.any(self._strategies == strategy)
+            )
+
+        return SolveDiagnosticSummary(
+            sample_count=count,
+            worst_condition_index=worst_condition_index,
+            worst_condition_number=float(
+                self._condition_numbers[worst_condition_index]
+            ),
+            minimum_singular_value_index=minimum_singular_value_index,
+            minimum_singular_value=float(
+                self._min_singular_values[minimum_singular_value_index]
+            ),
+            minimum_rank=int(np.min(self._ranks)),
+            max_subdivision_index=max_subdivision_index,
+            max_subdivision_count=max_subdivision_count,
+            max_corrector_attempt_index=max_corrector_attempt_index,
+            max_corrector_attempts=max_corrector_attempts,
+            strategy_counts=strategy_counts,
+        )
+
     def _slice(self, index: slice) -> SolveDiagnostics:
         """Return a sliced diagnostics history for result-container internals."""
         if not isinstance(index, slice):
@@ -222,9 +307,13 @@ def _nonnegative_int_array(value: object, *, name: str) -> np.ndarray:
     return result
 
 
-_ALLOWED_STRATEGIES = frozenset(
-    {"initial_guess", "predictor", "warm_start", "subdivision"}
+_STRATEGY_ORDER = (
+    "initial_guess",
+    "predictor",
+    "warm_start",
+    "subdivision",
 )
+_ALLOWED_STRATEGIES = frozenset(_STRATEGY_ORDER)
 
 
 def _strategy_array(value: object) -> np.ndarray:

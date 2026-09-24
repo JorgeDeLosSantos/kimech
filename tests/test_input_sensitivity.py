@@ -147,7 +147,9 @@ def test_prismatic_input_sensitivity_is_exact():
 def test_four_bar_sensitivity_matches_central_finite_difference():
     mechanism, input_joint, rocker_joint, point, guess = _four_bar()
     center = 0.9
-    step = 1e-6
+    # Keep the finite-difference step comfortably above the nonlinear
+    # position-solve residual floor so solve error is not amplified by 1/h.
+    step = 1e-4
     values = [center - step, center, center + step]
 
     solution = solve(

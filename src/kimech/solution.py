@@ -312,6 +312,7 @@ class KinematicSolution:
         "_input_joint",
         "_input_positions",
         "_input_velocities",
+        "_joints",
         "_links",
         "_mechanism",
     )
@@ -333,6 +334,7 @@ class KinematicSolution:
         self._initialize(
             mechanism,
             mechanism.links,
+            mechanism.joints,
             input_joint,
             input_positions,
             coordinates,
@@ -348,6 +350,7 @@ class KinematicSolution:
         cls,
         mechanism: Mechanism,
         links: tuple[Link, ...],
+        joints: tuple[_Joint, ...],
         input_joint: _Joint,
         input_positions: Sequence[float] | np.ndarray,
         coordinates: Sequence[Sequence[float]] | np.ndarray,
@@ -362,6 +365,7 @@ class KinematicSolution:
         solution._initialize(
             mechanism,
             links,
+            joints,
             input_joint,
             input_positions,
             coordinates,
@@ -377,6 +381,7 @@ class KinematicSolution:
         self,
         mechanism: Mechanism,
         links: tuple[Link, ...],
+        joints: tuple[_Joint, ...],
         input_joint: _Joint,
         input_positions: Sequence[float] | np.ndarray,
         coordinates: Sequence[Sequence[float]] | np.ndarray,
@@ -428,6 +433,7 @@ class KinematicSolution:
 
         self._mechanism = mechanism
         self._links = links
+        self._joints = joints
         self._input_joint = input_joint
         self._input_positions = values
         self._input_velocities = input_velocity_array
@@ -509,6 +515,7 @@ class KinematicSolution:
             return KinematicSolution._from_snapshot(
                 self._mechanism,
                 self._links,
+                self._joints,
                 self._input_joint,
                 self._input_positions[index],
                 self._coordinates[index],

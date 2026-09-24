@@ -12,6 +12,7 @@ from ._geometry import as_vector2
 
 if TYPE_CHECKING:
     from .joints import PrismaticJoint, RevoluteJoint
+    from .topology import MechanismTopology
     from .validation import ValidationReport
 
 
@@ -168,6 +169,12 @@ class Mechanism:
         self._ensure_joint_belongs_here(joint)
         self._joints.append(joint)
         return joint
+
+    def topology(self) -> MechanismTopology:
+        """Return a structural topology snapshot of the mechanism."""
+        from .topology import MechanismTopology
+
+        return MechanismTopology(self)
 
     def mobility(self) -> int:
         """Return the planar lower-pair structural mobility estimate."""

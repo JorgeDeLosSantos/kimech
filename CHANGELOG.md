@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.5.0
+
+Kimech `0.5.0` consolidates the existing one-DOF planar R/P kinematics core around introspection, solve observability, and analysis.
+
+### Added
+
+- public structural topology snapshots through `Mechanism.topology()` and `MechanismTopology`;
+- topology queries for incident joints, adjacent bodies, joints between bodies, connected components, connectivity, degree, and cycle rank;
+- schematic topology visualization through `kimech.visualization.plot_topology()`;
+- structured numerical failure metadata through `SolveFailureContext` attached optionally to `KinematicSolveError.context`;
+- compact solve-history summaries through `SolveDiagnostics.summary()` and `SolveDiagnosticSummary`;
+- explicit input-coordinate sensitivity analysis through `input_sensitivity(solution)` and `InputSensitivity`;
+- `dq/du`, body-pose, point-position, and natural joint-coordinate sensitivity queries;
+- permanent complex-mechanism acceptance coverage for Archimedes trammel, Whitworth quick-return, and Watt II six-bar;
+- forward/reverse branch-consistency regression for the Watt II six-bar;
+- design/study documents for topology, sensitivity, and regression acceptance.
+
+### Changed
+
+- `KinematicSolution` now retains the joint snapshot associated with the solved mechanism state so later mechanism extensions do not alter downstream sensitivity semantics;
+- solve failures at position, velocity, acceleration, and input-tangent stages expose structured context when meaningful while preserving human-readable error messages;
+- requested-sample continuation failures report attempted recovery strategies and corrector-attempt counts;
+- result diagnostics can be summarized without exposing SciPy-specific counters;
+- documentation now distinguishes physical configuration, structural topology, driven-solve diagnostics, and input-coordinate sensitivity explicitly.
+
+### Design limits
+
+- topology visualization is structural/schematic and does not imply physical geometry;
+- input sensitivity is computed explicitly after a successful solve and is not a time derivative;
+- no universal singularity threshold, binary `is_singular` flag, or dedicated singularity exception is introduced;
+- no public Driver abstraction, multiple simultaneous prescribed inputs, general multi-DOF solving, motion-law abstraction, pseudo-arclength continuation, global branch enumeration, or dynamics are included;
+- automatic branch-independent initial-guess generation remains deferred;
+- Klann and Theo Jansen remain reproducible release-level studies rather than per-commit acceptance tests.
+
+
 ## 0.4.0
 
 Kimech `0.4.0` strengthens continuation robustness and adds structured numerical diagnostics without changing the public `solve()` signature.

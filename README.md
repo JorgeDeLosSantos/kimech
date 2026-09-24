@@ -2,9 +2,9 @@
 
 Kimech is a small Python library for modeling and solving the kinematics of planar rigid-body mechanisms.
 
-It provides declarative rigid-body models with revolute and prismatic joints, position solving with warm-start continuation, analytic velocity and acceleration kinematics, result queries, and schematic plotting and animation.
+It provides declarative rigid-body models with revolute and prismatic joints, robust one-DOF position/velocity/acceleration solving, structural topology introspection, structured numerical diagnostics, input-coordinate sensitivity analysis, and schematic plotting and animation.
 
-Kimech supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms with one prescribed joint coordinate. The `0.1.0` position-kinematics baseline is recorded in [`docs/design.md`](docs/design.md), the `0.2.0` differential-kinematics baseline in [`docs/design-0.2.0.md`](docs/design-0.2.0.md), and the solver-robustness design for `0.4.0` in [`docs/design-0.4.0.md`](docs/design-0.4.0.md). [`docs/api.md`](docs/api.md) documents the implemented public API.
+Kimech supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms with one prescribed joint coordinate. The current `0.5.0` consolidation baseline is recorded in [`docs/design-0.5.0.md`](docs/design-0.5.0.md); earlier design baselines remain available in the `docs/` directory. [`docs/api.md`](docs/api.md) documents the implemented public API.
 
 ## Installation
 
@@ -99,15 +99,38 @@ residuals = diagnostics.residual_norms
 
 These diagnostics describe the selected driven solve formulation. A configuration may therefore be regular for one chosen input and singular for another.
 
+Topology can be inspected independently of solved geometry:
+
+```python
+topology = mechanism.topology()
+print(topology.cycle_rank)
+print(topology.connected_components)
+```
+
+Input-coordinate sensitivity is an explicit downstream analysis:
+
+```python
+from kimech import input_sensitivity
+
+sensitivity = input_sensitivity(solution)
+dq_du = sensitivity.coordinate_derivatives
+point_dp_du = sensitivity.point_position_derivatives(point_p)
+```
+
+Sensitivity is with respect to the prescribed natural joint coordinate; it is not a time derivative.
+
 ## Visualization
 
 Visualization remains presentation-only and does not define physical time:
 
 ```python
 import matplotlib.pyplot as plt
-from kimech.visualization import animate
+from kimech.visualization import animate, plot_topology
 
 animation = animate(solution, fps=30)
+
+# Structural connectivity, independent of physical geometry
+fig, ax = plot_topology(mechanism)
 
 # Optional progressive trace for one or more mechanism points
 animation = animate(solution, fps=30, trace_points=[point_p])

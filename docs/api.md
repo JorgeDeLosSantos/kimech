@@ -1,8 +1,8 @@
 # Kimech — Package structure and public API
 
-> Status: current API for `0.4.0`.
+> Status: current API for `0.5.0`.
 >
-> Kimech remains a young project, and this API may evolve in future versions. [`design.md`](design.md) records the `0.1.0` position-kinematics baseline, [`design-0.2.0.md`](design-0.2.0.md) the differential-kinematics baseline, and [`design-0.4.0.md`](design-0.4.0.md) the solver-robustness design baseline.
+> Kimech remains a young project, and this API may evolve in future versions. [`design-0.5.0.md`](design-0.5.0.md) records the current consolidation baseline; earlier design documents remain available for historical context.
 
 ## 1. Overview
 
@@ -43,6 +43,8 @@ src/
     ├── __init__.py
     ├── model.py
     ├── joints.py
+    ├── topology.py
+    ├── sensitivity.py
     ├── solution.py
     ├── diagnostics.py
     ├── solver.py
@@ -58,12 +60,14 @@ src/
         └── animation.py
 ```
 
-The package remains intentionally flat. Mechanism-specific solver classes, backend registries, and plugin systems are not part of `0.4.0`.
+The package remains intentionally flat. Mechanism-specific solver classes, backend registries, and plugin systems are not part of `0.5.0`.
 
 ### Module responsibilities
 
 - `model.py` owns `Mechanism`, `Link`, `Ground`, and `Point`, including topology and local point geometry. Models do not store solved state or perform numerical solves.
 - `joints.py` owns immutable `RevoluteJoint` and `PrismaticJoint` domain objects.
+- `topology.py` owns immutable-from-the-caller's-perspective structural topology snapshots through `MechanismTopology`.
+- `sensitivity.py` provides explicit input-coordinate sensitivity analysis through `input_sensitivity()` and `InputSensitivity`.
 - `_geometry.py` contains private planar numerical helpers.
 - `_constraints.py` assembles private residual, Jacobian, and analytic second-order constraint contributions.
 - `_differential.py` solves private velocity and acceleration linear systems and independently verifies their residuals.
@@ -85,17 +89,22 @@ The public core surface is available from `kimech`:
 from kimech import (
     Configuration,
     Ground,
+    InputSensitivity,
     InvalidModelError,
     KimechError,
     KinematicSolution,
     KinematicSolveError,
     Link,
     Mechanism,
+    MechanismTopology,
     Point,
     PrismaticJoint,
     RevoluteJoint,
+    SolveDiagnosticSummary,
     SolveDiagnostics,
+    SolveFailureContext,
     ValidationReport,
+    input_sensitivity,
     solve,
 )
 ```
@@ -103,7 +112,7 @@ from kimech import (
 Visualization is imported separately:
 
 ```python
-from kimech.visualization import animate, plot
+from kimech.visualization import animate, plot, plot_topology
 ```
 
 The core dependencies are NumPy and SciPy. Visualization is an optional extra containing Matplotlib and Pillow:
@@ -141,6 +150,7 @@ class Mechanism:
     def add_link(self, name: str) -> Link: ...
     def revolute(...) -> RevoluteJoint: ...
     def prismatic(...) -> PrismaticJoint: ...
+    def topology(self) -> MechanismTopology: ...
     def mobility(self) -> int: ...
     def validate(self) -> ValidationReport: ...
     def __getitem__(self, name: str) -> Link: ...
@@ -165,6 +175,38 @@ A `Point` exposes `name`, `body`, and `local`. `local` returns a safe NumPy copy
 `RevoluteJoint` stores `point_a`, `point_b`, and optional `name`.
 
 `PrismaticJoint` additionally stores normalized local `axis_a` and `axis_b`. `axis_a` defines the sign of the natural prismatic coordinate and its derivatives.
+
+
+### Structural topology
+
+```python
+topology = mechanism.topology()
+```
+
+`MechanismTopology` is a structural snapshot of the mechanism modeled semantically as an undirected body-joint multigraph. Bodies are vertices and joints are edges; parallel joints between the same pair of bodies retain their identities.
+
+The snapshot exposes:
+
+```python
+topology.mechanism
+topology.bodies
+topology.joints
+
+topology.incident_joints(body)
+topology.adjacent_bodies(body)
+topology.joints_between(body_a, body_b)
+topology.degree(body)
+
+topology.connected_components
+topology.is_connected
+topology.cycle_rank
+```
+
+Ordering is deterministic. `bodies` contains ground first and then mobile links in creation order; joint-valued queries preserve joint creation order. `degree(body)` counts incident joints rather than unique neighboring bodies.
+
+`cycle_rank` is the undirected multigraph quantity `E - V + C`. It is purely structural and is not mobility, constraint rank, or an assembly-mode count.
+
+Topology objects use snapshot semantics: extending the source mechanism later does not change an existing `MechanismTopology`. Calling `mechanism.topology()` again produces a fresh structural snapshot.
 
 ## 5. Solving
 
@@ -383,7 +425,47 @@ for config in solution:
 
 Fancy indexing and mutation operations such as item assignment, `append`, or `extend` are not part of the public API. Empty `KinematicSolution` objects are valid containers, although `solve()` does not produce them.
 
-## 9. Intentional breaking changes
+## 9. Input-coordinate sensitivity
+
+Input-coordinate sensitivity is an explicit downstream analysis of an accepted solution:
+
+```python
+solution = solve(...)
+sensitivity = input_sensitivity(solution)
+```
+
+It evaluates the local derivative
+
+\[
+\frac{dq}{du}
+\]
+
+at every requested configuration, where `u` is the natural coordinate of the selected `input_joint`. Sensitivity is not a time derivative and does not require `input_velocity` or `input_acceleration`.
+
+`InputSensitivity` exposes:
+
+```python
+sensitivity.mechanism
+sensitivity.input_joint
+sensitivity.input_positions
+sensitivity.coordinate_derivatives
+
+sensitivity.body_pose_derivatives(body)
+sensitivity.point_position_derivatives(point)
+sensitivity.joint_coordinate_derivatives(joint)
+```
+
+For `N` configurations and `n` mobile bodies, `coordinate_derivatives` has shape `(N, 3*n)`. The selected input joint has coordinate derivative one up to numerical precision.
+
+The values are returned in the user's coordinate convention. With a revolute input, translational components are length per input angle; with a prismatic input, translational components are length per input displacement. Kimech does not attach a unit package.
+
+Sensitivity reuses the dimensionless scaled driven Jacobian formulation. If a reliable tangent cannot be computed at a requested sample, `input_sensitivity()` raises `KinematicSolveError` with structured failure context. The original position solution remains valid and unchanged.
+
+Sensitivity is deliberately not computed by every `solve()` call and no `compute_sensitivity` flag is provided. This keeps analysis optional and avoids redefining a valid position solution when the selected driven coordinate becomes locally singular.
+
+See [`study-0.5.0-input-sensitivity.md`](study-0.5.0-input-sensitivity.md).
+
+## 10. Intentional breaking changes
 
 Because Kimech remains pre-`1.0`, API cleanups are applied without compatibility aliases.
 
@@ -415,7 +497,7 @@ KinematicSolution.link_poses()
 
 See [`CHANGELOG.md`](../CHANGELOG.md).
 
-## 10. Solve diagnostics
+## 11. Solve diagnostics
 
 Solutions returned by `solve()` include structured numerical diagnostics:
 
@@ -461,7 +543,27 @@ The strategy names describe continuation behavior rather than a numerical backen
 
 Kimech deliberately does not expose SciPy-specific counters such as `nfev` or `njev` as part of `SolveDiagnostics`. Process diagnostics are intended to remain meaningful if the nonlinear backend changes.
 
-## 11. Adaptive subdivision
+A compact descriptive summary is available through:
+
+```python
+summary = solution.diagnostics.summary()
+
+summary.sample_count
+summary.worst_condition_index
+summary.worst_condition_number
+summary.minimum_singular_value_index
+summary.minimum_singular_value
+summary.minimum_rank
+summary.max_subdivision_index
+summary.max_subdivision_count
+summary.max_corrector_attempt_index
+summary.max_corrector_attempts
+summary.strategy_counts
+```
+
+`SolveDiagnosticSummary` reports extrema and solve effort only. It deliberately does not define a universal singularity threshold or an `is_singular` flag.
+
+## 12. Adaptive subdivision
 
 Position sweeps use predictor-corrector continuation. If a requested sample cannot be solved from the predictor, Kimech retries from the previous accepted configuration. If both attempts fail and there is a previous accepted sample, Kimech may recursively bisect the input interval and solve internal intermediate configurations.
 
@@ -474,7 +576,7 @@ The subdivision is an internal recovery mechanism:
 
 Adaptive subdivision does not make unreachable targets solvable and does not cross folds where the selected `input_joint` ceases to be a valid local parameter. See `docs/study-0.4.0-singularity-diagnostics.md` for examples involving slider-crank dead-centers and four-bar rocker toggles.
 
-## 12. Errors
+## 13. Errors
 
 Public exception hierarchy:
 
@@ -486,11 +588,22 @@ KimechError
 
 `InvalidModelError` reports structurally invalid models or solve problems.
 
-`KinematicSolveError` reports numerical failures at position, velocity, or acceleration level. Differential failures identify the stage and, for sweeps, the input index/value when available. Kimech independently verifies accepted residuals rather than trusting the underlying numerical routine alone.
+`KinematicSolveError` reports numerical failures at position, velocity, or acceleration level. Its message remains human-readable and backward-compatible, while `error.context` may provide a structured immutable `SolveFailureContext`:
 
-No public singularity exception or condition-number policy exists in `0.4.0`.
+```python
+try:
+    solution = solve(...)
+except KinematicSolveError as error:
+    context = error.context
+```
 
-## 13. Validation
+When available, the context records the kinematic stage, requested input index and position, independently checked residual norm, scaled-Jacobian condition number / minimum singular value / rank, and requested-sample recovery information such as attempted strategies and corrector-attempt count.
+
+Unavailable quantities are represented by `None`; Kimech does not fabricate diagnostics when a reliable candidate or Jacobian cannot be evaluated. The structured context describes Kimech semantics and does not expose SciPy-specific counters.
+
+No public singularity exception, universal condition-number threshold, or binary singularity policy is defined.
+
+## 14. Validation
 
 ```python
 report = mechanism.validate()
@@ -507,7 +620,7 @@ report.is_valid
 
 The mobility value is the planar lower-pair structural estimate. Validation does not promise complete detection of redundant constraints, special geometric degeneracies, toggles, or singularities.
 
-## 14. Visualization
+## 15. Visualization
 
 Visualization requires `[viz]` and remains Matplotlib-only.
 
@@ -521,6 +634,18 @@ fig.savefig("mechanism.svg")
 Kimech renders a schematic rigid-body scaffold rather than physical/CAD geometry. Structural joint points define the primary scaffold. Mobile links with fewer than two structural points fall back to their declared body points so plate-like bodies remain visually coherent. Auxiliary points on an already-defined scaffold remain markers and receive lightweight visual connectors to that scaffold. Ground does not use this fallback.
 
 Joint glyph sizes are scaled from effective body scaffolds rather than arbitrary remote auxiliary points. The plot bounds still include all rendered geometry.
+
+### Topology plotting
+
+```python
+fig, ax = plot_topology(mechanism)
+# or:
+fig, ax = plot_topology(mechanism.topology())
+```
+
+`plot_topology()` renders the structural body/joint multigraph rather than physical mechanism geometry. Body-node positions are deterministic display coordinates and do not encode link dimensions, local point coordinates, or a solved configuration.
+
+Ground and mobile bodies are visually distinct. Revolute and prismatic joints use different glyphs, and multiple joints between the same two bodies are rendered as separate curved connections so joint identity is preserved. Disconnected components are laid out separately.
 
 ### Animation
 
@@ -548,15 +673,15 @@ GIF output can be delegated to Matplotlib/Pillow:
 animation.save("mechanism.gif", writer="pillow")
 ```
 
-## 15. Result snapshot semantics
+## 16. Result snapshot semantics
 
 Public `Configuration` and `KinematicSolution` constructors validate the structure, shape, finiteness, and entity compatibility of supplied state. They do not certify that manually supplied coordinates satisfy the mechanism constraints. Results returned by `solve()` contain states accepted by the solver.
 
 For `Configuration`, any prescribed-input metadata (`input_position`, `input_velocity`, or `input_acceleration`) requires `input_joint`. Input acceleration additionally requires input velocity.
 
-Result objects retain the link layout captured when they are constructed or solved. This keeps the mapping between links and generalized state stable even if the mechanism object is later extended. Queries require entities compatible with that retained snapshot.
+Result objects retain the link layout captured when they are constructed or solved. Solve-generated `KinematicSolution` objects also retain the associated joint snapshot for downstream analyses such as input sensitivity. This keeps the mapping between entities and stored state stable even if the mechanism object is later extended. Queries require entities compatible with the retained snapshot.
 
-## 16. Examples and tests
+## 17. Examples and tests
 
 The examples deliberately separate geometric motion/animation from quantitative differential analysis:
 
@@ -574,8 +699,8 @@ examples/
 - `slider_crank_analysis.py` plots slider displacement, velocity, and acceleration versus crank angle and demonstrates equivalent prismatic-input reconstruction.
 - `slider_crank_analysis_comparison.py` compares position, velocity, and acceleration with an independent closed-form slider-crank solution.
 
-The test suite covers model/constraint behavior, position solving, differential result state, velocity and acceleration solves, analytic second-order terms, four-bar and slider-crank acceptance, prismatically driven inverse analysis, visualization, and package metadata.
+The test suite covers model/constraint behavior, position solving, differential result state, velocity and acceleration solves, analytic second-order terms, four-bar and slider-crank acceptance, prismatically driven inverse analysis, topology and topology visualization, structured failure observability, input sensitivity, complex-mechanism regression acceptance, visualization, and package metadata.
 
-## 17. Deliberately absent API
+## 18. Deliberately absent API
 
-`0.4.0` does not provide public abstractions for multiple inputs, motion laws, time histories, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. The release adds descriptive scaled-Jacobian and solve-process diagnostics plus bounded internal adaptive subdivision without defining a universal near-singularity policy.
+`0.5.0` does not provide public abstractions for multiple simultaneous inputs, a Driver abstraction, motion laws, time histories, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. The release adds structural topology introspection, structured solve observability, and explicit one-input sensitivity without defining a universal near-singularity policy.

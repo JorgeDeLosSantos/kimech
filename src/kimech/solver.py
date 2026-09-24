@@ -177,6 +177,7 @@ def solve(
     return KinematicSolution._from_snapshot(
         mechanism,
         links,
+        joints,
         input_joint,
         input_positions,
         coordinates,

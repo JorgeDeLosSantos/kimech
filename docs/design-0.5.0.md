@@ -313,17 +313,25 @@ and graph-library objects remain deferred.
 
 See [`study-0.5.0-topology.md`](study-0.5.0-topology.md).
 
+### Resolved for diagnostics and sensitivity
+
+The 0.5-C implementation uses a dedicated immutable `SolveFailureContext`
+attached optionally to `KinematicSolveError`, and
+`SolveDiagnostics.summary()` returns a `SolveDiagnosticSummary`.
+
+The 0.5-D sensitivity study resolves the next two questions:
+
+1. `dq/du` is computed explicitly on request through
+   `input_sensitivity(solution)`, rather than stored by every solve;
+2. the first public sensitivity surface includes generalized-coordinate,
+   body-pose, point-position, and natural joint-coordinate derivatives.
+
+See
+[`study-0.5.0-input-sensitivity.md`](study-0.5.0-input-sensitivity.md).
+
 ### Still open
 
-1. Should structured failure data live directly on `KinematicSolveError` or
-   in a dedicated immutable context object?
-2. Should diagnostic summaries be methods/properties of `SolveDiagnostics`
-   or remain user-computed NumPy operations?
-3. Should `dq/du` be stored in every `KinematicSolution` or computed lazily
-   on request?
-4. Which sensitivity queries belong in 0.5.0 without overcommitting the future
-   multi-DOF API?
-5. Which complex mechanisms should become permanent acceptance tests rather
+1. Which complex mechanisms should become permanent acceptance tests rather
    than remain reproducible studies?
 
 These questions define the remaining initial 0.5.0 design phase.

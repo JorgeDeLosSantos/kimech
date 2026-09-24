@@ -1,8 +1,8 @@
 # Kimech — Package structure and public API
 
-> Status: current API for `0.4.0`.
+> Status: current API for `0.5.0`.
 >
-> Kimech remains a young project, and this API may evolve in future versions. [`design.md`](design.md) records the `0.1.0` position-kinematics baseline, [`design-0.2.0.md`](design-0.2.0.md) the differential-kinematics baseline, and [`design-0.4.0.md`](design-0.4.0.md) the solver-robustness design baseline.
+> Kimech remains a young project, and this API may evolve in future versions. [`design-0.5.0.md`](design-0.5.0.md) records the current consolidation baseline; earlier design documents remain available for historical context.
 
 ## 1. Overview
 
@@ -60,7 +60,7 @@ src/
         └── animation.py
 ```
 
-The package remains intentionally flat. Mechanism-specific solver classes, backend registries, and plugin systems are not part of `0.4.0`.
+The package remains intentionally flat. Mechanism-specific solver classes, backend registries, and plugin systems are not part of `0.5.0`.
 
 ### Module responsibilities
 
@@ -679,7 +679,7 @@ Public `Configuration` and `KinematicSolution` constructors validate the structu
 
 For `Configuration`, any prescribed-input metadata (`input_position`, `input_velocity`, or `input_acceleration`) requires `input_joint`. Input acceleration additionally requires input velocity.
 
-Result objects retain the link layout captured when they are constructed or solved. This keeps the mapping between links and generalized state stable even if the mechanism object is later extended. Queries require entities compatible with that retained snapshot.
+Result objects retain the link layout captured when they are constructed or solved. Solve-generated `KinematicSolution` objects also retain the associated joint snapshot for downstream analyses such as input sensitivity. This keeps the mapping between entities and stored state stable even if the mechanism object is later extended. Queries require entities compatible with the retained snapshot.
 
 ## 17. Examples and tests
 
@@ -699,8 +699,8 @@ examples/
 - `slider_crank_analysis.py` plots slider displacement, velocity, and acceleration versus crank angle and demonstrates equivalent prismatic-input reconstruction.
 - `slider_crank_analysis_comparison.py` compares position, velocity, and acceleration with an independent closed-form slider-crank solution.
 
-The test suite covers model/constraint behavior, position solving, differential result state, velocity and acceleration solves, analytic second-order terms, four-bar and slider-crank acceptance, prismatically driven inverse analysis, visualization, and package metadata.
+The test suite covers model/constraint behavior, position solving, differential result state, velocity and acceleration solves, analytic second-order terms, four-bar and slider-crank acceptance, prismatically driven inverse analysis, topology and topology visualization, structured failure observability, input sensitivity, complex-mechanism regression acceptance, visualization, and package metadata.
 
 ## 18. Deliberately absent API
 
-`0.4.0` does not provide public abstractions for multiple inputs, motion laws, time histories, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. The release adds descriptive scaled-Jacobian and solve-process diagnostics plus bounded internal adaptive subdivision without defining a universal near-singularity policy.
+`0.5.0` does not provide public abstractions for multiple simultaneous inputs, a Driver abstraction, motion laws, time histories, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. The release adds structural topology introspection, structured solve observability, and explicit one-input sensitivity without defining a universal near-singularity policy.

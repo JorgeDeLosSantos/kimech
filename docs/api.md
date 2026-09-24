@@ -97,7 +97,9 @@ from kimech import (
     Point,
     PrismaticJoint,
     RevoluteJoint,
+    SolveDiagnosticSummary,
     SolveDiagnostics,
+    SolveFailureContext,
     ValidationReport,
     solve,
 )
@@ -497,6 +499,26 @@ The strategy names describe continuation behavior rather than a numerical backen
 
 Kimech deliberately does not expose SciPy-specific counters such as `nfev` or `njev` as part of `SolveDiagnostics`. Process diagnostics are intended to remain meaningful if the nonlinear backend changes.
 
+A compact descriptive summary is available through:
+
+```python
+summary = solution.diagnostics.summary()
+
+summary.sample_count
+summary.worst_condition_index
+summary.worst_condition_number
+summary.minimum_singular_value_index
+summary.minimum_singular_value
+summary.minimum_rank
+summary.max_subdivision_index
+summary.max_subdivision_count
+summary.max_corrector_attempt_index
+summary.max_corrector_attempts
+summary.strategy_counts
+```
+
+`SolveDiagnosticSummary` reports extrema and solve effort only. It deliberately does not define a universal singularity threshold or an `is_singular` flag.
+
 ## 11. Adaptive subdivision
 
 Position sweeps use predictor-corrector continuation. If a requested sample cannot be solved from the predictor, Kimech retries from the previous accepted configuration. If both attempts fail and there is a previous accepted sample, Kimech may recursively bisect the input interval and solve internal intermediate configurations.
@@ -522,9 +544,20 @@ KimechError
 
 `InvalidModelError` reports structurally invalid models or solve problems.
 
-`KinematicSolveError` reports numerical failures at position, velocity, or acceleration level. Differential failures identify the stage and, for sweeps, the input index/value when available. Kimech independently verifies accepted residuals rather than trusting the underlying numerical routine alone.
+`KinematicSolveError` reports numerical failures at position, velocity, or acceleration level. Its message remains human-readable and backward-compatible, while `error.context` may provide a structured immutable `SolveFailureContext`:
 
-No public singularity exception or condition-number policy exists in `0.4.0`.
+```python
+try:
+    solution = solve(...)
+except KinematicSolveError as error:
+    context = error.context
+```
+
+When available, the context records the kinematic stage, requested input index and position, independently checked residual norm, scaled-Jacobian condition number / minimum singular value / rank, and requested-sample recovery information such as attempted strategies and corrector-attempt count.
+
+Unavailable quantities are represented by `None`; Kimech does not fabricate diagnostics when a reliable candidate or Jacobian cannot be evaluated. The structured context describes Kimech semantics and does not expose SciPy-specific counters.
+
+No public singularity exception, universal condition-number threshold, or binary singularity policy is defined.
 
 ## 13. Validation
 

@@ -6,7 +6,8 @@ import numpy as np
 
 from ._constraints import acceleration_rhs, jacobian
 from ._scaling import NumericalScaling
-from .errors import KinematicSolveError
+from .diagnostics import _jacobian_metrics
+from .errors import KinematicSolveError, SolveFailureContext
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Link, Mechanism
 
@@ -122,6 +123,7 @@ def _solve_linear_state(
     try:
         candidate_hat = np.asarray(np.linalg.solve(matrix_hat, rhs_hat), dtype=float)
     except np.linalg.LinAlgError as error:
+        condition, minimum, rank = _jacobian_metrics(matrix_hat)
         raise KinematicSolveError(
             _failure_message(
                 stage,
@@ -129,7 +131,15 @@ def _solve_linear_state(
                 input_index=input_index,
                 residual_norm=float("nan"),
                 reason=f"linear solve failed: {error}",
-            )
+            ),
+            context=SolveFailureContext(
+                stage=stage,
+                input_index=input_index,
+                input_position=input_value,
+                condition_number=condition,
+                min_singular_value=minimum,
+                rank=rank,
+            ),
         ) from error
 
     expected_shape = (3 * link_count,)
@@ -148,6 +158,7 @@ def _solve_linear_state(
     ):
         return scaling.unscale_state(candidate_hat).copy()
 
+    condition, minimum, rank = _jacobian_metrics(matrix_hat)
     raise KinematicSolveError(
         _failure_message(
             stage,
@@ -155,7 +166,18 @@ def _solve_linear_state(
             input_index=input_index,
             residual_norm=residual_norm,
             reason="invalid or inaccurate linear solution",
-        )
+        ),
+        context=SolveFailureContext(
+            stage=stage,
+            input_index=input_index,
+            input_position=input_value,
+            residual_norm=(
+                residual_norm if np.isfinite(residual_norm) else None
+            ),
+            condition_number=condition,
+            min_singular_value=minimum,
+            rank=rank,
+        ),
     )
 
 

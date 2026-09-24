@@ -44,6 +44,7 @@ src/
     ├── model.py
     ├── joints.py
     ├── topology.py
+    ├── sensitivity.py
     ├── solution.py
     ├── diagnostics.py
     ├── solver.py
@@ -66,6 +67,7 @@ The package remains intentionally flat. Mechanism-specific solver classes, backe
 - `model.py` owns `Mechanism`, `Link`, `Ground`, and `Point`, including topology and local point geometry. Models do not store solved state or perform numerical solves.
 - `joints.py` owns immutable `RevoluteJoint` and `PrismaticJoint` domain objects.
 - `topology.py` owns immutable-from-the-caller's-perspective structural topology snapshots through `MechanismTopology`.
+- `sensitivity.py` provides explicit input-coordinate sensitivity analysis through `input_sensitivity()` and `InputSensitivity`.
 - `_geometry.py` contains private planar numerical helpers.
 - `_constraints.py` assembles private residual, Jacobian, and analytic second-order constraint contributions.
 - `_differential.py` solves private velocity and acceleration linear systems and independently verifies their residuals.
@@ -87,6 +89,7 @@ The public core surface is available from `kimech`:
 from kimech import (
     Configuration,
     Ground,
+    InputSensitivity,
     InvalidModelError,
     KimechError,
     KinematicSolution,
@@ -101,6 +104,7 @@ from kimech import (
     SolveDiagnostics,
     SolveFailureContext,
     ValidationReport,
+    input_sensitivity,
     solve,
 )
 ```
@@ -421,7 +425,47 @@ for config in solution:
 
 Fancy indexing and mutation operations such as item assignment, `append`, or `extend` are not part of the public API. Empty `KinematicSolution` objects are valid containers, although `solve()` does not produce them.
 
-## 9. Intentional breaking changes
+## 9. Input-coordinate sensitivity
+
+Input-coordinate sensitivity is an explicit downstream analysis of an accepted solution:
+
+```python
+solution = solve(...)
+sensitivity = input_sensitivity(solution)
+```
+
+It evaluates the local derivative
+
+\[
+\frac{dq}{du}
+\]
+
+at every requested configuration, where `u` is the natural coordinate of the selected `input_joint`. Sensitivity is not a time derivative and does not require `input_velocity` or `input_acceleration`.
+
+`InputSensitivity` exposes:
+
+```python
+sensitivity.mechanism
+sensitivity.input_joint
+sensitivity.input_positions
+sensitivity.coordinate_derivatives
+
+sensitivity.body_pose_derivatives(body)
+sensitivity.point_position_derivatives(point)
+sensitivity.joint_coordinate_derivatives(joint)
+```
+
+For `N` configurations and `n` mobile bodies, `coordinate_derivatives` has shape `(N, 3*n)`. The selected input joint has coordinate derivative one up to numerical precision.
+
+The values are returned in the user's coordinate convention. With a revolute input, translational components are length per input angle; with a prismatic input, translational components are length per input displacement. Kimech does not attach a unit package.
+
+Sensitivity reuses the dimensionless scaled driven Jacobian formulation. If a reliable tangent cannot be computed at a requested sample, `input_sensitivity()` raises `KinematicSolveError` with structured failure context. The original position solution remains valid and unchanged.
+
+Sensitivity is deliberately not computed by every `solve()` call and no `compute_sensitivity` flag is provided. This keeps analysis optional and avoids redefining a valid position solution when the selected driven coordinate becomes locally singular.
+
+See [`study-0.5.0-input-sensitivity.md`](study-0.5.0-input-sensitivity.md).
+
+## 10. Intentional breaking changes
 
 Because Kimech remains pre-`1.0`, API cleanups are applied without compatibility aliases.
 
@@ -453,7 +497,7 @@ KinematicSolution.link_poses()
 
 See [`CHANGELOG.md`](../CHANGELOG.md).
 
-## 10. Solve diagnostics
+## 11. Solve diagnostics
 
 Solutions returned by `solve()` include structured numerical diagnostics:
 
@@ -519,7 +563,7 @@ summary.strategy_counts
 
 `SolveDiagnosticSummary` reports extrema and solve effort only. It deliberately does not define a universal singularity threshold or an `is_singular` flag.
 
-## 11. Adaptive subdivision
+## 12. Adaptive subdivision
 
 Position sweeps use predictor-corrector continuation. If a requested sample cannot be solved from the predictor, Kimech retries from the previous accepted configuration. If both attempts fail and there is a previous accepted sample, Kimech may recursively bisect the input interval and solve internal intermediate configurations.
 
@@ -532,7 +576,7 @@ The subdivision is an internal recovery mechanism:
 
 Adaptive subdivision does not make unreachable targets solvable and does not cross folds where the selected `input_joint` ceases to be a valid local parameter. See `docs/study-0.4.0-singularity-diagnostics.md` for examples involving slider-crank dead-centers and four-bar rocker toggles.
 
-## 12. Errors
+## 13. Errors
 
 Public exception hierarchy:
 
@@ -559,7 +603,7 @@ Unavailable quantities are represented by `None`; Kimech does not fabricate diag
 
 No public singularity exception, universal condition-number threshold, or binary singularity policy is defined.
 
-## 13. Validation
+## 14. Validation
 
 ```python
 report = mechanism.validate()
@@ -576,7 +620,7 @@ report.is_valid
 
 The mobility value is the planar lower-pair structural estimate. Validation does not promise complete detection of redundant constraints, special geometric degeneracies, toggles, or singularities.
 
-## 14. Visualization
+## 15. Visualization
 
 Visualization requires `[viz]` and remains Matplotlib-only.
 
@@ -629,7 +673,7 @@ GIF output can be delegated to Matplotlib/Pillow:
 animation.save("mechanism.gif", writer="pillow")
 ```
 
-## 15. Result snapshot semantics
+## 16. Result snapshot semantics
 
 Public `Configuration` and `KinematicSolution` constructors validate the structure, shape, finiteness, and entity compatibility of supplied state. They do not certify that manually supplied coordinates satisfy the mechanism constraints. Results returned by `solve()` contain states accepted by the solver.
 
@@ -637,7 +681,7 @@ For `Configuration`, any prescribed-input metadata (`input_position`, `input_vel
 
 Result objects retain the link layout captured when they are constructed or solved. This keeps the mapping between links and generalized state stable even if the mechanism object is later extended. Queries require entities compatible with that retained snapshot.
 
-## 16. Examples and tests
+## 17. Examples and tests
 
 The examples deliberately separate geometric motion/animation from quantitative differential analysis:
 
@@ -657,6 +701,6 @@ examples/
 
 The test suite covers model/constraint behavior, position solving, differential result state, velocity and acceleration solves, analytic second-order terms, four-bar and slider-crank acceptance, prismatically driven inverse analysis, visualization, and package metadata.
 
-## 17. Deliberately absent API
+## 18. Deliberately absent API
 
 `0.4.0` does not provide public abstractions for multiple inputs, motion laws, time histories, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. The release adds descriptive scaled-Jacobian and solve-process diagnostics plus bounded internal adaptive subdivision without defining a universal near-singularity policy.

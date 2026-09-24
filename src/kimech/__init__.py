@@ -9,6 +9,7 @@ from .errors import (
 )
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Ground, Link, Mechanism, Point
+from .sensitivity import InputSensitivity, input_sensitivity
 from .solver import solve
 from .solution import Configuration, KinematicSolution
 from .topology import MechanismTopology
@@ -17,6 +18,7 @@ from .validation import ValidationReport
 __all__ = [
     "Configuration",
     "Ground",
+    "InputSensitivity",
     "InvalidModelError",
     "KimechError",
     "KinematicSolveError",
@@ -30,6 +32,7 @@ __all__ = [
     "SolveDiagnosticSummary",
     "SolveDiagnostics",
     "SolveFailureContext",
+    "input_sensitivity",
     "solve",
     "ValidationReport",
 ]

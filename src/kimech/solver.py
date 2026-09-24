@@ -11,7 +11,7 @@ from ._constraints import jacobian, residual
 from ._differential import solve_acceleration, solve_input_tangent, solve_velocity
 from ._scaling import NumericalScaling, build_numerical_scaling
 from .diagnostics import SolveDiagnostics, _jacobian_metrics
-from .errors import InvalidModelError, KinematicSolveError
+from .errors import InvalidModelError, KinematicSolveError, SolveFailureContext
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Link, Mechanism
 from .solution import Configuration, KinematicSolution
@@ -232,7 +232,11 @@ def _solve_requested_configuration(
         first_error = error
 
     if previous_accepted is None:
-        raise first_error
+        raise _with_recovery_context(
+            first_error,
+            attempted_strategies=(preferred_strategy,),
+            corrector_attempts=attempt_counter[0],
+        )
 
     if not np.array_equal(preferred_guess, previous_accepted):
         try:
@@ -252,7 +256,16 @@ def _solve_requested_configuration(
             pass
 
     if previous_input_value is None or input_value == previous_input_value:
-        raise first_error
+        attempted = (
+            (preferred_strategy, "warm_start")
+            if preferred_strategy != "warm_start"
+            else (preferred_strategy,)
+        )
+        raise _with_recovery_context(
+            first_error,
+            attempted_strategies=attempted,
+            corrector_attempts=attempt_counter[0],
+        )
 
     try:
         accepted, subdivision_count = _solve_with_subdivision(
@@ -269,7 +282,16 @@ def _solve_requested_configuration(
             attempt_counter=attempt_counter,
         )
     except KinematicSolveError:
-        raise first_error
+        attempted = (
+            (preferred_strategy, "warm_start", "subdivision")
+            if preferred_strategy != "warm_start"
+            else (preferred_strategy, "subdivision")
+        )
+        raise _with_recovery_context(
+            first_error,
+            attempted_strategies=attempted,
+            corrector_attempts=attempt_counter[0],
+        )
     return accepted, subdivision_count, "subdivision", attempt_counter[0]
 
 def _attempt_configuration(
@@ -369,14 +391,24 @@ def _solve_with_subdivision(
     if depth >= _MAX_SUBDIVISION_DEPTH:
         raise KinematicSolveError(
             f"adaptive subdivision exhausted at input index {input_index} "
-            f"(target={target_input_value:.12g}, depth={depth})"
+            f"(target={target_input_value:.12g}, depth={depth})",
+            context=SolveFailureContext(
+                stage="position",
+                input_index=input_index,
+                input_position=target_input_value,
+            ),
         )
 
     midpoint = 0.5 * (start_input_value + target_input_value)
     if midpoint == start_input_value or midpoint == target_input_value:
         raise KinematicSolveError(
             f"adaptive subdivision reached floating-point step limit at input index "
-            f"{input_index} (target={target_input_value:.12g})"
+            f"{input_index} (target={target_input_value:.12g})",
+            context=SolveFailureContext(
+                stage="position",
+                input_index=input_index,
+                input_position=target_input_value,
+            ),
         )
 
     try:
@@ -627,6 +659,32 @@ def _pack_poses(poses: list[object]) -> np.ndarray:
     return packed
 
 
+def _with_recovery_context(
+    error: KinematicSolveError,
+    *,
+    attempted_strategies: tuple[str, ...],
+    corrector_attempts: int,
+) -> KinematicSolveError:
+    """Return an equivalent failure enriched with requested-sample recovery data."""
+    context = error.context
+    if context is None:
+        return KinematicSolveError(str(error))
+    return KinematicSolveError(
+        str(error),
+        context=SolveFailureContext(
+            stage=context.stage,
+            input_index=context.input_index,
+            input_position=context.input_position,
+            residual_norm=context.residual_norm,
+            condition_number=context.condition_number,
+            min_singular_value=context.min_singular_value,
+            rank=context.rank,
+            attempted_strategies=attempted_strategies,
+            corrector_attempts=corrector_attempts,
+        ),
+    )
+
+
 def _solve_configuration(
     mechanism: Mechanism,
     links: tuple[Link, ...],
@@ -685,7 +743,28 @@ def _solve_configuration(
     norm_text = f"{residual_norm:.12g}" if np.isfinite(residual_norm) else "unavailable"
     success = bool(getattr(result, "success", False))
     message = getattr(result, "message", "unavailable")
+    condition_number = None
+    min_singular_value = None
+    rank = None
+    if candidate_valid:
+        try:
+            matrix_hat = jac(candidate_hat)
+            condition_number, min_singular_value, rank = _jacobian_metrics(matrix_hat)
+        except (TypeError, ValueError, np.linalg.LinAlgError):
+            pass
+
     raise KinematicSolveError(
         f"failed to solve {location}: residual_inf={norm_text}; "
-        f"solver success={success}; solver message={message}"
+        f"solver success={success}; solver message={message}",
+        context=SolveFailureContext(
+            stage="position",
+            input_index=input_index,
+            input_position=input_value,
+            residual_norm=(
+                residual_norm if np.isfinite(residual_norm) else None
+            ),
+            condition_number=condition_number,
+            min_singular_value=min_singular_value,
+            rank=rank,
+        ),
     )

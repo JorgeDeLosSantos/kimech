@@ -99,9 +99,11 @@ class InputSensitivity:
 
     def joint_coordinate_derivatives(self, joint: _Joint) -> np.ndarray:
         """Return joint-coordinate derivatives with respect to the input coordinate."""
-        _validate_joint(self._mechanism, self._links, joint)
+        if not isinstance(joint, (RevoluteJoint, PrismaticJoint)):
+            raise TypeError("joint must be a RevoluteJoint or PrismaticJoint")
         if not any(joint is item for item in self._joints):
             raise ValueError("joint does not belong to this sensitivity snapshot")
+        _validate_joint(self._mechanism, self._links, joint)
 
         values = np.empty(len(self), dtype=float)
         for index in range(len(self)):

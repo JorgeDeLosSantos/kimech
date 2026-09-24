@@ -1,7 +1,12 @@
 """Kimech: planar mechanism kinematics for Python."""
 
-from .diagnostics import SolveDiagnostics
-from .errors import InvalidModelError, KimechError, KinematicSolveError
+from .diagnostics import SolveDiagnosticSummary, SolveDiagnostics
+from .errors import (
+    InvalidModelError,
+    KimechError,
+    KinematicSolveError,
+    SolveFailureContext,
+)
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Ground, Link, Mechanism, Point
 from .solver import solve
@@ -22,7 +27,9 @@ __all__ = [
     "Point",
     "PrismaticJoint",
     "RevoluteJoint",
+    "SolveDiagnosticSummary",
     "SolveDiagnostics",
+    "SolveFailureContext",
     "solve",
     "ValidationReport",
 ]

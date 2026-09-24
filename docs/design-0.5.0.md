@@ -329,9 +329,18 @@ The 0.5-D sensitivity study resolves the next two questions:
 See
 [`study-0.5.0-input-sensitivity.md`](study-0.5.0-input-sensitivity.md).
 
-### Still open
+### Resolved for regression acceptance
 
-1. Which complex mechanisms should become permanent acceptance tests rather
-   than remain reproducible studies?
+0.5-E promotes three compound mechanism families to permanent CI acceptance:
 
-These questions define the remaining initial 0.5.0 design phase.
+1. Archimedes trammel;
+2. Whitworth quick-return;
+3. Watt II six-bar, including forward/reverse branch consistency.
+
+Klann and Theo Jansen remain reproducible release-level studies rather than
+per-commit tests.
+
+See
+[`study-0.5.0-regression-acceptance.md`](study-0.5.0-regression-acceptance.md).
+
+The initial 0.5.0 design questions are now resolved.

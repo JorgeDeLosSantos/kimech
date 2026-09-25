@@ -3,8 +3,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from kimech import Mechanism, solve
-from kimech.driver import KinematicDriver
+from kimech import KinematicDriver, Mechanism, solve
 from kimech._scaling import build_numerical_scaling
 
 

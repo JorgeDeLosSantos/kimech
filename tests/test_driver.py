@@ -1,9 +1,7 @@
 import numpy as np
 import pytest
 
-from kimech.driver import KinematicDriver
-from kimech.joints import RevoluteJoint
-from kimech import Mechanism
+from kimech import KinematicDriver, Mechanism, RevoluteJoint
 
 
 def _revolute():

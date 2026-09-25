@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from kimech import Configuration, KinematicSolution, KinematicSolveError, Mechanism, solve
+from kimech import Configuration, KinematicDriver, KinematicSolution, KinematicSolveError, Mechanism, solve
 
 
 def _single_revolute():
@@ -36,10 +36,12 @@ def test_scalar_revolute_acceleration_matches_prescribed_angular_acceleration():
 
     config = solve(
         mechanism,
-        input_joint=joint,
-        input_position=0.7,
-        input_velocity=2.5,
-        input_acceleration=-1.2,
+        driver=KinematicDriver(
+            joint,
+            position=0.7,
+            velocity=2.5,
+            acceleration=-1.2,
+        ),
         initial_guess=guess,
     )[0]
 
@@ -56,10 +58,12 @@ def test_scalar_prismatic_acceleration_matches_prescribed_translation_accelerati
 
     config = solve(
         mechanism,
-        input_joint=joint,
-        input_position=1.2,
-        input_velocity=-0.4,
-        input_acceleration=0.75,
+        driver=KinematicDriver(
+            joint,
+            position=1.2,
+            velocity=-0.4,
+            acceleration=0.75,
+        ),
         initial_guess=guess,
     )[0]
 
@@ -74,10 +78,12 @@ def test_point_acceleration_includes_centripetal_term_for_constant_input_speed()
 
     config = solve(
         mechanism,
-        input_joint=joint,
-        input_position=theta,
-        input_velocity=omega,
-        input_acceleration=0.0,
+        driver=KinematicDriver(
+            joint,
+            position=theta,
+            velocity=omega,
+            acceleration=0.0,
+        ),
         initial_guess=guess,
     )[0]
 
@@ -91,10 +97,12 @@ def test_sweep_scalar_acceleration_broadcasts_and_preserves_result_shape():
 
     solution = solve(
         mechanism,
-        input_joint=joint,
-        input_position=values,
-        input_velocity=2.0,
-        input_acceleration=-0.5,
+        driver=KinematicDriver(
+            joint,
+            position=values,
+            velocity=2.0,
+            acceleration=-0.5,
+        ),
         initial_guess=guess,
     )
 
@@ -112,10 +120,12 @@ def test_sweep_accepts_elementwise_acceleration_history():
 
     solution = solve(
         mechanism,
-        input_joint=joint,
-        input_position=values,
-        input_velocity=velocities,
-        input_acceleration=accelerations,
+        driver=KinematicDriver(
+            joint,
+            position=values,
+            velocity=velocities,
+            acceleration=accelerations,
+        ),
         initial_guess=guess,
     )
 
@@ -130,17 +140,21 @@ def test_acceleration_request_does_not_change_position_or_velocity_solution():
 
     velocity_only = solve(
         mechanism,
-        input_joint=joint,
-        input_position=values,
-        input_velocity=4.0,
+        driver=KinematicDriver(
+            joint,
+            position=values,
+            velocity=4.0,
+        ),
         initial_guess=guess,
     )
     with_acceleration = solve(
         mechanism,
-        input_joint=joint,
-        input_position=values,
-        input_velocity=4.0,
-        input_acceleration=1.25,
+        driver=KinematicDriver(
+            joint,
+            position=values,
+            velocity=4.0,
+            acceleration=1.25,
+        ),
         initial_guess=guess,
     )
 
@@ -157,9 +171,11 @@ def test_input_acceleration_without_velocity_is_rejected_before_solving():
     with pytest.raises(ValueError, match="requires input_velocity"):
         solve(
             mechanism,
-            input_joint=joint,
-            input_position=0.5,
-            input_acceleration=1.0,
+            driver=KinematicDriver(
+                joint,
+                position=0.5,
+                acceleration=1.0,
+            ),
             initial_guess=guess,
         )
 
@@ -180,10 +196,12 @@ def test_input_acceleration_shape_and_finiteness_validation(values, acceleration
     with pytest.raises((TypeError, ValueError), match=message):
         solve(
             mechanism,
-            input_joint=joint,
-            input_position=values,
-            input_velocity=1.0,
-            input_acceleration=acceleration,
+            driver=KinematicDriver(
+                joint,
+                position=values,
+                velocity=1.0,
+                acceleration=acceleration,
+            ),
             initial_guess=guess,
         )
 
@@ -208,9 +226,11 @@ def test_acceleration_linear_algebra_failure_is_translated(monkeypatch):
     ):
         solve(
             mechanism,
-            input_joint=joint,
-            input_position=0.5,
-            input_velocity=1.0,
-            input_acceleration=0.0,
+            driver=KinematicDriver(
+                joint,
+                position=0.5,
+                velocity=1.0,
+                acceleration=0.0,
+            ),
             initial_guess=guess,
         )

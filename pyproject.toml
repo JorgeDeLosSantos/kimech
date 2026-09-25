@@ -34,7 +34,9 @@ docs = [
 ]
 
 [project.urls]
+Documentation = "https://jorgedelossantos.github.io/kimech/"
 Repository = "https://github.com/JorgeDeLosSantos/kimech"
+Changelog = "https://github.com/JorgeDeLosSantos/kimech/blob/main/CHANGELOG.md"
 Issues = "https://github.com/JorgeDeLosSantos/kimech/issues"
 
 [tool.setuptools]

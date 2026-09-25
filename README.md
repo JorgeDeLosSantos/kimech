@@ -10,22 +10,22 @@ Kimech supports position, velocity, and acceleration analysis for one-DOF planar
 
 ## Installation
 
-Install the core package, which depends on NumPy and SciPy:
+Install the released `0.6.0` version directly from its GitHub tag:
 
 ```bash
-pip install -e .
+pip install "kimech @ git+https://github.com/JorgeDeLosSantos/kimech.git@v0.6.0"
 ```
 
-Install the optional visualization dependencies (Matplotlib and Pillow) for plotting, animation, and GIF output:
+For plotting, animation, and GIF support:
 
 ```bash
-pip install -e ".[viz]"
+pip install "kimech[viz] @ git+https://github.com/JorgeDeLosSantos/kimech.git@v0.6.0"
 ```
 
-For development, install both development and visualization dependencies and run the tests:
+For local development, clone the repository and use an editable install:
 
 ```bash
-pip install -e ".[dev,viz]"
+pip install -e ".[dev,viz,docs]"
 pytest
 ```
 

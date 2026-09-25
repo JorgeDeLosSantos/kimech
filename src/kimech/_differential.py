@@ -26,7 +26,7 @@ def solve_velocity(
     driver_velocity: float,
     scaling: NumericalScaling,
     *,
-    input_index: int | None = None,
+    driver_index: int | None = None,
 ) -> np.ndarray:
     """Solve one generalized velocity state from differentiated constraints."""
     velocity = _finite_scalar(driver_velocity, name="driver_velocity")
@@ -39,12 +39,12 @@ def solve_velocity(
         scaling=scaling,
         link_count=len(links),
         stage="velocity",
-        input_value=driver_value,
-        input_index=input_index,
+        driver_value=driver_value,
+        driver_index=driver_index,
     )
 
 
-def solve_input_tangent(
+def solve_driver_tangent(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
@@ -53,7 +53,7 @@ def solve_input_tangent(
     driver_value: float,
     scaling: NumericalScaling,
     *,
-    input_index: int | None = None,
+    driver_index: int | None = None,
 ) -> np.ndarray:
     """Solve the configuration tangent dq/du for continuation."""
     matrix = jacobian(mechanism, links, joints, driver, q, driver_value)
@@ -64,9 +64,9 @@ def solve_input_tangent(
         scaling.scale_rhs(rhs),
         scaling=scaling,
         link_count=len(links),
-        stage="input tangent",
-        input_value=driver_value,
-        input_index=input_index,
+        stage="driver tangent",
+        driver_value=driver_value,
+        driver_index=driver_index,
     )
 
 
@@ -81,7 +81,7 @@ def solve_acceleration(
     driver_acceleration: float,
     scaling: NumericalScaling,
     *,
-    input_index: int | None = None,
+    driver_index: int | None = None,
 ) -> np.ndarray:
     """Solve one generalized acceleration state from second-order constraints."""
     prescribed = _finite_scalar(driver_acceleration, name="driver_acceleration")
@@ -102,8 +102,8 @@ def solve_acceleration(
         scaling=scaling,
         link_count=len(links),
         stage="acceleration",
-        input_value=driver_value,
-        input_index=input_index,
+        driver_value=driver_value,
+        driver_index=driver_index,
     )
 
 
@@ -114,8 +114,8 @@ def _solve_linear_state(
     scaling: NumericalScaling,
     link_count: int,
     stage: str,
-    input_value: float,
-    input_index: int | None,
+    driver_value: float,
+    driver_index: int | None,
 ) -> np.ndarray:
     try:
         candidate_hat = np.asarray(np.linalg.solve(matrix_hat, rhs_hat), dtype=float)
@@ -124,15 +124,15 @@ def _solve_linear_state(
         raise KinematicSolveError(
             _failure_message(
                 stage,
-                input_value,
-                input_index=input_index,
+                driver_value,
+                driver_index=driver_index,
                 residual_norm=float("nan"),
                 reason=f"linear solve failed: {error}",
             ),
             context=SolveFailureContext(
                 stage=stage,
-                input_index=input_index,
-                input_position=input_value,
+                driver_index=driver_index,
+                driver_position=driver_value,
                 condition_number=condition,
                 min_singular_value=minimum,
                 rank=rank,
@@ -159,15 +159,15 @@ def _solve_linear_state(
     raise KinematicSolveError(
         _failure_message(
             stage,
-            input_value,
-            input_index=input_index,
+            driver_value,
+            driver_index=driver_index,
             residual_norm=residual_norm,
             reason="invalid or inaccurate linear solution",
         ),
         context=SolveFailureContext(
             stage=stage,
-            input_index=input_index,
-            input_position=input_value,
+            driver_index=driver_index,
+            driver_position=driver_value,
             residual_norm=(
                 residual_norm if np.isfinite(residual_norm) else None
             ),
@@ -180,16 +180,16 @@ def _solve_linear_state(
 
 def _failure_message(
     stage: str,
-    input_value: float,
+    driver_value: float,
     *,
-    input_index: int | None,
+    driver_index: int | None,
     residual_norm: float,
     reason: str,
 ) -> str:
     location = (
-        f"input index {input_index} (value={input_value:.12g})"
-        if input_index is not None
-        else f"input value {input_value:.12g}"
+        f"driver index {driver_index} (value={driver_value:.12g})"
+        if driver_index is not None
+        else f"driver value {driver_value:.12g}"
     )
     norm_text = f"{residual_norm:.12g}" if np.isfinite(residual_norm) else "unavailable"
     return (

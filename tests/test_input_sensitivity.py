@@ -2,11 +2,12 @@ import numpy as np
 import pytest
 
 from kimech import (
-    KinematicDriver,    InputSensitivity,
+    DriverSensitivity,
+    KinematicDriver,
     KinematicSolveError,
     Mechanism,
     SolveFailureContext,
-    input_sensitivity,
+    driver_sensitivity,
     solve,
 )
 
@@ -70,7 +71,7 @@ def _four_bar(scale=1.0):
     return mechanism, input_joint, rocker_joint, coupler_p, guess
 
 
-def test_revolute_input_sensitivity_is_exact_and_derives_point_motion():
+def test_revolute_driver_sensitivity_is_exact_and_derives_point_motion():
     mechanism, link, point, joint, guess = _single_revolute()
     solution = solve(
         mechanism,
@@ -81,9 +82,9 @@ def test_revolute_input_sensitivity_is_exact_and_derives_point_motion():
         initial_guess=guess,
     )
 
-    sensitivity = input_sensitivity(solution)
+    sensitivity = driver_sensitivity(solution)
 
-    assert isinstance(sensitivity, InputSensitivity)
+    assert isinstance(sensitivity, DriverSensitivity)
     np.testing.assert_allclose(
         sensitivity.coordinate_derivatives,
         [[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]],
@@ -113,7 +114,7 @@ def test_revolute_input_sensitivity_is_exact_and_derives_point_motion():
     )
 
 
-def test_prismatic_input_sensitivity_is_exact():
+def test_prismatic_driver_sensitivity_is_exact():
     mechanism, slider, point, joint, guess = _single_prismatic()
     solution = solve(
         mechanism,
@@ -124,7 +125,7 @@ def test_prismatic_input_sensitivity_is_exact():
         initial_guess=guess,
     )
 
-    sensitivity = input_sensitivity(solution)
+    sensitivity = driver_sensitivity(solution)
 
     np.testing.assert_allclose(
         sensitivity.coordinate_derivatives,
@@ -164,7 +165,7 @@ def test_four_bar_sensitivity_matches_central_finite_difference():
         ),
         initial_guess=guess,
     )
-    sensitivity = input_sensitivity(solution)
+    sensitivity = driver_sensitivity(solution)
 
     finite_difference_coordinates = (
         solution.coordinates[2] - solution.coordinates[0]
@@ -199,7 +200,7 @@ def test_four_bar_sensitivity_matches_central_finite_difference():
 
 
 @pytest.mark.parametrize("scale", [1e-3, 1.0, 1e3])
-def test_revolute_input_sensitivity_scales_consistently_with_geometry(scale):
+def test_revolute_driver_sensitivity_scales_consistently_with_geometry(scale):
     mechanism, input_joint, _, point, guess = _four_bar(scale)
     solution = solve(
         mechanism,
@@ -209,7 +210,7 @@ def test_revolute_input_sensitivity_scales_consistently_with_geometry(scale):
         ),
         initial_guess=guess,
     )
-    sensitivity = input_sensitivity(solution)
+    sensitivity = driver_sensitivity(solution)
 
     reference_mechanism, reference_input, _, reference_point, reference_guess = _four_bar(1.0)
     reference_solution = solve(
@@ -220,7 +221,7 @@ def test_revolute_input_sensitivity_scales_consistently_with_geometry(scale):
         ),
         initial_guess=reference_guess,
     )
-    reference = input_sensitivity(reference_solution)
+    reference = driver_sensitivity(reference_solution)
 
     np.testing.assert_allclose(
         sensitivity.point_position_derivatives(point),
@@ -249,7 +250,7 @@ def test_returned_sensitivity_arrays_are_safe_copies():
         ),
         initial_guess=guess,
     )
-    sensitivity = input_sensitivity(solution)
+    sensitivity = driver_sensitivity(solution)
 
     values = sensitivity.coordinate_derivatives
     values[0, 2] = 99.0
@@ -273,7 +274,7 @@ def test_sensitivity_uses_solution_joint_snapshot_after_mechanism_extension():
     extension_e = extension.add_point("E", (0.0, 0.0))
     new_joint = mechanism.revolute(ground_e, extension_e, name="new_joint")
 
-    sensitivity = input_sensitivity(solution)
+    sensitivity = driver_sensitivity(solution)
 
     np.testing.assert_allclose(
         sensitivity.coordinate_derivatives,
@@ -302,21 +303,21 @@ def test_sensitivity_failure_does_not_mutate_or_invalidate_solution(monkeypatch)
         raise KinematicSolveError(
             "deliberate tangent failure",
             context=SolveFailureContext(
-                stage="input tangent",
-                input_index=0,
-                input_position=0.5,
+                stage="driver tangent",
+                driver_index=0,
+                driver_position=0.5,
             ),
         )
 
-    monkeypatch.setattr("kimech.sensitivity.solve_input_tangent", fail_tangent)
+    monkeypatch.setattr("kimech.sensitivity.solve_driver_tangent", fail_tangent)
 
     with pytest.raises(KinematicSolveError, match="deliberate tangent failure"):
-        input_sensitivity(solution)
+        driver_sensitivity(solution)
 
     np.testing.assert_array_equal(solution.coordinates, baseline)
     assert solution[0].body_pose(link)[2] == pytest.approx(0.5)
 
 
-def test_input_sensitivity_rejects_non_solution():
+def test_driver_sensitivity_rejects_non_solution():
     with pytest.raises(TypeError, match="KinematicSolution"):
-        input_sensitivity(object())
+        driver_sensitivity(object())

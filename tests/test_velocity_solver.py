@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from kimech import Configuration, KinematicDriver, KinematicSolution, KinematicSolveError, Mechanism, solve
-from kimech._differential import solve_input_tangent
+from kimech._differential import solve_driver_tangent
 from kimech._scaling import build_numerical_scaling
 
 
@@ -294,7 +294,7 @@ def test_input_tangent_is_derivative_with_respect_to_driver_coordinate():
         driver,
     )
 
-    tangent = solve_input_tangent(
+    tangent = solve_driver_tangent(
         mechanism,
         links,
         joints,

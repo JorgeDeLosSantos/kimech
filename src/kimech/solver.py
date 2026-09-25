@@ -8,7 +8,7 @@ import numpy as np
 from scipy import optimize
 
 from ._constraints import jacobian, residual
-from ._differential import solve_acceleration, solve_input_tangent, solve_velocity
+from ._differential import solve_acceleration, solve_driver_tangent, solve_velocity
 from ._scaling import NumericalScaling, build_numerical_scaling
 from .diagnostics import SolveDiagnostics, _jacobian_metrics
 from .driver import KinematicDriver
@@ -86,7 +86,7 @@ def solve(
             input_value,
             current_guess,
             scaling,
-            input_index=index,
+            driver_index=index,
             previous_input_value=previous_input_value,
             previous_accepted=previous_accepted,
         )
@@ -108,7 +108,7 @@ def solve(
                 input_value,
                 next_input_value,
                 scaling,
-                input_index=index,
+                driver_index=index,
             )
 
     diagnostics = _build_solve_diagnostics(
@@ -139,7 +139,7 @@ def solve(
                 float(input_position_value),
                 float(prescribed_velocity),
                 scaling,
-                input_index=index,
+                driver_index=index,
             )
 
     coordinate_accelerations = None
@@ -158,7 +158,7 @@ def solve(
                 float(input_position_value),
                 float(prescribed_acceleration),
                 scaling,
-                input_index=index,
+                driver_index=index,
             )
 
     return KinematicSolution._from_snapshot(
@@ -183,7 +183,7 @@ def _solve_requested_configuration(
     preferred_guess: np.ndarray,
     scaling: NumericalScaling,
     *,
-    input_index: int,
+    driver_index: int,
     previous_input_value: float | None,
     previous_accepted: np.ndarray | None,
 ) -> tuple[np.ndarray, int, str, int]:
@@ -210,7 +210,7 @@ def _solve_requested_configuration(
             input_value,
             preferred_guess,
             scaling,
-            input_index=input_index,
+            driver_index=driver_index,
         )
         return accepted, 0, preferred_strategy, attempt_counter[0]
     except KinematicSolveError as error:
@@ -234,7 +234,7 @@ def _solve_requested_configuration(
                 input_value,
                 previous_accepted,
                 scaling,
-                input_index=input_index,
+                driver_index=driver_index,
             )
             return accepted, 0, "warm_start", attempt_counter[0]
         except KinematicSolveError:
@@ -262,7 +262,7 @@ def _solve_requested_configuration(
             start_q=previous_accepted,
             target_input_value=input_value,
             scaling=scaling,
-            input_index=input_index,
+            driver_index=driver_index,
             depth=0,
             attempt_counter=attempt_counter,
         )
@@ -289,7 +289,7 @@ def _attempt_configuration(
     initial_q: np.ndarray,
     scaling: NumericalScaling,
     *,
-    input_index: int,
+    driver_index: int,
 ) -> np.ndarray:
     """Call the nonlinear corrector while recording one attempted solve."""
     attempt_counter[0] += 1
@@ -301,7 +301,7 @@ def _attempt_configuration(
         input_value,
         initial_q,
         scaling,
-        input_index=input_index,
+        driver_index=driver_index,
     )
 
 
@@ -315,7 +315,7 @@ def _solve_step_from_accepted(
     start_q: np.ndarray,
     target_input_value: float,
     scaling: NumericalScaling,
-    input_index: int,
+    driver_index: int,
     attempt_counter: list[int],
 ) -> np.ndarray:
     """Attempt one continuation step using predictor first, then warm start."""
@@ -328,7 +328,7 @@ def _solve_step_from_accepted(
         start_input_value,
         target_input_value,
         scaling,
-        input_index=input_index,
+        driver_index=driver_index,
     )
     try:
         return _attempt_configuration(
@@ -340,7 +340,7 @@ def _solve_step_from_accepted(
             target_input_value,
             predicted,
             scaling,
-            input_index=input_index,
+            driver_index=driver_index,
         )
     except KinematicSolveError:
         if np.array_equal(predicted, start_q):
@@ -354,7 +354,7 @@ def _solve_step_from_accepted(
             target_input_value,
             start_q,
             scaling,
-            input_index=input_index,
+            driver_index=driver_index,
         )
 
 
@@ -368,31 +368,31 @@ def _solve_with_subdivision(
     start_q: np.ndarray,
     target_input_value: float,
     scaling: NumericalScaling,
-    input_index: int,
+    driver_index: int,
     depth: int,
     attempt_counter: list[int],
 ) -> tuple[np.ndarray, int]:
     """Recover a failed requested step by recursively bisecting its input interval."""
     if depth >= _MAX_SUBDIVISION_DEPTH:
         raise KinematicSolveError(
-            f"adaptive subdivision exhausted at input index {input_index} "
+            f"adaptive subdivision exhausted at driver index {driver_index} "
             f"(target={target_input_value:.12g}, depth={depth})",
             context=SolveFailureContext(
                 stage="position",
-                input_index=input_index,
-                input_position=target_input_value,
+                driver_index=driver_index,
+                driver_position=target_input_value,
             ),
         )
 
     midpoint = 0.5 * (start_input_value + target_input_value)
     if midpoint == start_input_value or midpoint == target_input_value:
         raise KinematicSolveError(
-            f"adaptive subdivision reached floating-point step limit at input index "
-            f"{input_index} (target={target_input_value:.12g})",
+            f"adaptive subdivision reached floating-point step limit at driver index "
+            f"{driver_index} (target={target_input_value:.12g})",
             context=SolveFailureContext(
                 stage="position",
-                input_index=input_index,
-                input_position=target_input_value,
+                driver_index=driver_index,
+                driver_position=target_input_value,
             ),
         )
 
@@ -406,7 +406,7 @@ def _solve_with_subdivision(
             start_q=start_q,
             target_input_value=midpoint,
             scaling=scaling,
-            input_index=input_index,
+            driver_index=driver_index,
             attempt_counter=attempt_counter,
         )
     except KinematicSolveError:
@@ -419,7 +419,7 @@ def _solve_with_subdivision(
             start_q=start_q,
             target_input_value=midpoint,
             scaling=scaling,
-            input_index=input_index,
+            driver_index=driver_index,
             depth=depth + 1,
             attempt_counter=attempt_counter,
         )
@@ -436,7 +436,7 @@ def _solve_with_subdivision(
             start_q=midpoint_q,
             target_input_value=target_input_value,
             scaling=scaling,
-            input_index=input_index,
+            driver_index=driver_index,
             attempt_counter=attempt_counter,
         )
         return target_q, left_count + 1
@@ -450,7 +450,7 @@ def _solve_with_subdivision(
             start_q=midpoint_q,
             target_input_value=target_input_value,
             scaling=scaling,
-            input_index=input_index,
+            driver_index=driver_index,
             depth=depth + 1,
             attempt_counter=attempt_counter,
         )
@@ -467,7 +467,7 @@ def _predict_next_configuration(
     next_input_value: float,
     scaling: NumericalScaling,
     *,
-    input_index: int | None = None,
+    driver_index: int | None = None,
 ) -> np.ndarray:
     """Return a first-order continuation predictor, falling back to warm start."""
     delta_input = next_input_value - input_value
@@ -475,7 +475,7 @@ def _predict_next_configuration(
         return q.copy()
 
     try:
-        tangent = solve_input_tangent(
+        tangent = solve_driver_tangent(
             mechanism,
             links,
             joints,
@@ -483,7 +483,7 @@ def _predict_next_configuration(
             q,
             input_value,
             scaling,
-            input_index=input_index,
+            driver_index=driver_index,
         )
     except KinematicSolveError:
         return q.copy()
@@ -635,8 +635,8 @@ def _with_recovery_context(
         str(error),
         context=SolveFailureContext(
             stage=context.stage,
-            input_index=context.input_index,
-            input_position=context.input_position,
+            driver_index=context.driver_index,
+            driver_position=context.driver_position,
             residual_norm=context.residual_norm,
             condition_number=context.condition_number,
             min_singular_value=context.min_singular_value,
@@ -656,7 +656,7 @@ def _solve_configuration(
     initial_q: np.ndarray,
     scaling: NumericalScaling,
     *,
-    input_index: int | None = None,
+    driver_index: int | None = None,
 ) -> np.ndarray:
     def unpack(q_hat: np.ndarray) -> np.ndarray:
         return scaling.unscale_coordinates(q_hat)
@@ -698,9 +698,9 @@ def _solve_configuration(
         return unpack(candidate_hat).copy()
 
     location = (
-        f"input index {input_index} (value={input_value:.12g})"
-        if input_index is not None
-        else f"input value {input_value:.12g}"
+        f"driver index {driver_index} (value={input_value:.12g})"
+        if driver_index is not None
+        else f"driver value {input_value:.12g}"
     )
     norm_text = f"{residual_norm:.12g}" if np.isfinite(residual_norm) else "unavailable"
     success = bool(getattr(result, "success", False))
@@ -720,8 +720,8 @@ def _solve_configuration(
         f"solver success={success}; solver message={message}",
         context=SolveFailureContext(
             stage="position",
-            input_index=input_index,
-            input_position=input_value,
+            driver_index=driver_index,
+            driver_position=input_value,
             residual_norm=(
                 residual_norm if np.isfinite(residual_norm) else None
             ),

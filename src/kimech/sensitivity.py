@@ -1,10 +1,10 @@
-"""Input-coordinate sensitivity analysis for accepted solutions."""
+"""Driver-coordinate sensitivity analysis for accepted solutions."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from ._differential import solve_input_tangent
+from ._differential import solve_driver_tangent
 from ._scaling import build_numerical_scaling
 from .driver import KinematicDriver
 from .joints import PrismaticJoint, RevoluteJoint
@@ -21,14 +21,14 @@ _Joint = RevoluteJoint | PrismaticJoint
 _Body = Link | Ground
 
 
-class InputSensitivity:
-    """Sensitivity of a one-input solution with respect to its input coordinate."""
+class DriverSensitivity:
+    """Sensitivity of a driven solution with respect to its driver coordinate."""
 
     __slots__ = (
         "_coordinate_derivatives",
         "_coordinates",
-        "_input_joint",
-        "_input_positions",
+        "_driver",
+        "_driver_positions",
         "_joints",
         "_links",
         "_mechanism",
@@ -54,8 +54,8 @@ class InputSensitivity:
         self._mechanism = solution.mechanism
         self._links = solution._links
         self._joints = solution._joints
-        self._input_joint = solution.driver.joint
-        self._input_positions = solution.driver._position_history().copy()
+        self._driver = solution.driver
+        self._driver_positions = solution.driver._position_history().copy()
         self._coordinates = solution.coordinates
         self._coordinate_derivatives = derivatives.copy()
 
@@ -65,14 +65,9 @@ class InputSensitivity:
         return self._mechanism
 
     @property
-    def input_joint(self) -> _Joint:
-        """Return the prescribed joint defining the sensitivity coordinate."""
-        return self._input_joint
-
-    @property
-    def input_positions(self) -> np.ndarray:
-        """Return the sampled prescribed coordinate values."""
-        return self._input_positions.copy()
+    def driver(self) -> KinematicDriver:
+        """Return the driver defining the sensitivity coordinate."""
+        return self._driver
 
     @property
     def coordinate_derivatives(self) -> np.ndarray:
@@ -80,7 +75,7 @@ class InputSensitivity:
         return self._coordinate_derivatives.copy()
 
     def __len__(self) -> int:
-        return len(self._input_positions)
+        return len(self._driver_positions)
 
     def body_pose_derivatives(self, body: _Body) -> np.ndarray:
         """Return body-pose derivatives with respect to the input coordinate."""
@@ -118,25 +113,24 @@ class InputSensitivity:
             self._coordinates[index],
             coordinate_velocities=self._coordinate_derivatives[index],
             driver=KinematicDriver(
-                self._input_joint,
-                position=float(self._input_positions[index]),
+                self._driver.joint,
+                position=float(self._driver_positions[index]),
                 velocity=1.0,
             ),
         )
 
 
-def input_sensitivity(solution: KinematicSolution) -> InputSensitivity:
-    """Compute local dq/du sensitivity for every accepted solution sample."""
+def driver_sensitivity(solution: KinematicSolution) -> DriverSensitivity:
+    """Compute local dq/du sensitivity for every accepted driver sample."""
     if not isinstance(solution, KinematicSolution):
         raise TypeError("solution must be a KinematicSolution")
 
     links = solution._links
     joints = solution._joints
-    input_joint = solution.driver.joint
-    input_positions = solution.driver._position_history()
+    driver = solution.driver
+    driver_positions = driver._position_history()
     coordinates = solution.coordinates
 
-    driver = KinematicDriver(input_joint, position=input_positions)
     scaling = build_numerical_scaling(
         solution.mechanism,
         links,
@@ -145,16 +139,16 @@ def input_sensitivity(solution: KinematicSolution) -> InputSensitivity:
     )
 
     derivatives = np.empty_like(coordinates)
-    for index, (input_value, q) in enumerate(zip(input_positions, coordinates)):
-        derivatives[index] = solve_input_tangent(
+    for index, (driver_value, q) in enumerate(zip(driver_positions, coordinates)):
+        derivatives[index] = solve_driver_tangent(
             solution.mechanism,
             links,
             joints,
             driver,
             q,
-            float(input_value),
+            float(driver_value),
             scaling,
-            input_index=index,
+            driver_index=index,
         )
 
-    return InputSensitivity(solution, derivatives)
+    return DriverSensitivity(solution, derivatives)

@@ -10,7 +10,7 @@ from .errors import (
 )
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Ground, Link, Mechanism, Point
-from .sensitivity import InputSensitivity, input_sensitivity
+from .sensitivity import DriverSensitivity, driver_sensitivity
 from .solver import solve
 from .solution import Configuration, KinematicSolution
 from .topology import MechanismTopology
@@ -19,7 +19,7 @@ from .validation import ValidationReport
 __all__ = [
     "Configuration",
     "Ground",
-    "InputSensitivity",
+    "DriverSensitivity",
     "InvalidModelError",
     "KimechError",
     "KinematicDriver",
@@ -34,7 +34,7 @@ __all__ = [
     "SolveDiagnosticSummary",
     "SolveDiagnostics",
     "SolveFailureContext",
-    "input_sensitivity",
+    "driver_sensitivity",
     "solve",
     "ValidationReport",
 ]

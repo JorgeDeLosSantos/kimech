@@ -3,7 +3,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from kimech import Mechanism, solve
+from kimech import Mechanism, KinematicDriver, solve
 from kimech.visualization import animate
 
 
@@ -47,8 +47,10 @@ def main():
 
     solution = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values,
+        driver=KinematicDriver(
+            input_joint,
+            position=values,
+        ),
         initial_guess=initial_guess,
     )
 

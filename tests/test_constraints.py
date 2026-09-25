@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from kimech import Configuration, Mechanism, RevoluteJoint
+from kimech.driver import KinematicDriver
 from kimech._constraints import (
     driver_jacobian,
     driver_residual,
@@ -294,13 +295,18 @@ def test_complete_nine_equation_system_jacobian_matches_finite_differences(build
     joints = mechanism.joints
     q = np.array([0.2, -0.15, 0.38, 1.25, 0.45, -0.27, 3.0, 0.12, 0.19])
     input_position = 0.31
-    phi = residual(mechanism, links, joints, input_joint, q, input_position)
-    analytical = jacobian(mechanism, links, joints, input_joint, q, input_position)
+    phi = residual(mechanism, links, joints, KinematicDriver(input_joint, position=input_position), q, input_position)
+    analytical = jacobian(mechanism, links, joints, KinematicDriver(input_joint, position=input_position), q, input_position)
     assert phi.shape == (9,)
     assert analytical.shape == (9, 9)
     assert_jacobian_matches(
         lambda value: residual(
-            mechanism, links, joints, input_joint, value, input_position
+            mechanism,
+            links,
+            joints,
+            KinematicDriver(input_joint, position=input_position),
+            value,
+            input_position,
         ),
         analytical,
         q,
@@ -312,7 +318,7 @@ def test_assembly_preserves_explicit_link_and_joint_snapshot_order():
     links = tuple(reversed(mechanism.links))
     joints = tuple(reversed(mechanism.joints))
     q = np.array([2.9, 0.1, 0.2, 1.3, 0.4, -0.3, 0.2, -0.1, 0.4])
-    phi = residual(mechanism, links, joints, input_joint, q, 0.1)
+    phi = residual(mechanism, links, joints, KinematicDriver(input_joint, position=0.1), q, 0.1)
     for index, joint in enumerate(joints):
         np.testing.assert_allclose(
             phi[2 * index : 2 * index + 2],
@@ -329,21 +335,21 @@ def test_constraints_validate_inputs_and_snapshot_membership():
     joints = mechanism.joints
     q = np.zeros(9)
     with pytest.raises(ValueError, match="shape"):
-        residual(mechanism, links, joints, input_joint, q[:-1], 0.0)
+        residual(mechanism, links, joints, KinematicDriver(input_joint, position=0.0), q[:-1], 0.0)
     with pytest.raises(ValueError, match="finite"):
-        residual(mechanism, links, joints, input_joint, q * np.nan, 0.0)
+        residual(mechanism, links, joints, KinematicDriver(input_joint, position=0.0), q * np.nan, 0.0)
     with pytest.raises(ValueError, match="scalar"):
-        residual(mechanism, links, joints, input_joint, q, [0.0])
+        residual(mechanism, links, joints, KinematicDriver(input_joint, position=0.0), q, [0.0])
     with pytest.raises(ValueError, match="finite"):
-        residual(mechanism, links, joints, input_joint, q, np.inf)
+        residual(mechanism, links, joints, KinematicDriver(input_joint, position=0.0), q, np.inf)
 
     other, other_input = _four_bar()
     with pytest.raises(ValueError, match="links snapshot"):
         joint_residual(mechanism, links, other_input, q)
     with pytest.raises(ValueError, match="input_joint"):
-        residual(mechanism, links, joints, other_input, q, 0.0)
+        residual(mechanism, links, joints, KinematicDriver(other_input, position=0.0), q, 0.0)
 
     unregistered = RevoluteJoint(input_joint.point_a, input_joint.point_b)
     with pytest.raises(ValueError, match="does not belong"):
-        residual(mechanism, links, (unregistered, *joints[1:]), unregistered, q, 0.0)
+        residual(mechanism, links, (unregistered, *joints[1:]), KinematicDriver(unregistered, position=0.0), q, 0.0)
     assert other is other_input.point_a.body.mechanism

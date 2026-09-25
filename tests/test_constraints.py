@@ -1,8 +1,7 @@
 import numpy as np
 import pytest
 
-from kimech import Configuration, Mechanism, RevoluteJoint
-from kimech.driver import KinematicDriver
+from kimech import Configuration, KinematicDriver, Mechanism, RevoluteJoint
 from kimech._constraints import (
     driver_jacobian,
     driver_residual,
@@ -346,7 +345,7 @@ def test_constraints_validate_inputs_and_snapshot_membership():
     other, other_input = _four_bar()
     with pytest.raises(ValueError, match="links snapshot"):
         joint_residual(mechanism, links, other_input, q)
-    with pytest.raises(ValueError, match="input_joint"):
+    with pytest.raises(ValueError, match="driver joint"):
         residual(mechanism, links, joints, KinematicDriver(other_input, position=0.0), q, 0.0)
 
     unregistered = RevoluteJoint(input_joint.point_a, input_joint.point_b)

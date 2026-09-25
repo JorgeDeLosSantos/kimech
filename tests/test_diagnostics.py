@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from kimech import Mechanism, SolveDiagnostics, solve
+from kimech import Mechanism, KinematicDriver, SolveDiagnostics, solve
 from kimech.diagnostics import _jacobian_metrics
 
 
@@ -48,8 +48,10 @@ def test_solve_returns_structured_full_rank_diagnostics():
     mechanism, link, joint = _single_revolute()
     solution = solve(
         mechanism,
-        input_joint=joint,
-        input_position=[0.2, 0.4, 0.6],
+        driver=KinematicDriver(
+            joint,
+            position=[0.2, 0.4, 0.6],
+        ),
         initial_guess={link: (0.0, 0.0, 0.0)},
     )
 
@@ -71,8 +73,10 @@ def test_diagnostics_follow_solution_slicing():
     mechanism, link, joint = _single_revolute()
     solution = solve(
         mechanism,
-        input_joint=joint,
-        input_position=[0.2, 0.4, 0.6],
+        driver=KinematicDriver(
+            joint,
+            position=[0.2, 0.4, 0.6],
+        ),
         initial_guess={link: (0.0, 0.0, 0.0)},
     )
 
@@ -112,8 +116,10 @@ def test_scaled_jacobian_diagnostics_are_invariant_to_linear_units(scale):
 
     solution = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values,
+        driver=KinematicDriver(
+            input_joint,
+            position=values,
+        ),
         initial_guess=guess,
     )
 
@@ -123,8 +129,10 @@ def test_scaled_jacobian_diagnostics_are_invariant_to_linear_units(scale):
     reference_mechanism, reference_input, reference_guess = _four_bar(1.0)
     reference = solve(
         reference_mechanism,
-        input_joint=reference_input,
-        input_position=values,
+        driver=KinematicDriver(
+            reference_input,
+            position=values,
+        ),
         initial_guess=reference_guess,
     ).diagnostics
 

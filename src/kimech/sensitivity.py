@@ -54,8 +54,8 @@ class InputSensitivity:
         self._mechanism = solution.mechanism
         self._links = solution._links
         self._joints = solution._joints
-        self._input_joint = solution.input_joint
-        self._input_positions = solution.input_positions
+        self._input_joint = solution.driver.joint
+        self._input_positions = solution.driver._position_history().copy()
         self._coordinates = solution.coordinates
         self._coordinate_derivatives = derivatives.copy()
 
@@ -117,9 +117,11 @@ class InputSensitivity:
             self._links,
             self._coordinates[index],
             coordinate_velocities=self._coordinate_derivatives[index],
-            input_joint=self._input_joint,
-            input_position=self._input_positions[index],
-            input_velocity=1.0,
+            driver=KinematicDriver(
+                self._input_joint,
+                position=float(self._input_positions[index]),
+                velocity=1.0,
+            ),
         )
 
 
@@ -130,8 +132,8 @@ def input_sensitivity(solution: KinematicSolution) -> InputSensitivity:
 
     links = solution._links
     joints = solution._joints
-    input_joint = solution.input_joint
-    input_positions = solution.input_positions
+    input_joint = solution.driver.joint
+    input_positions = solution.driver._position_history()
     coordinates = solution.coordinates
 
     driver = KinematicDriver(input_joint, position=input_positions)

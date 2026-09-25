@@ -78,7 +78,7 @@ class DriverSensitivity:
         return len(self._driver_positions)
 
     def body_pose_derivatives(self, body: _Body) -> np.ndarray:
-        """Return body-pose derivatives with respect to the input coordinate."""
+        """Return body-pose derivatives with respect to the driver coordinate."""
         index = _body_index(self._mechanism, self._links, body)
         if index is None:
             return np.zeros((len(self), 3), dtype=float)
@@ -86,7 +86,7 @@ class DriverSensitivity:
         return self._coordinate_derivatives[:, start : start + 3].copy()
 
     def point_position_derivatives(self, point: Point) -> np.ndarray:
-        """Return point-position derivatives with respect to the input coordinate."""
+        """Return point-position derivatives with respect to the driver coordinate."""
         _validate_point(self._mechanism, self._links, point)
         values = np.empty((len(self), 2), dtype=float)
         for index in range(len(self)):
@@ -94,7 +94,7 @@ class DriverSensitivity:
         return values
 
     def joint_coordinate_derivatives(self, joint: _Joint) -> np.ndarray:
-        """Return joint-coordinate derivatives with respect to the input coordinate."""
+        """Return joint-coordinate derivatives with respect to the driver coordinate."""
         if not isinstance(joint, (RevoluteJoint, PrismaticJoint)):
             raise TypeError("joint must be a RevoluteJoint or PrismaticJoint")
         if not any(joint is item for item in self._joints):

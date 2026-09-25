@@ -27,7 +27,7 @@ from klann import build_mechanism as build_klann
 from theo_jansen import build_mechanism as build_theo_jansen
 from watt_six_bar import build_mechanism as build_watt
 from whitworth import build_mechanism as build_whitworth
-from kimech import KinematicSolution, solve
+from kimech import KinematicSolution, KinematicDriver, solve
 from kimech._scaling import build_numerical_scaling
 
 
@@ -141,14 +141,18 @@ def run_case(name: str, builder) -> ContinuityRecord:
 
     forward = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values,
+        driver=KinematicDriver(
+            input_joint,
+            position=values,
+        ),
         initial_guess=initial_guess,
     )
     reverse = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values[::-1],
+        driver=KinematicDriver(
+            input_joint,
+            position=values[::-1],
+        ),
         initial_guess=forward[-1],
     )
     reverse_aligned = reverse[::-1]

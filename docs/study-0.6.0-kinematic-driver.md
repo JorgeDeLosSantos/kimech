@@ -590,28 +590,19 @@ input_acceleration(s)
 
 0.6.0 should migrate toward driver terminology.
 
-Candidate public metadata is:
+The implemented result API retains the immutable Driver snapshot directly:
 
 ```text
 solution.driver
-solution.driver_positions
-solution.driver_velocities
-solution.driver_accelerations
 solution.time
-```
 
-and per-configuration metadata:
-
-```text
 configuration.driver
-configuration.driver_position
-configuration.driver_velocity
-configuration.driver_acceleration
 configuration.time
 ```
 
-The final result API should be designed together with implementation rather than
-copying these names mechanically.
+Prescribed values are read from `driver.position`, `driver.velocity`, and
+`driver.acceleration`. This avoids duplicating Driver metadata as parallel
+result properties.
 
 Snapshot behavior remains important: a solution must retain enough information
 to reproduce its analysis semantics even if the source mechanism is later
@@ -627,14 +618,7 @@ dq / du
 
 already has driver semantics.
 
-0.6.0 should consider migrating:
-
-```text
-input_sensitivity
-InputSensitivity
-```
-
-toward:
+0.6.0 implements:
 
 ```text
 driver_sensitivity
@@ -644,25 +628,20 @@ DriverSensitivity
 with derivatives explicitly interpreted with respect to the current driver
 coordinate.
 
-The sensitivity calculation remains an explicit downstream analysis and should
-not be computed automatically by every solve.
-
-This rename should be decided as part of the broader 0.6.0 public API cleanup,
-not as a prerequisite for constructing `KinematicDriver`.
+The sensitivity calculation remains an explicit downstream analysis and is not
+computed automatically by every solve.
 
 ## 17. Diagnostics and failure terminology
 
 Structured diagnostics and failures should gradually move away from
 `input_position` terminology and describe the selected driven formulation.
 
-Likely candidates include:
+The implemented failure-context vocabulary is:
 
 ```text
 driver_position
 driver_index
 ```
-
-or another consistently chosen driver-value vocabulary.
 
 The important semantic rule remains unchanged: conditioning and failures
 describe the selected driven formulation, not a universal mechanism
@@ -770,21 +749,33 @@ The recommended 0.6-A direction is:
 The release remains one-DOF. The abstraction is intended to make the current
 formulation clearer first and make later generalization possible second.
 
-## 22. Questions to resolve during implementation
+## 22. Implementation outcome
 
-The following details remain intentionally open for 0.6-B/C:
+The open design questions were resolved as follows:
 
-1. Should the normalized public history properties be singular
-   (`position`) or plural (`positions`)?
-2. Should `KinematicSolution.driver` retain the original immutable driver or
-   an explicit solve snapshot?
-3. What exact private boundary best localizes coordinate-specific residual,
-   Jacobian, and acceleration-bias behavior?
-4. Should the sensitivity rename happen in the same breaking API block or a
-   later 0.6.0 block?
-5. What exact scalar `time` convention gives the cleanest behavior for a
-   one-sample solve?
-6. Should `time` be strictly increasing only, or merely ordered/nondecreasing
-   when repeated physical instants could have a legitimate use?
+1. public Driver value properties remain singular: `position`, `velocity`,
+   and `acceleration`; histories are represented by one-dimensional arrays;
+2. `KinematicSolution` retains an immutable Driver snapshot, and indexed
+   `Configuration` objects retain a scalar Driver snapshot;
+3. driver-specific residual, Jacobian, acceleration-bias, continuation tangent,
+   and scaling semantics remain private implementation concerns;
+4. sensitivity uses the Driver-first public names
+   `driver_sensitivity()` and `DriverSensitivity`;
+5. one-sample solves accept one finite scalar `time` value;
+6. multi-sample solve-time histories must be strictly increasing, while sliced
+   result containers preserve whatever order the slice produces.
 
-These questions do not block the central driver semantics above.
+The representative constant-speed four-bar case was added as permanent
+acceptance coverage and confirms that supplying `time` does not alter the
+kinematic solution.
+
+`MotionLaw` remains deliberately deferred. The 0.6.0 release establishes the
+separation needed for it later:
+
+```text
+KinematicDriver   -> prescribed kinematic coordinate and derivatives
+time              -> global physical sample association
+MotionLaw         -> future optional generator of u(t), u_dot(t), u_ddot(t)
+```
+
+No public motion-law abstraction is required to close 0.6.0.

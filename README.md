@@ -4,7 +4,7 @@ Kimech is a small Python library for modeling and solving the kinematics of plan
 
 It provides declarative rigid-body models with revolute and prismatic joints, robust one-DOF position/velocity/acceleration solving, structural topology introspection, structured numerical diagnostics, driver-coordinate sensitivity analysis, and schematic plotting and animation.
 
-Kimech supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms with one prescribed joint coordinate. The current `0.5.0` consolidation baseline is recorded in [`docs/design-0.5.0.md`](docs/design-0.5.0.md); earlier design baselines remain available in the `docs/` directory. [`docs/api.md`](docs/api.md) documents the implemented public API.
+Kimech supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms driven by one `KinematicDriver`. The current `0.6.0` driver/time design is recorded in [`docs/study-0.6.0-kinematic-driver.md`](docs/study-0.6.0-kinematic-driver.md); earlier design baselines remain available in the `docs/` directory. [`docs/api.md`](docs/api.md) documents the implemented public API.
 
 ## Installation
 
@@ -101,7 +101,7 @@ subdivisions = diagnostics.subdivision_counts
 residuals = diagnostics.residual_norms
 ```
 
-These diagnostics describe the selected driven solve formulation. A configuration may therefore be regular for one chosen input and singular for another.
+These diagnostics describe the selected driven solve formulation. A configuration may therefore be regular for one chosen driver coordinate and singular for another.
 
 Topology can be inspected independently of solved geometry:
 

@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.6.0
+
+Kimech `0.6.0` makes prescribed kinematic motion a first-class concept while preserving the existing one-DOF planar R/P solver.
+
+### Added
+
+- public `KinematicDriver` for prescribing one revolute or prismatic natural coordinate;
+- driver position histories with optional physical velocity and acceleration data;
+- optional physical sample times through `solve(..., time=...)`;
+- `solution.time` and per-configuration `config.time`;
+- driver snapshots retained by `KinematicSolution` and indexed `Configuration` objects;
+- driver-coordinate sensitivity through `driver_sensitivity(solution)` and `DriverSensitivity`;
+- time-aware four-bar acceptance coverage using a constant-speed crank over more than one revolution.
+
+### Changed
+
+- `solve()` now accepts `driver=KinematicDriver(...)` instead of separate `input_joint`, `input_position`, `input_velocity`, and `input_acceleration` arguments;
+- result metadata is now exposed through `solution.driver` / `config.driver` instead of `input_*` properties;
+- `input_sensitivity()` / `InputSensitivity` were renamed to `driver_sensitivity()` / `DriverSensitivity`;
+- `SolveFailureContext.input_index` / `input_position` were renamed to `driver_index` / `driver_position`;
+- continuation, differential solves, numerical scaling, sensitivity, and failure metadata now use driver-oriented internal terminology;
+- optional `time` associates physical instants with requested samples but does not change continuation, trigger integration, or numerically differentiate driver data;
+- documentation and examples now use the Driver-first API.
+
+### Design limits
+
+- `0.6.0` remains one-DOF and accepts exactly one `KinematicDriver`;
+- the Driver targets only the natural coordinate of one revolute or prismatic joint;
+- `time` is global solve metadata and is not part of the Driver;
+- no motion-law abstraction is included;
+- no numerical differentiation or automatic consistency check is performed between time, position, velocity, and acceleration histories;
+- multiple drivers, general multi-DOF solving, generic point/orientation drivers, pseudo-arclength continuation, branch enumeration, automatic branch-independent initial guesses, new joint families, and dynamics remain deferred.
+
 ## 0.5.0
 
 Kimech `0.5.0` consolidates the existing one-DOF planar R/P kinematics core around introspection, solve observability, and analysis.

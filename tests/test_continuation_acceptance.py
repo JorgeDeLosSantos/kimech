@@ -99,7 +99,7 @@ def test_four_bar_full_cycle_is_direction_consistent_with_valid_process_diagnost
     assert forward_diagnostics is not None
     assert reverse_diagnostics is not None
 
-    np.testing.assert_array_equal(forward.input_positions, reverse.input_positions)
+    np.testing.assert_array_equal(forward.driver.position, reverse.driver.position)
     assert np.all(forward_diagnostics.ranks == 9)
     assert np.all(reverse_diagnostics.ranks == 9)
     assert np.all(forward_diagnostics.residual_norms <= 1e-9)

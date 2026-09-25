@@ -30,7 +30,7 @@ from typing import TypeAlias
 import numpy as np
 from scipy import optimize
 
-from kimech import Mechanism
+from kimech import Mechanism, KinematicDriver
 from kimech._constraints import jacobian, residual
 from kimech.joints import PrismaticJoint, RevoluteJoint
 from kimech.model import Link
@@ -116,8 +116,10 @@ def _control_case(scale: float) -> StudyCase:
     return StudyCase(
         name="control_revolute",
         mechanism=mechanism,
-        input_joint=input_joint,
-        input_position=np.linspace(0.0, 2.0 * np.pi, 361),
+        driver=KinematicDriver(
+            input_joint,
+            position=np.linspace(0.0, 2.0 * np.pi, 361),
+        ),
         initial_guess=guess,
         characteristic_length=100.0 * scale,
     )
@@ -154,8 +156,10 @@ def _baseline_four_bar(scale: float) -> StudyCase:
     return StudyCase(
         name="baseline_four_bar",
         mechanism=mechanism,
-        input_joint=input_joint,
-        input_position=np.linspace(0.8, 1.3, 25),
+        driver=KinematicDriver(
+            input_joint,
+            position=np.linspace(0.8, 1.3, 25),
+        ),
         initial_guess=guess,
         characteristic_length=0.30 * scale,
     )
@@ -197,8 +201,10 @@ def _problem_four_bar(scale: float) -> StudyCase:
     return StudyCase(
         name="problem_four_bar",
         mechanism=mechanism,
-        input_joint=input_joint,
-        input_position=np.linspace(0.0, 2.0 * np.pi, 361),
+        driver=KinematicDriver(
+            input_joint,
+            position=np.linspace(0.0, 2.0 * np.pi, 361),
+        ),
         initial_guess=guess,
         characteristic_length=200.0 * scale,
     )

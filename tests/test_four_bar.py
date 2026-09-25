@@ -75,7 +75,7 @@ def _assert_pose_history_is_continuous(poses):
 def test_four_bar_scalar_solve_satisfies_complete_constraint_system():
     mechanism, input_joint, _, guess = _four_bar()
 
-    config = solve(mechanism, input_joint=input_joint, input_position=0.8, initial_guess=guess)[0]
+    config = solve(mechanism, driver=KinematicDriver(input_joint, position=0.8), initial_guess=guess)[0]
 
     assert isinstance(config, Configuration)
     assert config.joint_coordinate(input_joint) == pytest.approx(0.8, abs=1e-10)
@@ -86,7 +86,7 @@ def test_four_bar_sweep_uses_continuation_and_preserves_values():
     mechanism, input_joint, _, guess = _four_bar()
     values = np.linspace(0.8, 1.3, 40)
 
-    solution = solve(mechanism, input_joint=input_joint, input_position=values, initial_guess=guess)
+    solution = solve(mechanism, driver=KinematicDriver(input_joint, position=values), initial_guess=guess)
 
     assert isinstance(solution, KinematicSolution)
     assert len(solution) == len(values)
@@ -100,10 +100,10 @@ def test_four_bar_sweep_uses_continuation_and_preserves_values():
 
 def test_four_bar_reverse_sweep_preserves_user_direction():
     mechanism, input_joint, _, guess = _four_bar()
-    endpoint = solve(mechanism, input_joint=input_joint, input_position=1.3, initial_guess=guess)[0]
+    endpoint = solve(mechanism, driver=KinematicDriver(input_joint, position=1.3), initial_guess=guess)[0]
     values = np.linspace(0.8, 1.3, 40)[::-1]
 
-    solution = solve(mechanism, input_joint=input_joint, input_position=values, initial_guess=endpoint)
+    solution = solve(mechanism, driver=KinematicDriver(input_joint, position=values), initial_guess=endpoint)
 
     np.testing.assert_array_equal(solution.input_positions, values)
     np.testing.assert_allclose(solution.joint_coordinates(input_joint), values, atol=1e-10)
@@ -115,8 +115,10 @@ def test_four_bar_completes_full_revolution_and_returns_to_physical_configuratio
 
     solution = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values,
+        driver=KinematicDriver(
+            input_joint,
+            position=values,
+        ),
         initial_guess=guess,
     )
 

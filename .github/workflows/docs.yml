@@ -47,6 +47,8 @@ jobs:
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Build documentation
         run: sphinx-build -W --keep-going -b html docs/user docs/user/_build/html

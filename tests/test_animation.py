@@ -8,7 +8,7 @@ import pytest
 from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Polygon
 
-from kimech import KinematicSolution, Mechanism, solve
+from kimech import KinematicSolution, KinematicDriver, Mechanism, solve
 from kimech.visualization import animate
 from kimech.visualization.animation import _prismatic_range
 
@@ -51,8 +51,10 @@ def _four_bar_solution():
     mechanism.revolute(rocker_d, ground_d)
     solution = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=np.linspace(0.8, 1.3, 4),
+        driver=KinematicDriver(
+            input_joint,
+            position=np.linspace(0.8, 1.3, 4),
+        ),
         initial_guess={
             crank: (0.0, 0.0, 0.8),
             coupler: (0.05, 0.06, 0.2),
@@ -88,8 +90,10 @@ def _slider_crank_solution():
     )
     return solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=np.linspace(0.7, 1.2, 4),
+        driver=KinematicDriver(
+            input_joint,
+            position=np.linspace(0.7, 1.2, 4),
+        ),
         initial_guess={
             crank: (0.0, 0.0, 0.7),
             rod: (0.06, 0.05, -0.2),

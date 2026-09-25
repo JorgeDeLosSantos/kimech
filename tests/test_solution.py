@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from kimech import Configuration, KinematicSolution, Mechanism
+from kimech import Configuration, KinematicDriver, KinematicSolution, Mechanism
 
 
 def _revolute_mechanism():
@@ -154,26 +154,26 @@ def test_solution_sequence_properties_and_negative_indexing():
     mechanism, link, joint = _revolute_mechanism()
     inputs = np.array([0.0, 0.5, 1.0])
     coordinates = np.array([[1.0, 2.0, 0.0], [2.0, 3.0, 0.5], [3.0, 4.0, 1.0]])
-    solution = KinematicSolution(mechanism, joint, inputs, coordinates)
+    solution = KinematicSolution(mechanism, KinematicDriver(joint, position=inputs), coordinates)
 
     assert len(solution) == 3
     assert solution.mechanism is mechanism
-    assert solution.input_joint is joint
-    assert solution[0].input_joint is joint
-    assert solution[0].input_position == pytest.approx(0.0)
+    assert solution.driver.joint is joint
+    assert solution[0].driver.joint is joint
+    assert solution[0].driver.position == pytest.approx(0.0)
     np.testing.assert_allclose(solution[0].body_pose(link), coordinates[0])
     np.testing.assert_allclose(solution[-1].body_pose(link), coordinates[-1])
-    np.testing.assert_allclose(solution.input_positions, inputs)
+    np.testing.assert_allclose(solution.driver.position, inputs)
     np.testing.assert_allclose(solution.coordinates, coordinates)
 
     sliced = solution[:2]
     assert isinstance(sliced, KinematicSolution)
     assert len(sliced) == 2
-    np.testing.assert_allclose(sliced.input_positions, inputs[:2])
+    np.testing.assert_allclose(sliced.driver.position, inputs[:2])
     np.testing.assert_allclose(sliced.coordinates, coordinates[:2])
 
     reversed_solution = solution[::-1]
-    np.testing.assert_allclose(reversed_solution.input_positions, inputs[::-1])
+    np.testing.assert_allclose(reversed_solution.driver.position, inputs[::-1])
     np.testing.assert_allclose(reversed_solution.coordinates, coordinates[::-1])
 
     configs = list(solution)
@@ -184,7 +184,7 @@ def test_solution_sequence_properties_and_negative_indexing():
 
 def test_solution_and_derived_configuration_keep_original_link_layout():
     mechanism, original, joint = _revolute_mechanism()
-    solution = KinematicSolution(mechanism, joint, [0.5], [[1.0, 2.0, 0.5]])
+    solution = KinematicSolution(mechanism, KinematicDriver(joint, position=[0.5]), [[1.0, 2.0, 0.5]])
 
     added = mechanism.add_link("added")
     added_point = added.add_point("P", (0.0, 0.0))
@@ -208,7 +208,7 @@ def test_point_path_body_poses_and_joint_coordinates_have_expected_values():
     point = link.add_point("P", (1.0, 0.0))
     angles = np.array([0.0, np.pi / 2, np.pi])
     coordinates = np.column_stack((np.full(3, 2.0), np.full(3, 3.0), angles))
-    solution = KinematicSolution(mechanism, joint, angles, coordinates)
+    solution = KinematicSolution(mechanism, KinematicDriver(joint, position=angles), coordinates)
 
     expected_path = [[3.0, 3.0], [2.0, 4.0], [1.0, 3.0]]
     assert solution.point_positions(point).shape == (3, 2)
@@ -223,7 +223,7 @@ def test_point_path_body_poses_and_joint_coordinates_have_expected_values():
 def test_empty_solution_queries_preserve_documented_shapes():
     mechanism, link, joint = _revolute_mechanism()
     point = link.add_point("P", (1.0, 0.0))
-    solution = KinematicSolution(mechanism, joint, np.empty(0), np.empty((0, 3)))
+    solution = KinematicSolution(mechanism, KinematicDriver._from_history(joint, np.empty(0)), np.empty((0, 3)))
 
     assert solution.point_positions(point).shape == (0, 2)
     assert solution.body_poses(link).shape == (0, 3)
@@ -247,19 +247,19 @@ def test_public_arrays_cannot_mutate_stored_results_or_alias_constructor_inputs(
 
     input_positions = np.array([0.0, 0.5])
     coordinates = np.array([[1.0, 2.0, 0.0], [2.0, 3.0, 0.5]])
-    solution = KinematicSolution(mechanism, joint, input_positions, coordinates)
+    solution = KinematicSolution(mechanism, KinematicDriver(joint, position=input_positions), coordinates)
     input_positions[:] = -1.0
     coordinates[:] = -1.0
-    exposed_values = solution.input_positions
+    exposed_values = solution.driver.position
     exposed_coordinates = solution.coordinates
     exposed_values[:] = 99.0
     exposed_coordinates[:] = 99.0
 
-    np.testing.assert_allclose(solution.input_positions, [0.0, 0.5])
+    np.testing.assert_allclose(solution.driver.position, [0.0, 0.5])
     np.testing.assert_allclose(solution.coordinates, [[1.0, 2.0, 0.0], [2.0, 3.0, 0.5]])
 
 
-def test_configuration_validates_arrays_input_metadata_and_membership():
+def test_configuration_validates_arrays_driver_metadata_and_membership():
     mechanism, _, joint = _revolute_mechanism()
     other, other_link, other_joint = _revolute_mechanism()
 
@@ -272,20 +272,17 @@ def test_configuration_validates_arrays_input_metadata_and_membership():
     with pytest.raises(ValueError, match="finite"):
         Configuration(mechanism, [0.0, np.inf, 0.0])
     with pytest.raises(ValueError, match="joint"):
-        Configuration(mechanism, [0.0, 0.0, 0.0], input_joint=other_joint)
-    with pytest.raises(ValueError, match="scalar"):
-        Configuration(mechanism, [0.0, 0.0, 0.0], input_joint=joint, input_position=[1.0])
-    with pytest.raises(ValueError, match="finite"):
         Configuration(
             mechanism,
             [0.0, 0.0, 0.0],
-            input_joint=joint,
-            input_position=np.nan,
+            driver=KinematicDriver(other_joint, position=0.5),
         )
-    with pytest.raises(ValueError, match="requires input_joint"):
-        Configuration(mechanism, [0.0, 0.0, 0.0], input_position=0.5)
-    with pytest.raises(ValueError, match="requires input_joint"):
-        Configuration(mechanism, [0.0, 0.0, 0.0], input_velocity=1.0)
+    with pytest.raises(ValueError, match="exactly one sample"):
+        Configuration(
+            mechanism,
+            [0.0, 0.0, 0.0],
+            driver=KinematicDriver(joint, position=[0.0, 0.5]),
+        )
 
     config = Configuration(mechanism, [0.0, 0.0, 0.0])
     with pytest.raises(ValueError, match="body"):
@@ -296,24 +293,23 @@ def test_configuration_validates_arrays_input_metadata_and_membership():
         config.joint_coordinate(other_joint)
     assert other is other_link.mechanism
 
-
 def test_solution_validates_shapes_finiteness_and_external_entities():
     mechanism, _, joint = _revolute_mechanism()
     other, other_link, other_joint = _revolute_mechanism()
-    solution = KinematicSolution(mechanism, joint, [0.0], [[0.0, 0.0, 0.0]])
+    solution = KinematicSolution(mechanism, KinematicDriver(joint, position=[0.0]), [[0.0, 0.0, 0.0]])
 
     with pytest.raises(ValueError, match="joint"):
-        KinematicSolution(mechanism, other_joint, [0.0], [[0.0, 0.0, 0.0]])
+        KinematicSolution(mechanism, KinematicDriver(other_joint, position=[0.0]), [[0.0, 0.0, 0.0]])
     with pytest.raises(ValueError, match="1-dimensional"):
-        KinematicSolution(mechanism, joint, [[0.0]], [[0.0, 0.0, 0.0]])
+        KinematicDriver(joint, position=[[0.0]])
     with pytest.raises(ValueError, match="2-dimensional"):
-        KinematicSolution(mechanism, joint, [0.0], [0.0, 0.0, 0.0])
+        KinematicSolution(mechanism, KinematicDriver(joint, position=[0.0]), [0.0, 0.0, 0.0])
     with pytest.raises(ValueError, match="shape"):
-        KinematicSolution(mechanism, joint, [0.0, 1.0], [[0.0, 0.0, 0.0]])
+        KinematicSolution(mechanism, KinematicDriver(joint, position=[0.0, 1.0]), [[0.0, 0.0, 0.0]])
     with pytest.raises(ValueError, match="finite"):
-        KinematicSolution(mechanism, joint, [np.inf], [[0.0, 0.0, 0.0]])
+        KinematicDriver(joint, position=[np.inf])
     with pytest.raises(ValueError, match="finite"):
-        KinematicSolution(mechanism, joint, [0.0], [[0.0, np.nan, 0.0]])
+        KinematicSolution(mechanism, KinematicDriver(joint, position=[0.0]), [[0.0, np.nan, 0.0]])
 
     external_point = other_link.add_point("external", (1.0, 0.0))
     with pytest.raises(ValueError):
@@ -335,10 +331,12 @@ def test_configuration_stores_optional_differential_state_and_metadata_as_safe_c
         [1.0, 2.0, 0.5],
         coordinate_velocities=q_dot,
         coordinate_accelerations=q_ddot,
-        input_joint=joint,
-        input_position=0.5,
-        input_velocity=9.0,
-        input_acceleration=10.0,
+        driver=KinematicDriver(
+            joint,
+            position=0.5,
+            velocity=9.0,
+            acceleration=10.0,
+        ),
     )
 
     q_dot[:] = -1.0
@@ -346,8 +344,8 @@ def test_configuration_stores_optional_differential_state_and_metadata_as_safe_c
 
     assert config.has_velocity is True
     assert config.has_acceleration is True
-    assert config.input_velocity == pytest.approx(9.0)
-    assert config.input_acceleration == pytest.approx(10.0)
+    assert config.driver.velocity == pytest.approx(9.0)
+    assert config.driver.acceleration == pytest.approx(10.0)
     np.testing.assert_allclose(config.coordinate_velocities, [3.0, 4.0, 5.0])
     np.testing.assert_allclose(config.coordinate_accelerations, [6.0, 7.0, 8.0])
     np.testing.assert_allclose(config.body_velocity(link), [3.0, 4.0, 5.0])
@@ -448,12 +446,11 @@ def test_configuration_validates_differential_state_invariants():
             [0.0, 0.0, 0.0],
             coordinate_accelerations=[0.0, 0.0, 0.0],
         )
-    with pytest.raises(ValueError, match="requires input_velocity"):
-        Configuration(
-            mechanism,
-            [0.0, 0.0, 0.0],
-            input_joint=joint,
-            input_acceleration=1.0,
+    with pytest.raises(ValueError, match="requires velocity"):
+        KinematicDriver(
+            joint,
+            position=0.0,
+            acceleration=1.0,
         )
     with pytest.raises(ValueError, match="shape"):
         Configuration(
@@ -477,14 +474,13 @@ def test_solution_time_is_optional_and_propagates_through_indexing_and_slicing()
     )
     times = np.array([0.0, 0.25, 0.75])
 
-    untimed = KinematicSolution(mechanism, joint, inputs, coordinates)
+    untimed = KinematicSolution(mechanism, KinematicDriver(joint, position=inputs), coordinates)
     assert untimed.time is None
     assert untimed[0].time is None
 
     solution = KinematicSolution(
         mechanism,
-        joint,
-        inputs,
+        KinematicDriver(joint, position=inputs),
         coordinates,
         time=times,
     )
@@ -507,8 +503,7 @@ def test_solution_time_is_a_safe_copy_and_must_match_sample_count():
 
     solution = KinematicSolution(
         mechanism,
-        joint,
-        inputs,
+        KinematicDriver(joint, position=inputs),
         coordinates,
         time=times,
     )

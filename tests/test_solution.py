@@ -515,8 +515,7 @@ def test_solution_time_is_a_safe_copy_and_must_match_sample_count():
     with pytest.raises(ValueError, match="time must have shape"):
         KinematicSolution(
             mechanism,
-            joint,
-            inputs,
+            KinematicDriver(joint, position=inputs),
             coordinates,
             time=[0.0],
         )
@@ -524,8 +523,7 @@ def test_solution_time_is_a_safe_copy_and_must_match_sample_count():
     with pytest.raises(ValueError, match="finite"):
         KinematicSolution(
             mechanism,
-            joint,
-            inputs,
+            KinematicDriver(joint, position=inputs),
             coordinates,
             time=[0.0, np.nan],
         )

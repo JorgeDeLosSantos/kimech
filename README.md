@@ -87,7 +87,7 @@ accelerations = solution.point_accelerations(point_p)
 
 `KinematicDriver` packages the prescribed natural coordinate of a revolute or prismatic joint together with optional physical velocity and acceleration data. `position` may be a scalar or a one-dimensional sequence; scalar differential values are broadcast across sweeps. `solve()` always returns a `KinematicSolution`, so a scalar driver position produces a solution of length one and `solution[0]` returns its `Configuration`.
 
-Position-only solving remains valid by constructing the driver with `position` only. Position sweeps use predictor-corrector continuation with warm-start fallback and bounded adaptive subdivision when recovery is needed. Solutions also expose structured numerical diagnostics through `solution.diagnostics`.
+Position-only solving remains valid by constructing the driver with `position` only. An optional `time=` array may associate each requested sample with a physical instant; it does not control continuation or trigger numerical differentiation. Position sweeps use predictor-corrector continuation with warm-start fallback and bounded adaptive subdivision when recovery is needed. Solutions also expose structured numerical diagnostics through `solution.diagnostics`.
 
 For example:
 
@@ -125,7 +125,7 @@ Sensitivity is with respect to the prescribed natural joint coordinate; it is no
 
 ## Visualization
 
-Visualization remains presentation-only and does not define physical time:
+Visualization remains presentation-only. When `solution.time` is available it records physical sample times, while animation `fps` still controls playback only:
 
 ```python
 import matplotlib.pyplot as plt

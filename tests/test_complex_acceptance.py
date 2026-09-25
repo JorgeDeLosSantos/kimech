@@ -1,6 +1,6 @@
 import numpy as np
 
-from kimech import Mechanism, solve
+from kimech import Mechanism, KinematicDriver, solve
 
 
 def _wrapped_angle_difference(a, b):
@@ -372,8 +372,10 @@ def test_archimedes_trammel_full_cycle_matches_analytical_geometry():
     values = np.linspace(theta0, theta0 + 2.0 * np.pi, 73)
     solution = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values,
+        driver=KinematicDriver(
+            input_joint,
+            position=values,
+        ),
         initial_guess=guess,
     )
 
@@ -419,8 +421,10 @@ def test_whitworth_full_cycle_matches_slot_and_ram_geometry():
     values = np.linspace(theta0, theta0 + 2.0 * np.pi, 73)
     solution = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values,
+        driver=KinematicDriver(
+            input_joint,
+            position=values,
+        ),
         initial_guess=guess,
     )
 
@@ -470,14 +474,18 @@ def test_watt_ii_full_cycle_matches_independent_geometry_and_reverse_branch():
     values = np.linspace(theta0, theta0 + 2.0 * np.pi, 73)
     forward = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values,
+        driver=KinematicDriver(
+            input_joint,
+            position=values,
+        ),
         initial_guess=guess,
     )
     reverse = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values[::-1],
+        driver=KinematicDriver(
+            input_joint,
+            position=values[::-1],
+        ),
         initial_guess=forward[-1],
     )[::-1]
 

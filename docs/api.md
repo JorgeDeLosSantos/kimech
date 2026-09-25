@@ -331,6 +331,30 @@ Slicing preserves the corresponding time samples. Result containers do not impos
 
 Animation `fps` remains presentation-only and is not a physical integration step.
 
+A representative constant-speed four-bar prescription is:
+
+```python
+time = np.linspace(0.0, 2.0, 201)
+theta0 = np.deg2rad(30.0)
+omega = 5.0
+
+driver = KinematicDriver(
+    crank_joint,
+    position=theta0 + omega * time,
+    velocity=omega,
+    acceleration=0.0,
+)
+
+solution = solve(
+    mechanism,
+    driver=driver,
+    time=time,
+    initial_guess=initial_guess,
+)
+```
+
+This remains a prescribed kinematic history: Kimech does not integrate the crank motion forward in time. The same driver solved without `time=` produces the same position, velocity, and acceleration states; `time` adds the physical sample association only.
+
 ## 7. `Configuration`
 
 A `Configuration` always stores generalized position state and may store velocity and acceleration state.

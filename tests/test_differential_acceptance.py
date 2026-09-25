@@ -308,7 +308,7 @@ def test_sweep_acceleration_failure_reports_stage_and_sample_index(monkeypatch):
 
     with pytest.raises(
         KinematicSolveError,
-        match=r"failed to solve acceleration at input index 1 .*linear solve failed",
+        match=r"failed to solve acceleration at driver index 1 .*linear solve failed",
     ):
         solve(
             mechanism,

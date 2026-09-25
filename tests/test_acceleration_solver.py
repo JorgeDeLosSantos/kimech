@@ -48,7 +48,7 @@ def test_scalar_revolute_acceleration_matches_prescribed_angular_acceleration():
     assert isinstance(config, Configuration)
     assert config.has_velocity
     assert config.has_acceleration
-    assert config.input_acceleration == pytest.approx(-1.2)
+    assert config.driver.acceleration == pytest.approx(-1.2)
     np.testing.assert_allclose(config.body_acceleration(link), [0.0, 0.0, -1.2])
     assert config.joint_acceleration(joint) == pytest.approx(-1.2)
 
@@ -108,7 +108,7 @@ def test_sweep_scalar_acceleration_broadcasts_and_preserves_result_shape():
 
     assert isinstance(solution, KinematicSolution)
     assert solution.has_acceleration
-    np.testing.assert_allclose(solution.input_accelerations, [-0.5, -0.5, -0.5])
+    np.testing.assert_allclose(solution.driver.acceleration, [-0.5, -0.5, -0.5])
     np.testing.assert_allclose(solution.body_accelerations(link)[:, 2], [-0.5, -0.5, -0.5])
 
 
@@ -129,9 +129,9 @@ def test_sweep_accepts_elementwise_acceleration_history():
         initial_guess=guess,
     )
 
-    np.testing.assert_array_equal(solution.input_accelerations, accelerations)
+    np.testing.assert_array_equal(solution.driver.acceleration, accelerations)
     np.testing.assert_allclose(solution.body_accelerations(link)[:, 2], accelerations)
-    assert solution[1].input_acceleration == pytest.approx(-0.25)
+    assert solution[1].driver.acceleration == pytest.approx(-0.25)
 
 
 def test_acceleration_request_does_not_change_position_or_velocity_solution():

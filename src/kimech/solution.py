@@ -9,6 +9,7 @@ import numpy as np
 
 from ._geometry import perpendicular, rotation_matrix
 from .diagnostics import SolveDiagnostics
+from .driver import KinematicDriver
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Ground, Link, Mechanism, Point
 
@@ -23,11 +24,8 @@ class Configuration:
         "_coordinate_accelerations",
         "_coordinate_velocities",
         "_coordinates",
-        "_input_acceleration",
-        "_input_joint",
-        "_input_position",
-        "_input_velocity",
-        "_links",
+        "_driver",
+                "_links",
         "_mechanism",
         "_time",
     )
@@ -39,10 +37,7 @@ class Configuration:
         *,
         coordinate_velocities: Sequence[float] | np.ndarray | None = None,
         coordinate_accelerations: Sequence[float] | np.ndarray | None = None,
-        input_joint: _Joint | None = None,
-        input_position: float | None = None,
-        input_velocity: float | None = None,
-        input_acceleration: float | None = None,
+        driver: KinematicDriver | None = None,
         time: float | None = None,
     ) -> None:
         _validate_mechanism(mechanism)
@@ -52,10 +47,7 @@ class Configuration:
             coordinates,
             coordinate_velocities=coordinate_velocities,
             coordinate_accelerations=coordinate_accelerations,
-            input_joint=input_joint,
-            input_position=input_position,
-            input_velocity=input_velocity,
-            input_acceleration=input_acceleration,
+            driver=driver,
             time=time,
         )
 
@@ -81,10 +73,7 @@ class Configuration:
             coordinates,
             coordinate_velocities=coordinate_velocities,
             coordinate_accelerations=coordinate_accelerations,
-            input_joint=input_joint,
-            input_position=input_position,
-            input_velocity=input_velocity,
-            input_acceleration=input_acceleration,
+            driver=driver,
             time=time,
         )
         return configuration
@@ -97,23 +86,17 @@ class Configuration:
         *,
         coordinate_velocities: Sequence[float] | np.ndarray | None,
         coordinate_accelerations: Sequence[float] | np.ndarray | None,
-        input_joint: _Joint | None,
-        input_position: float | None,
-        input_velocity: float | None,
-        input_acceleration: float | None,
+        driver: KinematicDriver | None,
         time: float | None,
     ) -> None:
-        if input_joint is not None:
-            _validate_joint(mechanism, links, input_joint)
-        elif any(
-            value is not None
-            for value in (input_position, input_velocity, input_acceleration)
-        ):
-            raise ValueError("input metadata requires input_joint")
+        if driver is not None:
+            if not isinstance(driver, KinematicDriver):
+                raise TypeError("driver must be a KinematicDriver or None")
+            _validate_joint(mechanism, links, driver.joint)
+            if driver.sample_count != 1:
+                raise ValueError("configuration driver must contain exactly one sample")
         if coordinate_accelerations is not None and coordinate_velocities is None:
             raise ValueError("coordinate_accelerations requires coordinate_velocities")
-        if input_acceleration is not None and input_velocity is None:
-            raise ValueError("input_acceleration requires input_velocity")
 
         state_shape = (3 * len(links),)
         self._mechanism = mechanism
@@ -133,13 +116,7 @@ class Configuration:
             name="coordinate_accelerations",
             shape=state_shape,
         )
-        self._input_joint = input_joint
-        self._input_position = _optional_finite_scalar(input_position, name="input_position")
-        self._input_velocity = _optional_finite_scalar(input_velocity, name="input_velocity")
-        self._input_acceleration = _optional_finite_scalar(
-            input_acceleration,
-            name="input_acceleration",
-        )
+        self._driver = driver
         self._time = _optional_finite_scalar(time, name="time")
 
     @property
@@ -148,24 +125,9 @@ class Configuration:
         return self._mechanism
 
     @property
-    def input_joint(self) -> _Joint | None:
-        """Return the prescribed joint associated with this configuration, if any."""
-        return self._input_joint
-
-    @property
-    def input_position(self) -> float | None:
-        """Return the prescribed joint coordinate associated with this configuration."""
-        return self._input_position
-
-    @property
-    def input_velocity(self) -> float | None:
-        """Return the prescribed joint velocity metadata, if available."""
-        return self._input_velocity
-
-    @property
-    def input_acceleration(self) -> float | None:
-        """Return the prescribed joint acceleration metadata, if available."""
-        return self._input_acceleration
+    def driver(self) -> KinematicDriver | None:
+        """Return the prescribed kinematic driver for this configuration."""
+        return self._driver
 
     @property
     def time(self) -> float | None:
@@ -320,10 +282,7 @@ class KinematicSolution:
         "_coordinate_velocities",
         "_coordinates",
         "_diagnostics",
-        "_input_accelerations",
-        "_input_joint",
-        "_input_positions",
-        "_input_velocities",
+        "_driver",
         "_joints",
         "_links",
         "_mechanism",
@@ -333,14 +292,11 @@ class KinematicSolution:
     def __init__(
         self,
         mechanism: Mechanism,
-        input_joint: _Joint,
-        input_positions: Sequence[float] | np.ndarray,
+        driver: KinematicDriver,
         coordinates: Sequence[Sequence[float]] | np.ndarray,
         *,
         coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None = None,
         coordinate_accelerations: Sequence[Sequence[float]] | np.ndarray | None = None,
-        input_velocities: Sequence[float] | np.ndarray | None = None,
-        input_accelerations: Sequence[float] | np.ndarray | None = None,
         time: Sequence[float] | np.ndarray | None = None,
         diagnostics: SolveDiagnostics | None = None,
     ) -> None:
@@ -349,13 +305,10 @@ class KinematicSolution:
             mechanism,
             mechanism.links,
             mechanism.joints,
-            input_joint,
-            input_positions,
+            driver,
             coordinates,
             coordinate_velocities=coordinate_velocities,
             coordinate_accelerations=coordinate_accelerations,
-            input_velocities=input_velocities,
-            input_accelerations=input_accelerations,
             time=time,
             diagnostics=diagnostics,
         )
@@ -366,8 +319,7 @@ class KinematicSolution:
         mechanism: Mechanism,
         links: tuple[Link, ...],
         joints: tuple[_Joint, ...],
-        input_joint: _Joint,
-        input_positions: Sequence[float] | np.ndarray,
+        driver: KinematicDriver,
         coordinates: Sequence[Sequence[float]] | np.ndarray,
         *,
         coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None = None,
@@ -382,13 +334,10 @@ class KinematicSolution:
             mechanism,
             links,
             joints,
-            input_joint,
-            input_positions,
+            driver,
             coordinates,
             coordinate_velocities=coordinate_velocities,
             coordinate_accelerations=coordinate_accelerations,
-            input_velocities=input_velocities,
-            input_accelerations=input_accelerations,
             time=time,
             diagnostics=diagnostics,
         )
@@ -405,19 +354,17 @@ class KinematicSolution:
         *,
         coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None,
         coordinate_accelerations: Sequence[Sequence[float]] | np.ndarray | None,
-        input_velocities: Sequence[float] | np.ndarray | None,
-        input_accelerations: Sequence[float] | np.ndarray | None,
         time: Sequence[float] | np.ndarray | None,
         diagnostics: SolveDiagnostics | None,
     ) -> None:
         _validate_mechanism(mechanism)
-        _validate_joint(mechanism, links, input_joint)
+        if not isinstance(driver, KinematicDriver):
+            raise TypeError("driver must be a KinematicDriver")
+        _validate_joint(mechanism, links, driver.joint)
         if coordinate_accelerations is not None and coordinate_velocities is None:
             raise ValueError("coordinate_accelerations requires coordinate_velocities")
-        if input_accelerations is not None and input_velocities is None:
-            raise ValueError("input_accelerations requires input_velocities")
 
-        values = _finite_float_array(input_positions, name="input_positions", ndim=1)
+        values = driver._position_history()
         coordinate_array = _finite_float_array(coordinates, name="coordinates", ndim=2)
         state_shape = (len(values), 3 * len(links))
         if coordinate_array.shape != state_shape:
@@ -432,35 +379,22 @@ class KinematicSolution:
             name="coordinate_accelerations",
             shape=state_shape,
         )
-        input_shape = (len(values),)
-        input_velocity_array = _optional_finite_float_array(
-            input_velocities,
-            name="input_velocities",
-            shape=input_shape,
-        )
-        input_acceleration_array = _optional_finite_float_array(
-            input_accelerations,
-            name="input_accelerations",
-            shape=input_shape,
-        )
+        history_shape = (len(values),)
         time_array = _optional_finite_float_array(
             time,
             name="time",
-            shape=input_shape,
+            shape=history_shape,
         )
         if diagnostics is not None:
             if not isinstance(diagnostics, SolveDiagnostics):
                 raise TypeError("diagnostics must be a SolveDiagnostics or None")
             if len(diagnostics) != len(values):
-                raise ValueError("diagnostics length must match input_positions")
+                raise ValueError("diagnostics length must match driver samples")
 
         self._mechanism = mechanism
         self._links = links
         self._joints = joints
-        self._input_joint = input_joint
-        self._input_positions = values
-        self._input_velocities = input_velocity_array
-        self._input_accelerations = input_acceleration_array
+        self._driver = driver
         self._time = time_array
         self._coordinates = coordinate_array
         self._coordinate_velocities = velocity_array
@@ -473,28 +407,9 @@ class KinematicSolution:
         return self._mechanism
 
     @property
-    def input_joint(self) -> _Joint:
-        """Return the joint whose coordinate parameterizes the solution."""
-        return self._input_joint
-
-    @property
-    def input_positions(self) -> np.ndarray:
-        """Return a safe copy of the ordered prescribed coordinates."""
-        return self._input_positions.copy()
-
-    @property
-    def input_velocities(self) -> np.ndarray | None:
-        """Return prescribed input velocity history, if available."""
-        if self._input_velocities is None:
-            return None
-        return self._input_velocities.copy()
-
-    @property
-    def input_accelerations(self) -> np.ndarray | None:
-        """Return prescribed input acceleration history, if available."""
-        if self._input_accelerations is None:
-            return None
-        return self._input_accelerations.copy()
+    def driver(self) -> KinematicDriver:
+        """Return the prescribed kinematic driver snapshot."""
+        return self._driver
 
     @property
     def time(self) -> np.ndarray | None:
@@ -538,43 +453,46 @@ class KinematicSolution:
         return self._coordinate_accelerations is not None
 
     def __len__(self) -> int:
-        return len(self._input_positions)
+        return len(self._driver)
 
     def __getitem__(self, index: int | slice) -> Configuration | KinematicSolution:
         """Return one configuration or a sliced kinematic solution."""
+        positions = self._driver._position_history()
+        velocities = self._driver._velocity_history()
+        accelerations = self._driver._acceleration_history()
+
         if isinstance(index, slice):
+            sliced_driver = KinematicDriver._from_history(
+                self._driver.joint,
+                positions[index],
+                None if velocities is None else velocities[index],
+                None if accelerations is None else accelerations[index],
+            )
             return KinematicSolution._from_snapshot(
                 self._mechanism,
                 self._links,
                 self._joints,
-                self._input_joint,
-                self._input_positions[index],
+                sliced_driver,
                 self._coordinates[index],
                 coordinate_velocities=(
-                    None
-                    if self._coordinate_velocities is None
+                    None if self._coordinate_velocities is None
                     else self._coordinate_velocities[index]
                 ),
                 coordinate_accelerations=(
-                    None
-                    if self._coordinate_accelerations is None
+                    None if self._coordinate_accelerations is None
                     else self._coordinate_accelerations[index]
-                ),
-                input_velocities=(
-                    None
-                    if self._input_velocities is None
-                    else self._input_velocities[index]
-                ),
-                input_accelerations=(
-                    None
-                    if self._input_accelerations is None
-                    else self._input_accelerations[index]
                 ),
                 time=(None if self._time is None else self._time[index]),
                 diagnostics=(None if self._diagnostics is None else self._diagnostics._slice(index)),
             )
 
         item = operator.index(index)
+        sample_driver = KinematicDriver(
+            self._driver.joint,
+            position=float(positions[item]),
+            velocity=(None if velocities is None else float(velocities[item])),
+            acceleration=(None if accelerations is None else float(accelerations[item])),
+        )
         return Configuration._from_snapshot(
             self._mechanism,
             self._links,
@@ -583,20 +501,10 @@ class KinematicSolution:
                 None if self._coordinate_velocities is None else self._coordinate_velocities[item]
             ),
             coordinate_accelerations=(
-                None
-                if self._coordinate_accelerations is None
+                None if self._coordinate_accelerations is None
                 else self._coordinate_accelerations[item]
             ),
-            input_joint=self._input_joint,
-            input_position=self._input_positions[item],
-            input_velocity=(
-                None if self._input_velocities is None else self._input_velocities[item]
-            ),
-            input_acceleration=(
-                None
-                if self._input_accelerations is None
-                else self._input_accelerations[item]
-            ),
+            driver=sample_driver,
             time=(None if self._time is None else self._time[item]),
         )
 

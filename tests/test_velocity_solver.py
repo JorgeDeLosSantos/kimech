@@ -47,7 +47,7 @@ def test_scalar_revolute_velocity_is_exact_relative_angular_rate():
 
     assert isinstance(config, Configuration)
     assert config.has_velocity
-    assert config.input_velocity == pytest.approx(2.5)
+    assert config.driver.velocity == pytest.approx(2.5)
     np.testing.assert_allclose(config.body_velocity(link), [0.0, 0.0, 2.5])
     assert config.joint_velocity(joint) == pytest.approx(2.5)
 
@@ -86,7 +86,7 @@ def test_sweep_scalar_input_velocity_broadcasts_and_preserves_result_shape():
 
     assert isinstance(solution, KinematicSolution)
     assert solution.has_velocity
-    np.testing.assert_allclose(solution.input_velocities, [3.0, 3.0, 3.0])
+    np.testing.assert_allclose(solution.driver.velocity, [3.0, 3.0, 3.0])
     np.testing.assert_allclose(
         solution.body_velocities(link),
         [[0.0, 0.0, 3.0], [0.0, 0.0, 3.0], [0.0, 0.0, 3.0]],
@@ -108,9 +108,9 @@ def test_sweep_accepts_elementwise_input_velocity_history():
         initial_guess=guess,
     )
 
-    np.testing.assert_array_equal(solution.input_velocities, velocities)
+    np.testing.assert_array_equal(solution.driver.velocity, velocities)
     np.testing.assert_allclose(solution.body_velocities(link)[:, 2], velocities)
-    assert solution[1].input_velocity == pytest.approx(-2.0)
+    assert solution[1].driver.velocity == pytest.approx(-2.0)
 
 
 def test_zero_input_velocity_requests_and_returns_zero_velocity_state():
@@ -173,7 +173,7 @@ def test_length_one_values_sequence_still_returns_solution_with_scalar_velocity(
 
     assert isinstance(solution, KinematicSolution)
     assert solution.coordinate_velocities.shape == (1, 3)
-    np.testing.assert_allclose(solution.input_velocities, [2.0])
+    np.testing.assert_allclose(solution.driver.velocity, [2.0])
 
 
 @pytest.mark.parametrize(

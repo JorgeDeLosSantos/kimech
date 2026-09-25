@@ -34,7 +34,7 @@ The following builds a four-bar linkage and solves a differential kinematic swee
 ```python
 import numpy as np
 
-from kimech import Mechanism, solve
+from kimech import KinematicDriver, Mechanism, solve
 
 mechanism = Mechanism("four_bar")
 ground = mechanism.ground
@@ -67,12 +67,16 @@ initial_guess = {
 }
 input_positions = np.linspace(0.8, 1.3, 60)
 
+driver = KinematicDriver(
+    input_joint,
+    position=input_positions,
+    velocity=1.5,
+    acceleration=0.0,
+)
+
 solution = solve(
     mechanism,
-    input_joint=input_joint,
-    input_position=input_positions,
-    input_velocity=1.5,
-    input_acceleration=0.0,
+    driver=driver,
     initial_guess=initial_guess,
 )
 
@@ -81,9 +85,9 @@ velocities = solution.point_velocities(point_p)
 accelerations = solution.point_accelerations(point_p)
 ```
 
-`input_position` is the prescribed natural coordinate of `input_joint`: relative angle for a revolute joint and signed displacement for a prismatic joint. It may be a scalar or a one-dimensional sequence. `solve()` always returns a `KinematicSolution`; a scalar input therefore produces a solution of length one and `solution[0]` returns its `Configuration`. Differential inputs are physical derivatives with respect to a common external time variable, and scalar differential inputs are broadcast across sweeps.
+`KinematicDriver` packages the prescribed natural coordinate of a revolute or prismatic joint together with optional physical velocity and acceleration data. `position` may be a scalar or a one-dimensional sequence; scalar differential values are broadcast across sweeps. `solve()` always returns a `KinematicSolution`, so a scalar driver position produces a solution of length one and `solution[0]` returns its `Configuration`.
 
-Position-only solving remains valid by omitting the differential inputs. Position sweeps use predictor-corrector continuation with warm-start fallback and bounded adaptive subdivision when recovery is needed. Solutions also expose structured numerical diagnostics through `solution.diagnostics`.
+Position-only solving remains valid by constructing the driver with `position` only. Position sweeps use predictor-corrector continuation with warm-start fallback and bounded adaptive subdivision when recovery is needed. Solutions also expose structured numerical diagnostics through `solution.diagnostics`.
 
 For example:
 

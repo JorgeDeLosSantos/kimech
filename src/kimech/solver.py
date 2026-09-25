@@ -25,15 +25,14 @@ _MAX_SUBDIVISION_DEPTH = 8
 def solve(
     mechanism: Mechanism,
     *,
-    input_joint: RevoluteJoint | PrismaticJoint,
-    input_position,
+    driver: KinematicDriver,
     initial_guess,
-    input_velocity=None,
-    input_acceleration=None,
 ) -> KinematicSolution:
     """Solve position and, when requested, differential kinematics."""
     if not isinstance(mechanism, Mechanism):
         raise TypeError("mechanism must be a Mechanism")
+    if not isinstance(driver, KinematicDriver):
+        raise TypeError("driver must be a KinematicDriver")
 
     links = mechanism.links
     joints = mechanism.joints
@@ -47,55 +46,18 @@ def solve(
     equation_count = 2 * len(joints) + 1
     if coordinate_count != equation_count:
         raise InvalidModelError(
-            "solve() with one prescribed input requires structural mobility 1 "
+            "solve() with one kinematic driver requires structural mobility 1 "
             f"({coordinate_count} coordinates versus {equation_count} equations)"
         )
 
-    if not isinstance(input_joint, (RevoluteJoint, PrismaticJoint)):
-        raise TypeError("input_joint must be a RevoluteJoint or PrismaticJoint")
-    if not any(input_joint is joint for joint in joints):
+    if not any(driver.joint is joint for joint in joints):
         raise InvalidModelError(
-            "input_joint does not belong to the mechanism snapshot"
+            "driver joint does not belong to the mechanism snapshot"
         )
 
-    input_positions, scalar_input = _coerce_input_positions(input_position)
-    input_velocities = _coerce_optional_input_history(
-        input_velocity,
-        name="input_velocity",
-        scalar_input=scalar_input,
-        count=len(input_positions),
-    )
-    input_accelerations = _coerce_optional_input_history(
-        input_acceleration,
-        name="input_acceleration",
-        scalar_input=scalar_input,
-        count=len(input_positions),
-    )
-    if input_accelerations is not None and input_velocities is None:
-        raise ValueError("input_acceleration requires input_velocity")
-
-    driver = KinematicDriver(
-        input_joint,
-        position=(float(input_positions[0]) if scalar_input else input_positions),
-        velocity=(
-            None
-            if input_velocities is None
-            else (
-                float(input_velocities[0])
-                if scalar_input
-                else input_velocities
-            )
-        ),
-        acceleration=(
-            None
-            if input_accelerations is None
-            else (
-                float(input_accelerations[0])
-                if scalar_input
-                else input_accelerations
-            )
-        ),
-    )
+    input_positions = driver._position_history()
+    input_velocities = driver._velocity_history()
+    input_accelerations = driver._acceleration_history()
 
     scaling = build_numerical_scaling(
         mechanism,
@@ -210,7 +172,6 @@ def solve(
         input_accelerations=input_accelerations,
         diagnostics=diagnostics,
     )
-
 
 
 def _solve_requested_configuration(
@@ -587,55 +548,6 @@ def _build_solve_diagnostics(
         corrector_attempts=corrector_attempts,
         residual_norms=residual_norms,
     )
-
-
-def _coerce_input_positions(input_position: object) -> tuple[np.ndarray, bool]:
-    try:
-        array = np.asarray(input_position, dtype=float)
-    except (TypeError, ValueError) as error:
-        raise TypeError("input_position must be numeric") from error
-
-    scalar_input = array.ndim == 0
-    if scalar_input:
-        array = np.atleast_1d(array)
-    elif array.ndim != 1:
-        raise ValueError("input_position must be a scalar or a 1-dimensional sequence")
-    if array.size == 0:
-        raise ValueError("input_position sequence must not be empty")
-    if not np.all(np.isfinite(array)):
-        raise ValueError("input_position must contain only finite values")
-    return array.astype(float, copy=True), scalar_input
-
-
-def _coerce_optional_input_history(
-    value: object,
-    *,
-    name: str,
-    scalar_input: bool,
-    count: int,
-) -> np.ndarray | None:
-    if value is None:
-        return None
-    try:
-        array = np.asarray(value, dtype=float)
-    except (TypeError, ValueError) as error:
-        raise TypeError(f"{name} must be numeric") from error
-
-    if array.ndim == 0:
-        scalar_value = float(array)
-        if not np.isfinite(scalar_value):
-            raise ValueError(f"{name} must be finite")
-        return np.full(count, scalar_value, dtype=float)
-
-    if scalar_input:
-        raise ValueError(f"{name} must be a scalar when input_position is scalar")
-    if array.ndim != 1:
-        raise ValueError(f"{name} must be a scalar or a 1-dimensional sequence")
-    if array.shape != (count,):
-        raise ValueError(f"{name} must have shape ({count},)")
-    if not np.all(np.isfinite(array)):
-        raise ValueError(f"{name} must contain only finite values")
-    return array.astype(float, copy=True)
 
 
 def _pack_initial_guess(

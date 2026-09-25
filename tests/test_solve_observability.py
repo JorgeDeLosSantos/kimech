@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from kimech import (
-    KinematicSolveError,
+    KinematicDriver,    KinematicSolveError,
     Mechanism,
     SolveDiagnosticSummary,
     SolveDiagnostics,
@@ -65,8 +65,10 @@ def test_position_failure_exposes_structured_context(monkeypatch):
     with pytest.raises(KinematicSolveError) as captured:
         solve(
             mechanism,
-            input_joint=joint,
-            input_position=[0.5],
+            driver=KinematicDriver(
+                joint,
+                position=[0.5],
+            ),
             initial_guess={link: (0.0, 0.0, 0.0)},
         )
 
@@ -118,8 +120,10 @@ def test_failed_requested_sample_reports_recovery_path(monkeypatch):
     with pytest.raises(KinematicSolveError) as captured:
         solve(
             mechanism,
-            input_joint=joint,
-            input_position=[0.0, 0.2],
+            driver=KinematicDriver(
+                joint,
+                position=[0.0, 0.2],
+            ),
             initial_guess={link: (0.0, 0.0, 0.0)},
         )
 
@@ -143,9 +147,11 @@ def test_velocity_failure_exposes_structured_context(monkeypatch):
     with pytest.raises(KinematicSolveError) as captured:
         solve(
             mechanism,
-            input_joint=joint,
-            input_position=0.5,
-            input_velocity=1.0,
+            driver=KinematicDriver(
+                joint,
+                position=0.5,
+                velocity=1.0,
+            ),
             initial_guess={link: (0.0, 0.0, 0.0)},
         )
 

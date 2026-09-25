@@ -25,7 +25,7 @@ from pathlib import Path
 
 import numpy as np
 
-from kimech import Configuration, KinematicSolveError, Mechanism, solve
+from kimech import Configuration, KinematicDriver, KinematicSolveError, Mechanism, solve
 from kimech.joints import PrismaticJoint, RevoluteJoint
 
 ANGLE_OFFSETS = (1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 0.0)
@@ -122,8 +122,10 @@ def _reference_configuration(
     values = np.linspace(start, target, sample_count)
     return solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values,
+        driver=KinematicDriver(
+            input_joint,
+            position=values,
+        ),
         initial_guess=guess,
     )[-1]
 
@@ -177,8 +179,10 @@ def _compare_drivers(
 
         primary = solve(
             mechanism,
-            input_joint=primary_joint,
-            input_position=reference_angle,
+            driver=KinematicDriver(
+                primary_joint,
+                position=reference_angle,
+            ),
             initial_guess=config,
         )
         records.append(
@@ -195,8 +199,10 @@ def _compare_drivers(
         alternate_value = config.joint_coordinate(alternate_joint)
         alternate = solve(
             mechanism,
-            input_joint=alternate_joint,
-            input_position=alternate_value,
+            driver=KinematicDriver(
+                alternate_joint,
+                position=alternate_value,
+            ),
             initial_guess=config,
         )
         records.append(
@@ -319,8 +325,10 @@ def _probe_beyond_limit() -> None:
     try:
         solve(
             mechanism,
-            input_joint=slider_joint,
-            input_position=slider_limit + 1e-6,
+            driver=KinematicDriver(
+                slider_joint,
+                position=slider_limit + 1e-6,
+            ),
             initial_guess=dead_center,
         )
     except KinematicSolveError as error:

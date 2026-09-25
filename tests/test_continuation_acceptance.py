@@ -1,6 +1,6 @@
 import numpy as np
 
-from kimech import Mechanism, solve
+from kimech import Mechanism, KinematicDriver, solve
 
 
 def _wrapped_angle_difference(a, b):
@@ -79,14 +79,18 @@ def test_four_bar_full_cycle_is_direction_consistent_with_valid_process_diagnost
 
     forward = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values,
+        driver=KinematicDriver(
+            input_joint,
+            position=values,
+        ),
         initial_guess=initial_guess,
     )
     reverse = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values[::-1],
+        driver=KinematicDriver(
+            input_joint,
+            position=values[::-1],
+        ),
         initial_guess=forward[-1],
     )[::-1]
 
@@ -130,23 +134,29 @@ def test_slider_crank_dead_center_diagnostics_depend_on_selected_driver():
 
     approach = solve(
         mechanism,
-        input_joint=crank_joint,
-        input_position=np.linspace(0.7, 0.0, 40),
+        driver=KinematicDriver(
+            crank_joint,
+            position=np.linspace(0.7, 0.0, 40),
+        ),
         initial_guess=initial_guess,
     )
     dead_center = approach[-1]
 
     crank_driven = solve(
         mechanism,
-        input_joint=crank_joint,
-        input_position=0.0,
+        driver=KinematicDriver(
+            crank_joint,
+            position=0.0,
+        ),
         initial_guess=dead_center,
     )
     slider_position = dead_center.joint_coordinate(slider_joint)
     slider_driven = solve(
         mechanism,
-        input_joint=slider_joint,
-        input_position=slider_position,
+        driver=KinematicDriver(
+            slider_joint,
+            position=slider_position,
+        ),
         initial_guess=dead_center,
     )
 

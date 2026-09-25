@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from kimech import (
-    InputSensitivity,
+    KinematicDriver,    InputSensitivity,
     KinematicSolveError,
     Mechanism,
     SolveFailureContext,
@@ -74,8 +74,10 @@ def test_revolute_input_sensitivity_is_exact_and_derives_point_motion():
     mechanism, link, point, joint, guess = _single_revolute()
     solution = solve(
         mechanism,
-        input_joint=joint,
-        input_position=[0.3, 0.7],
+        driver=KinematicDriver(
+            joint,
+            position=[0.3, 0.7],
+        ),
         initial_guess=guess,
     )
 
@@ -115,8 +117,10 @@ def test_prismatic_input_sensitivity_is_exact():
     mechanism, slider, point, joint, guess = _single_prismatic()
     solution = solve(
         mechanism,
-        input_joint=joint,
-        input_position=[0.2, 0.8],
+        driver=KinematicDriver(
+            joint,
+            position=[0.2, 0.8],
+        ),
         initial_guess=guess,
     )
 
@@ -154,8 +158,10 @@ def test_four_bar_sensitivity_matches_central_finite_difference():
 
     solution = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values,
+        driver=KinematicDriver(
+            input_joint,
+            position=values,
+        ),
         initial_guess=guess,
     )
     sensitivity = input_sensitivity(solution)
@@ -197,8 +203,10 @@ def test_revolute_input_sensitivity_scales_consistently_with_geometry(scale):
     mechanism, input_joint, _, point, guess = _four_bar(scale)
     solution = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=[0.9],
+        driver=KinematicDriver(
+            input_joint,
+            position=[0.9],
+        ),
         initial_guess=guess,
     )
     sensitivity = input_sensitivity(solution)
@@ -206,8 +214,10 @@ def test_revolute_input_sensitivity_scales_consistently_with_geometry(scale):
     reference_mechanism, reference_input, _, reference_point, reference_guess = _four_bar(1.0)
     reference_solution = solve(
         reference_mechanism,
-        input_joint=reference_input,
-        input_position=[0.9],
+        driver=KinematicDriver(
+            reference_input,
+            position=[0.9],
+        ),
         initial_guess=reference_guess,
     )
     reference = input_sensitivity(reference_solution)
@@ -233,8 +243,10 @@ def test_returned_sensitivity_arrays_are_safe_copies():
     mechanism, _, _, joint, guess = _single_revolute()
     solution = solve(
         mechanism,
-        input_joint=joint,
-        input_position=[0.5],
+        driver=KinematicDriver(
+            joint,
+            position=[0.5],
+        ),
         initial_guess=guess,
     )
     sensitivity = input_sensitivity(solution)
@@ -249,8 +261,10 @@ def test_sensitivity_uses_solution_joint_snapshot_after_mechanism_extension():
     mechanism, link, _, joint, guess = _single_revolute()
     solution = solve(
         mechanism,
-        input_joint=joint,
-        input_position=[0.5],
+        driver=KinematicDriver(
+            joint,
+            position=[0.5],
+        ),
         initial_guess=guess,
     )
 
@@ -276,8 +290,10 @@ def test_sensitivity_failure_does_not_mutate_or_invalidate_solution(monkeypatch)
     mechanism, link, _, joint, guess = _single_revolute()
     solution = solve(
         mechanism,
-        input_joint=joint,
-        input_position=[0.5],
+        driver=KinematicDriver(
+            joint,
+            position=[0.5],
+        ),
         initial_guess=guess,
     )
     baseline = solution.coordinates.copy()

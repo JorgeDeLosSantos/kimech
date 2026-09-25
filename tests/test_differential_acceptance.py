@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import kimech._differential as differential
-from kimech import KinematicSolveError, Mechanism, solve
+from kimech import KinematicSolveError, KinematicDriver, Mechanism, solve
 
 
 def _four_bar():
@@ -73,18 +73,22 @@ def test_four_bar_velocity_and_speed_acceleration_scale_with_input_rate():
 
     base = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=theta,
-        input_velocity=omega,
-        input_acceleration=0.0,
+        driver=KinematicDriver(
+            input_joint,
+            position=theta,
+            velocity=omega,
+            acceleration=0.0,
+        ),
         initial_guess=guess,
     )[0]
     doubled = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=theta,
-        input_velocity=2.0 * omega,
-        input_acceleration=0.0,
+        driver=KinematicDriver(
+            input_joint,
+            position=theta,
+            velocity=2.0 * omega,
+            acceleration=0.0,
+        ),
         initial_guess=guess,
     )[0]
 
@@ -122,18 +126,22 @@ def test_four_bar_acceleration_is_linear_in_prescribed_input_acceleration():
 
     base = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=theta,
-        input_velocity=0.0,
-        input_acceleration=alpha,
+        driver=KinematicDriver(
+            input_joint,
+            position=theta,
+            velocity=0.0,
+            acceleration=alpha,
+        ),
         initial_guess=guess,
     )[0]
     doubled = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=theta,
-        input_velocity=0.0,
-        input_acceleration=2.0 * alpha,
+        driver=KinematicDriver(
+            input_joint,
+            position=theta,
+            velocity=0.0,
+            acceleration=2.0 * alpha,
+        ),
         initial_guess=guess,
     )[0]
 
@@ -155,26 +163,32 @@ def test_four_bar_acceleration_splits_into_speed_and_input_acceleration_terms():
 
     speed_only = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=theta,
-        input_velocity=omega,
-        input_acceleration=0.0,
+        driver=KinematicDriver(
+            input_joint,
+            position=theta,
+            velocity=omega,
+            acceleration=0.0,
+        ),
         initial_guess=guess,
     )[0]
     alpha_only = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=theta,
-        input_velocity=0.0,
-        input_acceleration=alpha,
+        driver=KinematicDriver(
+            input_joint,
+            position=theta,
+            velocity=0.0,
+            acceleration=alpha,
+        ),
         initial_guess=guess,
     )[0]
     combined = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=theta,
-        input_velocity=omega,
-        input_acceleration=alpha,
+        driver=KinematicDriver(
+            input_joint,
+            position=theta,
+            velocity=omega,
+            acceleration=alpha,
+        ),
         initial_guess=guess,
     )[0]
 
@@ -194,16 +208,20 @@ def test_four_bar_differential_sweep_preserves_input_and_position_history():
 
     position_only = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values,
+        driver=KinematicDriver(
+            input_joint,
+            position=values,
+        ),
         initial_guess=guess,
     )
     differential = solve(
         mechanism,
-        input_joint=input_joint,
-        input_position=values,
-        input_velocity=velocities,
-        input_acceleration=accelerations,
+        driver=KinematicDriver(
+            input_joint,
+            position=values,
+            velocity=velocities,
+            acceleration=accelerations,
+        ),
         initial_guess=guess,
     )
 
@@ -229,10 +247,12 @@ def test_slider_crank_prismatic_inverse_reconstructs_full_differential_state():
 
     forward = solve(
         mechanism,
-        input_joint=crank_joint,
-        input_position=crank_values,
-        input_velocity=1.1,
-        input_acceleration=-0.3,
+        driver=KinematicDriver(
+            crank_joint,
+            position=crank_values,
+            velocity=1.1,
+            acceleration=-0.3,
+        ),
         initial_guess=guess,
     )
     slider_values = forward.joint_coordinates(prismatic_joint)
@@ -241,10 +261,12 @@ def test_slider_crank_prismatic_inverse_reconstructs_full_differential_state():
 
     inverse = solve(
         mechanism,
-        input_joint=prismatic_joint,
-        input_position=slider_values,
-        input_velocity=slider_velocities,
-        input_acceleration=slider_accelerations,
+        driver=KinematicDriver(
+            prismatic_joint,
+            position=slider_values,
+            velocity=slider_velocities,
+            acceleration=slider_accelerations,
+        ),
         initial_guess=forward[0],
     )
 
@@ -290,9 +312,11 @@ def test_sweep_acceleration_failure_reports_stage_and_sample_index(monkeypatch):
     ):
         solve(
             mechanism,
-            input_joint=input_joint,
-            input_position=[0.9, 1.0, 1.1],
-            input_velocity=1.0,
-            input_acceleration=0.0,
+            driver=KinematicDriver(
+                input_joint,
+                position=[0.9, 1.0, 1.1],
+                velocity=1.0,
+                acceleration=0.0,
+            ),
             initial_guess=guess,
         )

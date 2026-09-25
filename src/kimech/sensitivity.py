@@ -6,6 +6,7 @@ import numpy as np
 
 from ._differential import solve_input_tangent
 from ._scaling import build_numerical_scaling
+from .driver import KinematicDriver
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Ground, Link, Point
 from .solution import (
@@ -133,12 +134,12 @@ def input_sensitivity(solution: KinematicSolution) -> InputSensitivity:
     input_positions = solution.input_positions
     coordinates = solution.coordinates
 
+    driver = KinematicDriver(input_joint, position=input_positions)
     scaling = build_numerical_scaling(
         solution.mechanism,
         links,
         joints,
-        input_joint,
-        input_positions,
+        driver,
     )
 
     derivatives = np.empty_like(coordinates)
@@ -147,7 +148,7 @@ def input_sensitivity(solution: KinematicSolution) -> InputSensitivity:
             solution.mechanism,
             links,
             joints,
-            input_joint,
+            driver,
             q,
             float(input_value),
             scaling,

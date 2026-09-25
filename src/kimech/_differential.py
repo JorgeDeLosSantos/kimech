@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from ._constraints import acceleration_rhs, jacobian
+from .driver import KinematicDriver
 from ._scaling import NumericalScaling
 from .diagnostics import _jacobian_metrics
 from .errors import KinematicSolveError, SolveFailureContext
@@ -19,17 +20,17 @@ def solve_velocity(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     q: np.ndarray,
-    input_value: float,
-    input_velocity: float,
+    driver_value: float,
+    driver_velocity: float,
     scaling: NumericalScaling,
     *,
     input_index: int | None = None,
 ) -> np.ndarray:
-    """Solve one generalized velocity state from the differentiated constraints."""
-    velocity = _finite_scalar(input_velocity, name="input_velocity")
-    matrix = jacobian(mechanism, links, joints, input_joint, q, input_value)
+    """Solve one generalized velocity state from differentiated constraints."""
+    velocity = _finite_scalar(driver_velocity, name="driver_velocity")
+    matrix = jacobian(mechanism, links, joints, driver, q, driver_value)
     rhs = np.zeros(matrix.shape[0], dtype=float)
     rhs[-1] = velocity
     return _solve_linear_state(
@@ -38,7 +39,7 @@ def solve_velocity(
         scaling=scaling,
         link_count=len(links),
         stage="velocity",
-        input_value=input_value,
+        input_value=driver_value,
         input_index=input_index,
     )
 
@@ -47,20 +48,15 @@ def solve_input_tangent(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     q: np.ndarray,
-    input_value: float,
+    driver_value: float,
     scaling: NumericalScaling,
     *,
     input_index: int | None = None,
 ) -> np.ndarray:
-    """Solve the configuration tangent dq/du for continuation.
-
-    The differentiated constraint system is J(q) dq/du = e_driver because
-    the prescribed driver equation is c(q) - u = 0. The returned state
-    derivative is with respect to the input coordinate, not physical time.
-    """
-    matrix = jacobian(mechanism, links, joints, input_joint, q, input_value)
+    """Solve the configuration tangent dq/du for continuation."""
+    matrix = jacobian(mechanism, links, joints, driver, q, driver_value)
     rhs = np.zeros(matrix.shape[0], dtype=float)
     rhs[-1] = 1.0
     return _solve_linear_state(
@@ -69,34 +65,35 @@ def solve_input_tangent(
         scaling=scaling,
         link_count=len(links),
         stage="input tangent",
-        input_value=input_value,
+        input_value=driver_value,
         input_index=input_index,
     )
+
 
 def solve_acceleration(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     q: np.ndarray,
     q_dot: np.ndarray,
-    input_value: float,
-    input_acceleration: float,
+    driver_value: float,
+    driver_acceleration: float,
     scaling: NumericalScaling,
     *,
     input_index: int | None = None,
 ) -> np.ndarray:
     """Solve one generalized acceleration state from second-order constraints."""
-    prescribed = _finite_scalar(input_acceleration, name="input_acceleration")
-    matrix = jacobian(mechanism, links, joints, input_joint, q, input_value)
+    prescribed = _finite_scalar(driver_acceleration, name="driver_acceleration")
+    matrix = jacobian(mechanism, links, joints, driver, q, driver_value)
     rhs = acceleration_rhs(
         mechanism,
         links,
         joints,
-        input_joint,
+        driver,
         q,
         q_dot,
-        input_value,
+        driver_value,
         prescribed,
     )
     return _solve_linear_state(
@@ -105,7 +102,7 @@ def solve_acceleration(
         scaling=scaling,
         link_count=len(links),
         stage="acceleration",
-        input_value=input_value,
+        input_value=driver_value,
         input_index=input_index,
     )
 

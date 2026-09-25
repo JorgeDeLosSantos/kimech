@@ -11,6 +11,7 @@ from ._constraints import jacobian, residual
 from ._differential import solve_acceleration, solve_input_tangent, solve_velocity
 from ._scaling import NumericalScaling, build_numerical_scaling
 from .diagnostics import SolveDiagnostics, _jacobian_metrics
+from .driver import KinematicDriver
 from .errors import InvalidModelError, KinematicSolveError, SolveFailureContext
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Link, Mechanism
@@ -73,12 +74,34 @@ def solve(
     if input_accelerations is not None and input_velocities is None:
         raise ValueError("input_acceleration requires input_velocity")
 
+    driver = KinematicDriver(
+        input_joint,
+        position=(float(input_positions[0]) if scalar_input else input_positions),
+        velocity=(
+            None
+            if input_velocities is None
+            else (
+                float(input_velocities[0])
+                if scalar_input
+                else input_velocities
+            )
+        ),
+        acceleration=(
+            None
+            if input_accelerations is None
+            else (
+                float(input_accelerations[0])
+                if scalar_input
+                else input_accelerations
+            )
+        ),
+    )
+
     scaling = build_numerical_scaling(
         mechanism,
         links,
         joints,
-        input_joint,
-        input_positions,
+        driver,
     )
     initial_q = _pack_initial_guess(mechanism, links, initial_guess)
 
@@ -95,7 +118,7 @@ def solve(
             mechanism,
             links,
             joints,
-            input_joint,
+            driver,
             input_value,
             current_guess,
             scaling,
@@ -116,7 +139,7 @@ def solve(
                 mechanism,
                 links,
                 joints,
-                input_joint,
+                driver,
                 accepted,
                 input_value,
                 next_input_value,
@@ -128,7 +151,7 @@ def solve(
         mechanism,
         links,
         joints,
-        input_joint,
+        driver,
         input_positions,
         coordinates,
         scaling,
@@ -147,7 +170,7 @@ def solve(
                 mechanism,
                 links,
                 joints,
-                input_joint,
+                driver,
                 coordinates[index],
                 float(input_position_value),
                 float(prescribed_velocity),
@@ -165,7 +188,7 @@ def solve(
                 mechanism,
                 links,
                 joints,
-                input_joint,
+                driver,
                 coordinates[index],
                 coordinate_velocities[index],
                 float(input_position_value),
@@ -178,7 +201,7 @@ def solve(
         mechanism,
         links,
         joints,
-        input_joint,
+        driver.joint,
         input_positions,
         coordinates,
         coordinate_velocities=coordinate_velocities,
@@ -194,7 +217,7 @@ def _solve_requested_configuration(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     input_value: float,
     preferred_guess: np.ndarray,
     scaling: NumericalScaling,
@@ -222,7 +245,7 @@ def _solve_requested_configuration(
             mechanism,
             links,
             joints,
-            input_joint,
+            driver,
             input_value,
             preferred_guess,
             scaling,
@@ -246,7 +269,7 @@ def _solve_requested_configuration(
                 mechanism,
                 links,
                 joints,
-                input_joint,
+                driver,
                 input_value,
                 previous_accepted,
                 scaling,
@@ -273,7 +296,7 @@ def _solve_requested_configuration(
             mechanism,
             links,
             joints,
-            input_joint,
+            driver,
             start_input_value=previous_input_value,
             start_q=previous_accepted,
             target_input_value=input_value,
@@ -300,7 +323,7 @@ def _attempt_configuration(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     input_value: float,
     initial_q: np.ndarray,
     scaling: NumericalScaling,
@@ -313,7 +336,7 @@ def _attempt_configuration(
         mechanism,
         links,
         joints,
-        input_joint,
+        driver,
         input_value,
         initial_q,
         scaling,
@@ -325,7 +348,7 @@ def _solve_step_from_accepted(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     *,
     start_input_value: float,
     start_q: np.ndarray,
@@ -339,7 +362,7 @@ def _solve_step_from_accepted(
         mechanism,
         links,
         joints,
-        input_joint,
+        driver,
         start_q,
         start_input_value,
         target_input_value,
@@ -352,7 +375,7 @@ def _solve_step_from_accepted(
             mechanism,
             links,
             joints,
-            input_joint,
+            driver,
             target_input_value,
             predicted,
             scaling,
@@ -366,7 +389,7 @@ def _solve_step_from_accepted(
             mechanism,
             links,
             joints,
-            input_joint,
+            driver,
             target_input_value,
             start_q,
             scaling,
@@ -378,7 +401,7 @@ def _solve_with_subdivision(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     *,
     start_input_value: float,
     start_q: np.ndarray,
@@ -417,7 +440,7 @@ def _solve_with_subdivision(
             mechanism,
             links,
             joints,
-            input_joint,
+            driver,
             start_input_value=start_input_value,
             start_q=start_q,
             target_input_value=midpoint,
@@ -430,7 +453,7 @@ def _solve_with_subdivision(
             mechanism,
             links,
             joints,
-            input_joint,
+            driver,
             start_input_value=start_input_value,
             start_q=start_q,
             target_input_value=midpoint,
@@ -447,7 +470,7 @@ def _solve_with_subdivision(
             mechanism,
             links,
             joints,
-            input_joint,
+            driver,
             start_input_value=midpoint,
             start_q=midpoint_q,
             target_input_value=target_input_value,
@@ -461,7 +484,7 @@ def _solve_with_subdivision(
             mechanism,
             links,
             joints,
-            input_joint,
+            driver,
             start_input_value=midpoint,
             start_q=midpoint_q,
             target_input_value=target_input_value,
@@ -477,7 +500,7 @@ def _predict_next_configuration(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     q: np.ndarray,
     input_value: float,
     next_input_value: float,
@@ -495,7 +518,7 @@ def _predict_next_configuration(
             mechanism,
             links,
             joints,
-            input_joint,
+            driver,
             q,
             input_value,
             scaling,
@@ -514,7 +537,7 @@ def _build_solve_diagnostics(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     input_positions: np.ndarray,
     coordinates: np.ndarray,
     scaling: NumericalScaling,
@@ -534,7 +557,7 @@ def _build_solve_diagnostics(
             mechanism,
             links,
             joints,
-            input_joint,
+            driver,
             q,
             float(input_value),
         )
@@ -542,7 +565,7 @@ def _build_solve_diagnostics(
             mechanism,
             links,
             joints,
-            input_joint,
+            driver,
             q,
             float(input_value),
         )
@@ -690,7 +713,7 @@ def _solve_configuration(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     input_value: float,
     initial_q: np.ndarray,
     scaling: NumericalScaling,
@@ -702,12 +725,12 @@ def _solve_configuration(
 
     def fun(q_hat: np.ndarray) -> np.ndarray:
         q = unpack(q_hat)
-        phi = residual(mechanism, links, joints, input_joint, q, input_value)
+        phi = residual(mechanism, links, joints, driver, q, input_value)
         return scaling.scale_residual(phi)
 
     def jac(q_hat: np.ndarray) -> np.ndarray:
         q = unpack(q_hat)
-        matrix = jacobian(mechanism, links, joints, input_joint, q, input_value)
+        matrix = jacobian(mechanism, links, joints, driver, q, input_value)
         return scaling.scale_jacobian(matrix)
 
     initial_q_hat = scaling.scale_coordinates(initial_q)

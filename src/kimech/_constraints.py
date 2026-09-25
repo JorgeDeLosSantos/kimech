@@ -7,6 +7,7 @@ from collections.abc import Sequence
 import numpy as np
 
 from ._geometry import perpendicular, rotation_matrix
+from .driver import KinematicDriver
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Ground, Link, Mechanism, Point
 
@@ -218,20 +219,22 @@ def residual(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     q: np.ndarray,
-    input_value: float,
+    driver_value: float,
 ) -> np.ndarray:
     """Assemble all joint equations followed by the driver equation."""
     coordinates, value = _validate_system(
-        mechanism, links, joints, input_joint, q, input_value
+        mechanism, links, joints, driver, q, driver_value
     )
     result = np.empty(2 * len(joints) + 1, dtype=float)
     for index, joint in enumerate(joints):
         result[2 * index : 2 * index + 2] = joint_residual(
             mechanism, links, joint, coordinates
         )
-    result[-1:] = driver_residual(mechanism, links, input_joint, coordinates, value)
+    result[-1:] = driver_residual(
+        mechanism, links, driver.joint, coordinates, value
+    )
     return result
 
 
@@ -239,20 +242,22 @@ def jacobian(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     q: np.ndarray,
-    input_value: float,
+    driver_value: float,
 ) -> np.ndarray:
-    """Assemble the analytical Jacobian in the same row order as ``residual``."""
+    """Assemble the analytical Jacobian in residual-row order."""
     coordinates, _ = _validate_system(
-        mechanism, links, joints, input_joint, q, input_value
+        mechanism, links, joints, driver, q, driver_value
     )
     result = np.empty((2 * len(joints) + 1, 3 * len(links)), dtype=float)
     for index, joint in enumerate(joints):
         result[2 * index : 2 * index + 2] = joint_jacobian(
             mechanism, links, joint, coordinates
         )
-    result[-1:] = driver_jacobian(mechanism, links, input_joint, coordinates)
+    result[-1:] = driver_jacobian(
+        mechanism, links, driver.joint, coordinates
+    )
     return result
 
 
@@ -260,19 +265,19 @@ def acceleration_rhs(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     q: np.ndarray,
     q_dot: np.ndarray,
-    input_value: float,
-    input_acceleration: float,
+    driver_value: float,
+    driver_acceleration: float,
 ) -> np.ndarray:
-    """Assemble the right-hand side of ``J q_ddot = b_a``."""
+    """Assemble the right-hand side of J q_ddot = b_a."""
     coordinates, _ = _validate_system(
-        mechanism, links, joints, input_joint, q, input_value
+        mechanism, links, joints, driver, q, driver_value
     )
     velocities = _finite_state(q_dot, len(links), name="q_dot")
     prescribed_acceleration = _finite_scalar(
-        input_acceleration, name="input_acceleration"
+        driver_acceleration, name="driver_acceleration"
     )
     result = np.empty(2 * len(joints) + 1, dtype=float)
     for index, joint in enumerate(joints):
@@ -281,7 +286,7 @@ def acceleration_rhs(
         )
         result[2 * index : 2 * index + 2] = -bias
     driver_bias = driver_acceleration_bias(
-        mechanism, links, input_joint, coordinates, velocities
+        mechanism, links, driver.joint, coordinates, velocities
     )
     result[-1] = prescribed_acceleration - driver_bias
     return result
@@ -291,15 +296,17 @@ def _validate_system(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    input_joint: _Joint,
+    driver: KinematicDriver,
     q: object,
-    input_value: object,
+    driver_value: object,
 ) -> tuple[np.ndarray, float]:
     _validate_snapshots(mechanism, links, joints)
-    if not any(input_joint is joint for joint in joints):
-        raise ValueError("input_joint must be included in the joints snapshot")
+    if not isinstance(driver, KinematicDriver):
+        raise TypeError("driver must be a KinematicDriver")
+    if not any(driver.joint is joint for joint in joints):
+        raise ValueError("driver joint must be included in the joints snapshot")
     coordinates = _finite_coordinates(q, len(links))
-    value = _finite_scalar(input_value, name="input_value")
+    value = _finite_scalar(driver_value, name="driver_value")
     return coordinates, value
 
 

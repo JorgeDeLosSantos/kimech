@@ -1,6 +1,7 @@
 """Kimech: planar mechanism kinematics for Python."""
 
 from .diagnostics import SolveDiagnosticSummary, SolveDiagnostics
+from .driver import KinematicDriver
 from .errors import (
     InvalidModelError,
     KimechError,
@@ -21,6 +22,7 @@ __all__ = [
     "InputSensitivity",
     "InvalidModelError",
     "KimechError",
+    "KinematicDriver",
     "KinematicSolveError",
     "KinematicSolution",
     "Link",

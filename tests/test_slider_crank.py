@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from kimech import Configuration, KinematicSolution, Mechanism, solve
+from kimech import Configuration, KinematicDriver, KinematicSolution, Mechanism, solve
 from kimech._constraints import residual
 
 
@@ -44,7 +44,7 @@ def _residual_inf(mechanism, input_joint, config, value):
             mechanism,
             mechanism.links,
             mechanism.joints,
-            input_joint,
+            KinematicDriver(input_joint, position=value),
             config.coordinates,
             value,
         ),

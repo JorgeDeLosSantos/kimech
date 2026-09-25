@@ -90,7 +90,7 @@ def test_four_bar_sweep_uses_continuation_and_preserves_values():
 
     assert isinstance(solution, KinematicSolution)
     assert len(solution) == len(values)
-    np.testing.assert_array_equal(solution.input_positions, values)
+    np.testing.assert_array_equal(solution.driver.position, values)
     np.testing.assert_allclose(solution.joint_coordinates(input_joint), values, atol=1e-10)
     assert all(
         _residual_inf(mechanism, input_joint, config, value) <= 1e-9
@@ -105,7 +105,7 @@ def test_four_bar_reverse_sweep_preserves_user_direction():
 
     solution = solve(mechanism, driver=KinematicDriver(input_joint, position=values), initial_guess=endpoint)
 
-    np.testing.assert_array_equal(solution.input_positions, values)
+    np.testing.assert_array_equal(solution.driver.position, values)
     np.testing.assert_allclose(solution.joint_coordinates(input_joint), values, atol=1e-10)
 
 

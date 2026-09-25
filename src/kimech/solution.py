@@ -25,7 +25,7 @@ class Configuration:
         "_coordinate_velocities",
         "_coordinates",
         "_driver",
-                "_links",
+        "_links",
         "_mechanism",
         "_time",
     )
@@ -60,10 +60,7 @@ class Configuration:
         *,
         coordinate_velocities: Sequence[float] | np.ndarray | None = None,
         coordinate_accelerations: Sequence[float] | np.ndarray | None = None,
-        input_joint: _Joint | None = None,
-        input_position: float | None = None,
-        input_velocity: float | None = None,
-        input_acceleration: float | None = None,
+        driver: KinematicDriver | None = None,
         time: float | None = None,
     ) -> Configuration:
         configuration = cls.__new__(cls)
@@ -324,8 +321,6 @@ class KinematicSolution:
         *,
         coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None = None,
         coordinate_accelerations: Sequence[Sequence[float]] | np.ndarray | None = None,
-        input_velocities: Sequence[float] | np.ndarray | None = None,
-        input_accelerations: Sequence[float] | np.ndarray | None = None,
         time: Sequence[float] | np.ndarray | None = None,
         diagnostics: SolveDiagnostics | None = None,
     ) -> KinematicSolution:
@@ -348,8 +343,7 @@ class KinematicSolution:
         mechanism: Mechanism,
         links: tuple[Link, ...],
         joints: tuple[_Joint, ...],
-        input_joint: _Joint,
-        input_positions: Sequence[float] | np.ndarray,
+        driver: KinematicDriver,
         coordinates: Sequence[Sequence[float]] | np.ndarray,
         *,
         coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None,

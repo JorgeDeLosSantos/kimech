@@ -2,7 +2,7 @@
 
 Kimech is a small Python library for modeling and solving the kinematics of planar rigid-body mechanisms.
 
-It provides declarative rigid-body models with revolute and prismatic joints, robust one-DOF position/velocity/acceleration solving, structural topology introspection, structured numerical diagnostics, input-coordinate sensitivity analysis, and schematic plotting and animation.
+It provides declarative rigid-body models with revolute and prismatic joints, robust one-DOF position/velocity/acceleration solving, structural topology introspection, structured numerical diagnostics, driver-coordinate sensitivity analysis, and schematic plotting and animation.
 
 Kimech supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms with one prescribed joint coordinate. The current `0.5.0` consolidation baseline is recorded in [`docs/design-0.5.0.md`](docs/design-0.5.0.md); earlier design baselines remain available in the `docs/` directory. [`docs/api.md`](docs/api.md) documents the implemented public API.
 
@@ -111,17 +111,17 @@ print(topology.cycle_rank)
 print(topology.connected_components)
 ```
 
-Input-coordinate sensitivity is an explicit downstream analysis:
+Driver-coordinate sensitivity is an explicit downstream analysis:
 
 ```python
-from kimech import input_sensitivity
+from kimech import driver_sensitivity
 
-sensitivity = input_sensitivity(solution)
+sensitivity = driver_sensitivity(solution)
 dq_du = sensitivity.coordinate_derivatives
 point_dp_du = sensitivity.point_position_derivatives(point_p)
 ```
 
-Sensitivity is with respect to the prescribed natural joint coordinate; it is not a time derivative.
+Sensitivity is with respect to the prescribed driver coordinate; it is not a time derivative.
 
 ## Visualization
 

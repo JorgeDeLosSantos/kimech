@@ -2,16 +2,22 @@
 
 ## Installation
 
-For a local development checkout:
+Install Kimech 0.6.0 directly from the GitHub release tag:
 
 ```bash
-pip install -e .
+pip install "kimech @ git+https://github.com/JorgeDeLosSantos/kimech.git@v0.6.0"
 ```
 
-For plotting and animation support:
+For plotting, animation, and GIF support:
 
 ```bash
-pip install -e ".[viz]"
+pip install "kimech[viz] @ git+https://github.com/JorgeDeLosSantos/kimech.git@v0.6.0"
+```
+
+For a local development checkout instead:
+
+```bash
+pip install -e ".[dev,viz,docs]"
 ```
 
 ## Your first four-bar

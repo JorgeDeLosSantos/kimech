@@ -29,6 +29,7 @@ class Configuration:
         "_input_velocity",
         "_links",
         "_mechanism",
+        "_time",
     )
 
     def __init__(
@@ -42,6 +43,7 @@ class Configuration:
         input_position: float | None = None,
         input_velocity: float | None = None,
         input_acceleration: float | None = None,
+        time: float | None = None,
     ) -> None:
         _validate_mechanism(mechanism)
         self._initialize(
@@ -54,6 +56,7 @@ class Configuration:
             input_position=input_position,
             input_velocity=input_velocity,
             input_acceleration=input_acceleration,
+            time=time,
         )
 
     @classmethod
@@ -69,6 +72,7 @@ class Configuration:
         input_position: float | None = None,
         input_velocity: float | None = None,
         input_acceleration: float | None = None,
+        time: float | None = None,
     ) -> Configuration:
         configuration = cls.__new__(cls)
         configuration._initialize(
@@ -81,6 +85,7 @@ class Configuration:
             input_position=input_position,
             input_velocity=input_velocity,
             input_acceleration=input_acceleration,
+            time=time,
         )
         return configuration
 
@@ -96,6 +101,7 @@ class Configuration:
         input_position: float | None,
         input_velocity: float | None,
         input_acceleration: float | None,
+        time: float | None,
     ) -> None:
         if input_joint is not None:
             _validate_joint(mechanism, links, input_joint)
@@ -134,6 +140,7 @@ class Configuration:
             input_acceleration,
             name="input_acceleration",
         )
+        self._time = _optional_finite_scalar(time, name="time")
 
     @property
     def mechanism(self) -> Mechanism:
@@ -159,6 +166,11 @@ class Configuration:
     def input_acceleration(self) -> float | None:
         """Return the prescribed joint acceleration metadata, if available."""
         return self._input_acceleration
+
+    @property
+    def time(self) -> float | None:
+        """Return the physical sample time associated with this configuration."""
+        return self._time
 
     @property
     def coordinates(self) -> np.ndarray:
@@ -315,6 +327,7 @@ class KinematicSolution:
         "_joints",
         "_links",
         "_mechanism",
+        "_time",
     )
 
     def __init__(
@@ -328,6 +341,7 @@ class KinematicSolution:
         coordinate_accelerations: Sequence[Sequence[float]] | np.ndarray | None = None,
         input_velocities: Sequence[float] | np.ndarray | None = None,
         input_accelerations: Sequence[float] | np.ndarray | None = None,
+        time: Sequence[float] | np.ndarray | None = None,
         diagnostics: SolveDiagnostics | None = None,
     ) -> None:
         _validate_mechanism(mechanism)
@@ -342,6 +356,7 @@ class KinematicSolution:
             coordinate_accelerations=coordinate_accelerations,
             input_velocities=input_velocities,
             input_accelerations=input_accelerations,
+            time=time,
             diagnostics=diagnostics,
         )
 
@@ -359,6 +374,7 @@ class KinematicSolution:
         coordinate_accelerations: Sequence[Sequence[float]] | np.ndarray | None = None,
         input_velocities: Sequence[float] | np.ndarray | None = None,
         input_accelerations: Sequence[float] | np.ndarray | None = None,
+        time: Sequence[float] | np.ndarray | None = None,
         diagnostics: SolveDiagnostics | None = None,
     ) -> KinematicSolution:
         solution = cls.__new__(cls)
@@ -373,6 +389,7 @@ class KinematicSolution:
             coordinate_accelerations=coordinate_accelerations,
             input_velocities=input_velocities,
             input_accelerations=input_accelerations,
+            time=time,
             diagnostics=diagnostics,
         )
         return solution
@@ -390,6 +407,7 @@ class KinematicSolution:
         coordinate_accelerations: Sequence[Sequence[float]] | np.ndarray | None,
         input_velocities: Sequence[float] | np.ndarray | None,
         input_accelerations: Sequence[float] | np.ndarray | None,
+        time: Sequence[float] | np.ndarray | None,
         diagnostics: SolveDiagnostics | None,
     ) -> None:
         _validate_mechanism(mechanism)
@@ -425,6 +443,11 @@ class KinematicSolution:
             name="input_accelerations",
             shape=input_shape,
         )
+        time_array = _optional_finite_float_array(
+            time,
+            name="time",
+            shape=input_shape,
+        )
         if diagnostics is not None:
             if not isinstance(diagnostics, SolveDiagnostics):
                 raise TypeError("diagnostics must be a SolveDiagnostics or None")
@@ -438,6 +461,7 @@ class KinematicSolution:
         self._input_positions = values
         self._input_velocities = input_velocity_array
         self._input_accelerations = input_acceleration_array
+        self._time = time_array
         self._coordinates = coordinate_array
         self._coordinate_velocities = velocity_array
         self._coordinate_accelerations = acceleration_array
@@ -471,6 +495,13 @@ class KinematicSolution:
         if self._input_accelerations is None:
             return None
         return self._input_accelerations.copy()
+
+    @property
+    def time(self) -> np.ndarray | None:
+        """Return physical sample times, if available."""
+        if self._time is None:
+            return None
+        return self._time.copy()
 
     @property
     def diagnostics(self) -> SolveDiagnostics | None:
@@ -539,6 +570,7 @@ class KinematicSolution:
                     if self._input_accelerations is None
                     else self._input_accelerations[index]
                 ),
+                time=(None if self._time is None else self._time[index]),
                 diagnostics=(None if self._diagnostics is None else self._diagnostics._slice(index)),
             )
 
@@ -565,6 +597,7 @@ class KinematicSolution:
                 if self._input_accelerations is None
                 else self._input_accelerations[item]
             ),
+            time=(None if self._time is None else self._time[item]),
         )
 
     def __iter__(self) -> Iterator[Configuration]:

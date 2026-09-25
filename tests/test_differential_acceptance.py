@@ -226,9 +226,9 @@ def test_four_bar_differential_sweep_preserves_input_and_position_history():
     )
 
     np.testing.assert_array_equal(differential.coordinates, position_only.coordinates)
-    np.testing.assert_array_equal(differential.input_positions, values)
-    np.testing.assert_array_equal(differential.input_velocities, velocities)
-    np.testing.assert_array_equal(differential.input_accelerations, accelerations)
+    np.testing.assert_array_equal(differential.driver.position, values)
+    np.testing.assert_array_equal(differential.driver.velocity, velocities)
+    np.testing.assert_array_equal(differential.driver.acceleration, accelerations)
     np.testing.assert_allclose(
         differential.joint_velocities(input_joint), velocities, atol=1e-11
     )

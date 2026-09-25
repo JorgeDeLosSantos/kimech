@@ -63,7 +63,7 @@ def main():
 
     print("Slider-crank motion")
     print(f"Solved {len(solution)} configurations")
-    print(f"Crank input: {solution.input_positions[0]:.3f} -> {solution.input_positions[-1]:.3f} rad")
+    print(f"Crank input: {solution.driver.position[0]:.3f} -> {solution.driver.position[-1]:.3f} rad")
     print(
         f"Slider displacement: {slider_positions.min():.6f} -> "
         f"{slider_positions.max():.6f}"

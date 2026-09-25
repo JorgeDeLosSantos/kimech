@@ -157,8 +157,7 @@ def test_manual_solution_may_omit_diagnostics():
 
     solution = KinematicSolution(
         mechanism,
-        joint,
-        [0.0],
+        KinematicDriver(joint, position=[0.0]),
         [[0.0, 0.0, 0.0]],
     )
 

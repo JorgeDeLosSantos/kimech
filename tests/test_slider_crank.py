@@ -88,7 +88,7 @@ def test_slider_crank_revolute_input_scalar_and_sweep():
     assert config.joint_coordinate(crank_joint) == pytest.approx(0.7, abs=1e-10)
     assert _residual_inf(mechanism, crank_joint, config, 0.7) <= 1e-9
     assert isinstance(solution, KinematicSolution)
-    np.testing.assert_array_equal(solution.input_positions, values)
+    np.testing.assert_array_equal(solution.driver.position, values)
     np.testing.assert_allclose(solution.joint_coordinates(crank_joint), values, atol=1e-10)
     assert all(
         _residual_inf(mechanism, crank_joint, solution[index], value) <= 1e-9
@@ -142,7 +142,7 @@ def test_slider_crank_prismatic_input_accepts_solver_configuration_as_guess():
     )[0]
 
     assert isinstance(slider_config, Configuration)
-    assert slider_config.input_joint is prismatic_joint
+    assert slider_config.driver.joint is prismatic_joint
     assert slider_config.joint_coordinate(prismatic_joint) == pytest.approx(
         slider_position, abs=1e-10
     )

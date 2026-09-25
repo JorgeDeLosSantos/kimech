@@ -40,8 +40,8 @@ def test_scalar_position_returns_length_one_solution_and_complete_mapping_is_pac
     assert isinstance(solution, KinematicSolution)
     assert len(solution) == 1
     assert isinstance(config, Configuration)
-    assert config.input_joint is joint
-    assert config.input_position == pytest.approx(0.5)
+    assert config.driver.joint is joint
+    assert config.driver.position == pytest.approx(0.5)
     assert config.joint_coordinate(joint) == pytest.approx(0.5)
     np.testing.assert_array_equal(pose, [0.1, -0.1, 0.4])
 
@@ -60,7 +60,7 @@ def test_length_one_sequence_returns_kinematic_solution():
 
     assert isinstance(solution, KinematicSolution)
     assert len(solution) == 1
-    np.testing.assert_array_equal(solution.input_positions, [0.5])
+    np.testing.assert_array_equal(solution.driver.position, [0.5])
 
 
 @pytest.mark.parametrize(
@@ -468,7 +468,7 @@ def test_adaptive_subdivision_recovers_failed_requested_step(monkeypatch):
         initial_guess={link: (0.0, 0.0, 0.0)},
     )
 
-    np.testing.assert_array_equal(solution.input_positions, [0.0, 0.2])
+    np.testing.assert_array_equal(solution.driver.position, [0.0, 0.2])
     np.testing.assert_allclose(solution.coordinates[:, 2], [0.0, 0.2])
     assert solution.diagnostics is not None
     np.testing.assert_array_equal(solution.diagnostics.subdivision_counts, [0, 1])
@@ -513,7 +513,7 @@ def test_adaptive_subdivision_hides_internal_samples(monkeypatch):
     )
 
     assert len(solution) == 2
-    np.testing.assert_array_equal(solution.input_positions, [0.0, 0.2])
+    np.testing.assert_array_equal(solution.driver.position, [0.0, 0.2])
     assert solution.diagnostics.subdivision_counts[1] == 3
     assert solution.diagnostics.strategies[1] == "subdivision"
     assert solution.diagnostics.corrector_attempts[1] == 7
@@ -573,7 +573,7 @@ def test_solve_accepts_optional_time_and_preserves_it_in_results():
     np.testing.assert_array_equal(solution.time, times)
     assert solution[0].time == pytest.approx(0.0)
     assert solution[-1].time == pytest.approx(0.5)
-    np.testing.assert_array_equal(solution.input_positions, [0.5, 0.7, 0.6])
+    np.testing.assert_array_equal(solution.driver.position, [0.5, 0.7, 0.6])
 
 
 def test_solve_accepts_scalar_time_for_scalar_driver_position():

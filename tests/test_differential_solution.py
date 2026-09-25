@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from kimech import KinematicSolution, Mechanism
+from kimech import KinematicDriver, KinematicSolution, Mechanism
 
 
 def _mechanism():
@@ -25,29 +25,31 @@ def test_solution_stores_differential_histories_and_preserves_them_when_indexed(
 
     solution = KinematicSolution(
         mechanism,
-        joint,
-        values,
+        KinematicDriver(
+            joint,
+            position=values,
+            velocity=input_velocities,
+            acceleration=input_accelerations,
+        ),
         coordinates,
         coordinate_velocities=velocities,
         coordinate_accelerations=accelerations,
-        input_velocities=input_velocities,
-        input_accelerations=input_accelerations,
     )
 
     assert solution.has_velocity is True
     assert solution.has_acceleration is True
     np.testing.assert_allclose(solution.coordinate_velocities, velocities)
     np.testing.assert_allclose(solution.coordinate_accelerations, accelerations)
-    np.testing.assert_allclose(solution.input_velocities, input_velocities)
-    np.testing.assert_allclose(solution.input_accelerations, input_accelerations)
+    np.testing.assert_allclose(solution.driver.velocity, input_velocities)
+    np.testing.assert_allclose(solution.driver.acceleration, input_accelerations)
     np.testing.assert_allclose(solution.body_velocities(link), velocities)
     np.testing.assert_allclose(solution.body_accelerations(link), accelerations)
 
     config = solution[1]
     assert config.has_velocity is True
     assert config.has_acceleration is True
-    assert config.input_velocity == pytest.approx(16.0)
-    assert config.input_acceleration == pytest.approx(18.0)
+    assert config.driver.velocity == pytest.approx(16.0)
+    assert config.driver.acceleration == pytest.approx(18.0)
     np.testing.assert_allclose(config.coordinate_velocities, velocities[1])
     np.testing.assert_allclose(config.coordinate_accelerations, accelerations[1])
 
@@ -55,9 +57,9 @@ def test_solution_stores_differential_histories_and_preserves_them_when_indexed(
     assert isinstance(sliced, KinematicSolution)
     assert sliced.has_velocity is True
     assert sliced.has_acceleration is True
-    np.testing.assert_allclose(sliced.input_positions, values[1:])
-    np.testing.assert_allclose(sliced.input_velocities, input_velocities[1:])
-    np.testing.assert_allclose(sliced.input_accelerations, input_accelerations[1:])
+    np.testing.assert_allclose(sliced.driver.position, values[1:])
+    np.testing.assert_allclose(sliced.driver.velocity, input_velocities[1:])
+    np.testing.assert_allclose(sliced.driver.acceleration, input_accelerations[1:])
     np.testing.assert_allclose(sliced.coordinates, coordinates[1:])
     np.testing.assert_allclose(sliced.coordinate_velocities, velocities[1:])
     np.testing.assert_allclose(sliced.coordinate_accelerations, accelerations[1:])
@@ -70,8 +72,7 @@ def test_solution_differential_entity_histories_have_expected_values():
     accelerations = np.array([[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]])
     solution = KinematicSolution(
         mechanism,
-        joint,
-        [0.0, 0.0],
+        KinematicDriver(joint, position=[0.0, 0.0]),
         coordinates,
         coordinate_velocities=velocities,
         coordinate_accelerations=accelerations,
@@ -99,12 +100,12 @@ def test_solution_differential_entity_histories_have_expected_values():
 
 def test_solution_unavailable_differential_state_fails_explicitly():
     mechanism, link, point, joint = _mechanism()
-    solution = KinematicSolution(mechanism, joint, [0.0], [[0.0, 0.0, 0.0]])
+    solution = KinematicSolution(mechanism, KinematicDriver(joint, position=[0.0]), [[0.0, 0.0, 0.0]])
 
     assert solution.has_velocity is False
     assert solution.has_acceleration is False
-    assert solution.input_velocities is None
-    assert solution.input_accelerations is None
+    assert solution.driver.velocity is None
+    assert solution.driver.acceleration is None
 
     with pytest.raises(ValueError, match="velocity data"):
         _ = solution.coordinate_velocities
@@ -132,13 +133,15 @@ def test_solution_differential_arrays_are_safe_copies():
     input_accelerations = np.array([8.0])
     solution = KinematicSolution(
         mechanism,
-        joint,
-        [0.0],
+        KinematicDriver(
+            joint,
+            position=[0.0],
+            velocity=input_velocities,
+            acceleration=input_accelerations,
+        ),
         [[0.0, 0.0, 0.0]],
         coordinate_velocities=velocities,
         coordinate_accelerations=accelerations,
-        input_velocities=input_velocities,
-        input_accelerations=input_accelerations,
     )
 
     velocities[:] = -1.0
@@ -148,8 +151,8 @@ def test_solution_differential_arrays_are_safe_copies():
 
     exposed_velocity = solution.coordinate_velocities
     exposed_acceleration = solution.coordinate_accelerations
-    exposed_input_velocity = solution.input_velocities
-    exposed_input_acceleration = solution.input_accelerations
+    exposed_input_velocity = solution.driver.velocity
+    exposed_input_acceleration = solution.driver.acceleration
     exposed_velocity[:] = 99.0
     exposed_acceleration[:] = 99.0
     exposed_input_velocity[:] = 99.0
@@ -157,8 +160,8 @@ def test_solution_differential_arrays_are_safe_copies():
 
     np.testing.assert_allclose(solution.coordinate_velocities, [[1.0, 2.0, 3.0]])
     np.testing.assert_allclose(solution.coordinate_accelerations, [[4.0, 5.0, 6.0]])
-    np.testing.assert_allclose(solution.input_velocities, [7.0])
-    np.testing.assert_allclose(solution.input_accelerations, [8.0])
+    np.testing.assert_allclose(solution.driver.velocity, [7.0])
+    np.testing.assert_allclose(solution.driver.acceleration, [8.0])
 
 
 def test_solution_validates_differential_shapes_and_invariants():
@@ -168,40 +171,33 @@ def test_solution_validates_differential_shapes_and_invariants():
     with pytest.raises(ValueError, match="requires coordinate_velocities"):
         KinematicSolution(
             mechanism,
-            joint,
-            [0.0],
+            KinematicDriver(joint, position=[0.0]),
             coordinates,
             coordinate_accelerations=[[0.0, 0.0, 0.0]],
         )
-    with pytest.raises(ValueError, match="requires input_velocities"):
-        KinematicSolution(
-            mechanism,
+    with pytest.raises(ValueError, match="requires velocity"):
+        KinematicDriver(
             joint,
-            [0.0],
-            coordinates,
-            input_accelerations=[0.0],
+            position=[0.0],
+            acceleration=[0.0],
         )
     with pytest.raises(ValueError, match="shape"):
         KinematicSolution(
             mechanism,
-            joint,
-            [0.0],
+            KinematicDriver(joint, position=[0.0]),
             coordinates,
             coordinate_velocities=[[0.0, 0.0]],
         )
     with pytest.raises(ValueError, match="shape"):
-        KinematicSolution(
-            mechanism,
+        KinematicDriver(
             joint,
-            [0.0],
-            coordinates,
-            input_velocities=[0.0, 1.0],
+            position=[0.0],
+            velocity=[0.0, 1.0],
         )
     with pytest.raises(ValueError, match="finite"):
         KinematicSolution(
             mechanism,
-            joint,
-            [0.0],
+            KinematicDriver(joint, position=[0.0]),
             coordinates,
             coordinate_velocities=[[0.0, np.inf, 0.0]],
         )
@@ -211,19 +207,21 @@ def test_empty_differential_solution_preserves_history_shapes():
     mechanism, link, point, joint = _mechanism()
     solution = KinematicSolution(
         mechanism,
-        joint,
-        np.empty(0),
+        KinematicDriver._from_history(
+            joint,
+            np.empty(0),
+            np.empty(0),
+            np.empty(0),
+        ),
         np.empty((0, 3)),
         coordinate_velocities=np.empty((0, 3)),
         coordinate_accelerations=np.empty((0, 3)),
-        input_velocities=np.empty(0),
-        input_accelerations=np.empty(0),
     )
 
     assert solution.coordinate_velocities.shape == (0, 3)
     assert solution.coordinate_accelerations.shape == (0, 3)
-    assert solution.input_velocities.shape == (0,)
-    assert solution.input_accelerations.shape == (0,)
+    assert solution.driver.velocity.shape == (0,)
+    assert solution.driver.acceleration.shape == (0,)
     assert solution.body_velocities(link).shape == (0, 3)
     assert solution.body_accelerations(link).shape == (0, 3)
     assert solution.point_velocities(point).shape == (0, 2)

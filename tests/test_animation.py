@@ -115,7 +115,7 @@ def _prismatic_solution(values):
     )
     values = np.asarray(values, dtype=float)
     coordinates = np.column_stack((values, np.zeros((len(values), 2))))
-    return KinematicSolution(mechanism, joint, values, coordinates), joint
+    return KinematicSolution(mechanism, KinematicDriver(joint, position=values), coordinates), joint
 
 
 def _mobile_prismatic_solution():
@@ -141,7 +141,7 @@ def _mobile_prismatic_solution():
     coordinates[:, 2] = theta
     coordinates[:, 3:5] = guide_positions + displacements[:, np.newaxis] * global_axis
     coordinates[:, 5] = theta
-    return KinematicSolution(mechanism, joint, displacements, coordinates)
+    return KinematicSolution(mechanism, KinematicDriver(joint, position=displacements), coordinates)
 
 
 def test_animate_returns_func_animation_with_uniform_fps_interval():
@@ -189,8 +189,7 @@ def test_animate_rejects_invalid_solution_and_empty_solution():
     solution, _ = _four_bar_solution()
     empty = KinematicSolution(
         solution.mechanism,
-        solution.input_joint,
-        np.empty(0),
+        KinematicDriver._from_history(solution.driver.joint, np.empty(0)),
         np.empty((0, solution.coordinates.shape[1])),
     )
     with pytest.raises(ValueError, match="at least one"):

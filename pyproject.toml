@@ -27,6 +27,11 @@ dev = [
     "pytest>=8",
     "pytest-cov>=5",
 ]
+docs = [
+    "sphinx>=8",
+    "myst-parser>=4",
+    "furo>=2024.8.6",
+]
 
 [project.urls]
 Repository = "https://github.com/JorgeDeLosSantos/kimech"

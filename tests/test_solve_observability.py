@@ -76,7 +76,7 @@ def test_position_failure_exposes_structured_context(monkeypatch):
     assert context is not None
     assert context.stage == "position"
     assert context.input_index == 0
-    assert context.driver.position == pytest.approx(0.5)
+    assert context.input_position == pytest.approx(0.5)
     assert context.residual_norm == pytest.approx(0.5)
     assert context.condition_number == pytest.approx(1.0)
     assert context.min_singular_value == pytest.approx(1.0)
@@ -130,7 +130,7 @@ def test_failed_requested_sample_reports_recovery_path(monkeypatch):
     context = captured.value.context
     assert context is not None
     assert context.input_index == 1
-    assert context.driver.position == pytest.approx(0.2)
+    assert context.input_position == pytest.approx(0.2)
     assert context.attempted_strategies == ("warm_start", "subdivision")
     assert context.corrector_attempts > 1
     assert "unreachable 0.2" in str(captured.value)
@@ -159,7 +159,7 @@ def test_velocity_failure_exposes_structured_context(monkeypatch):
     assert context is not None
     assert context.stage == "velocity"
     assert context.input_index == 0
-    assert context.driver.position == pytest.approx(0.5)
+    assert context.input_position == pytest.approx(0.5)
     assert context.condition_number == pytest.approx(1.0)
     assert context.min_singular_value == pytest.approx(1.0)
     assert context.rank == 3

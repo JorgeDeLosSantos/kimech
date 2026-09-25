@@ -339,10 +339,7 @@ Important properties:
 
 ```python
 config.mechanism
-config.input_joint
-config.input_position
-config.input_velocity
-config.input_acceleration
+config.driver
 config.time
 
 config.coordinates
@@ -398,10 +395,7 @@ Important properties:
 
 ```python
 solution.mechanism
-solution.input_joint
-solution.input_positions
-solution.input_velocities
-solution.input_accelerations
+solution.driver
 solution.time
 
 solution.coordinates
@@ -412,11 +406,16 @@ solution.has_velocity
 solution.has_acceleration
 ```
 
-Shapes are:
+The retained `solution.driver` is the prescribed driver snapshot for the full result history. Its position and optional differential data preserve the requested sample order:
 
-- `input_positions`: `(N,)`;
-- optional differential input histories: `(N,)`;
-- optional `time`: `(N,)`;
+```python
+solution.driver.joint
+solution.driver.position
+solution.driver.velocity
+solution.driver.acceleration
+```
+
+For a multi-sample result, driver histories have shape `(N,)`. Indexed configurations retain a scalar driver snapshot, so `solution[i].driver.position` is a scalar. Optional `time` has shape `(N,)`.
 - `coordinates`: `(N, 3*n)`;
 - optional generalized differential histories: `(N, 3*n)`.
 
@@ -426,7 +425,7 @@ Shapes are:
 config = solution[i]
 ```
 
-Integer indexing returns a `Configuration` preserving all position, velocity, acceleration and prescribed-input metadata available at sample `i`. Slicing returns a new `KinematicSolution` over the selected samples, and iteration yields `Configuration` objects in solution order.
+Integer indexing returns a `Configuration` preserving all position, velocity, acceleration, driver, and time metadata available at sample `i`. Slicing returns a new `KinematicSolution` over the selected samples, and iteration yields `Configuration` objects in solution order.
 
 ### History queries
 
@@ -502,6 +501,22 @@ See [`study-0.5.0-input-sensitivity.md`](study-0.5.0-input-sensitivity.md).
 ## 10. Intentional breaking changes
 
 Because Kimech remains pre-`1.0`, API cleanups are applied without compatibility aliases.
+
+For `0.6.0`:
+
+```text
+KinematicSolution.input_joint
+KinematicSolution.input_positions
+KinematicSolution.input_velocities
+KinematicSolution.input_accelerations
+    -> KinematicSolution.driver
+
+Configuration.input_joint
+Configuration.input_position
+Configuration.input_velocity
+Configuration.input_acceleration
+    -> Configuration.driver
+```
 
 For `0.3.0`:
 
@@ -711,9 +726,9 @@ animation.save("mechanism.gif", writer="pillow")
 
 Public `Configuration` and `KinematicSolution` constructors validate the structure, shape, finiteness, and entity compatibility of supplied state. They do not certify that manually supplied coordinates satisfy the mechanism constraints. Results returned by `solve()` contain states accepted by the solver.
 
-For `Configuration`, any prescribed-input metadata (`input_position`, `input_velocity`, or `input_acceleration`) requires `input_joint`. Input acceleration additionally requires input velocity.
+For `Configuration`, optional prescribed metadata is represented by a single-sample `KinematicDriver`. A configuration driver must contain exactly one sample; acceleration data remain subject to the driver's requirement that velocity is also present.
 
-Result objects retain the link layout captured when they are constructed or solved. Solve-generated `KinematicSolution` objects also retain the associated joint snapshot for downstream analyses such as input sensitivity. This keeps the mapping between entities and stored state stable even if the mechanism object is later extended. Queries require entities compatible with the retained snapshot.
+Result objects retain the link layout captured when they are constructed or solved. Solve-generated `KinematicSolution` objects retain the complete `KinematicDriver` snapshot together with the associated joint snapshot for downstream analyses such as input sensitivity. This keeps the mapping between entities and stored state stable even if the mechanism object is later extended. Queries require entities compatible with the retained snapshot.
 
 ## 17. Examples and tests
 

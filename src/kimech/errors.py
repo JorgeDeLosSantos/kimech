@@ -15,8 +15,8 @@ class SolveFailureContext:
     """
 
     stage: str
-    input_index: int | None = None
-    input_position: float | None = None
+    driver_index: int | None = None
+    driver_position: float | None = None
     residual_norm: float | None = None
     condition_number: float | None = None
     min_singular_value: float | None = None
@@ -28,12 +28,12 @@ class SolveFailureContext:
         if not isinstance(self.stage, str) or not self.stage.strip():
             raise ValueError("stage must be a non-empty string")
 
-        if self.input_index is not None:
-            if not isinstance(self.input_index, int) or self.input_index < 0:
-                raise ValueError("input_index must be a non-negative integer or None")
+        if self.driver_index is not None:
+            if not isinstance(self.driver_index, int) or self.driver_index < 0:
+                raise ValueError("driver_index must be a non-negative integer or None")
 
-        if self.input_position is not None and not math.isfinite(self.input_position):
-            raise ValueError("input_position must be finite or None")
+        if self.driver_position is not None and not math.isfinite(self.driver_position):
+            raise ValueError("driver_position must be finite or None")
 
         if self.residual_norm is not None:
             if not math.isfinite(self.residual_norm) or self.residual_norm < 0.0:

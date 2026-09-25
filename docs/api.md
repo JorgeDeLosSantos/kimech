@@ -1,8 +1,8 @@
 # Kimech — Package structure and public API
 
-> Status: development API for `0.6.0`.
+> Status: public API for `0.6.0`.
 >
-> Kimech remains a young project, and this API may evolve in future versions. [`design-0.5.0.md`](design-0.5.0.md) records the current consolidation baseline; earlier design documents remain available for historical context.
+> Kimech remains a young project, and this API may evolve in future versions. [`study-0.6.0-kinematic-driver.md`](study-0.6.0-kinematic-driver.md) records the current Driver/time design decisions; earlier design documents remain available for historical context.
 
 ## 1. Overview
 
@@ -65,7 +65,7 @@ src/
         └── animation.py
 ```
 
-The package remains intentionally flat. Mechanism-specific solver classes, backend registries, and plugin systems are not part of `0.5.0`.
+The package remains intentionally flat. Mechanism-specific solver classes, backend registries, and plugin systems are not part of `0.6.0`.
 
 ### Module responsibilities
 
@@ -294,7 +294,7 @@ Velocity solves
 J(q)\dot q=b_v,
 \]
 
-where the geometric rows of `b_v` are zero and the driver row contains the prescribed input velocity.
+where the geometric rows of `b_v` are zero and the driver row contains the prescribed driver velocity.
 
 Acceleration solves
 
@@ -621,7 +621,7 @@ An exactly rank-deficient Jacobian can therefore appear as `condition_number = i
 
 Diagnostics are preserved when slicing a `KinematicSolution`. Manually constructed `KinematicSolution` objects may omit diagnostics, in which case `solution.diagnostics is None`.
 
-The strategy names describe continuation behavior rather than a numerical backend. `"predictor"` means a first-order tangent prediction was accepted by the nonlinear corrector. `"warm_start"` means the previous accepted configuration was used directly; this includes cases where tangent prediction was unavailable and therefore collapsed to the previous state. `"subdivision"` means one or more hidden intermediate driver positions were needed before the requested sample could be reached.
+The strategy names describe continuation behavior rather than a numerical backend. `"predictor"` means a first-order driver-coordinate tangent prediction was accepted by the nonlinear corrector. `"warm_start"` means the previous accepted configuration was used directly; this includes cases where tangent prediction was unavailable and therefore collapsed to the previous state. `"subdivision"` means one or more hidden intermediate driver positions were needed before the requested sample could be reached.
 
 Kimech deliberately does not expose SciPy-specific counters such as `nfev` or `njev` as part of `SolveDiagnostics`. Process diagnostics are intended to remain meaningful if the nonlinear backend changes.
 

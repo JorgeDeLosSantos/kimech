@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from kimech import Mechanism, solve
+from kimech.driver import KinematicDriver
 from kimech._scaling import build_numerical_scaling
 
 
@@ -109,15 +110,13 @@ def test_characteristic_length_scales_with_problem_geometry():
         base_mechanism,
         base_mechanism.links,
         base_mechanism.joints,
-        base_input,
-        values,
+        KinematicDriver(base_input, position=values),
     )
     scaled = build_numerical_scaling(
         scaled_mechanism,
         scaled_mechanism.links,
         scaled_mechanism.joints,
-        scaled_input,
-        values,
+        KinematicDriver(scaled_input, position=values),
     )
 
     assert base.characteristic_length == pytest.approx(200.0)

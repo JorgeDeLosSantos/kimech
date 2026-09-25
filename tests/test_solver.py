@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 
 from kimech import (
-    KinematicDriver,    Configuration,
+    Configuration,
+    KinematicDriver,
     InvalidModelError,
     KinematicSolution,
     KinematicSolveError,
@@ -91,8 +92,10 @@ def test_solve_rejects_incorrect_argument_types():
 
     with pytest.raises(TypeError, match="mechanism"):
         solve(object(), driver=KinematicDriver(joint, position=0.5), initial_guess={link: (0.0, 0.0, 0.5)})
-    with pytest.raises(TypeError, match="input"):
-        solve(mechanism, driver=KinematicDriver(object(), position=0.5), initial_guess={link: (0.0, 0.0, 0.5)})
+    with pytest.raises(TypeError, match="joint"):
+        KinematicDriver(object(), position=0.5)
+    with pytest.raises(TypeError, match="driver"):
+        solve(mechanism, driver=object(), initial_guess={link: (0.0, 0.0, 0.5)})
     with pytest.raises(TypeError, match="initial_guess"):
         solve(mechanism, driver=KinematicDriver(joint, position=0.5), initial_guess=[0.0, 0.0, 0.5])
 

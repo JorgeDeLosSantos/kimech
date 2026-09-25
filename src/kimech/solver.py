@@ -27,6 +27,7 @@ def solve(
     *,
     driver: KinematicDriver,
     initial_guess,
+    time=None,
 ) -> KinematicSolution:
     """Solve position and, when requested, differential kinematics."""
     if not isinstance(mechanism, Mechanism):
@@ -58,6 +59,7 @@ def solve(
     input_positions = driver._position_history()
     input_velocities = driver._velocity_history()
     input_accelerations = driver._acceleration_history()
+    time_values = _coerce_time_history(time, count=len(input_positions))
 
     scaling = build_numerical_scaling(
         mechanism,
@@ -170,6 +172,7 @@ def solve(
         coordinate_accelerations=coordinate_accelerations,
         input_velocities=input_velocities,
         input_accelerations=input_accelerations,
+        time=time_values,
         diagnostics=diagnostics,
     )
 
@@ -548,6 +551,32 @@ def _build_solve_diagnostics(
         corrector_attempts=corrector_attempts,
         residual_norms=residual_norms,
     )
+
+
+
+def _coerce_time_history(time: object, *, count: int) -> np.ndarray | None:
+    """Validate optional physical sample times for one solve request."""
+    if time is None:
+        return None
+    try:
+        array = np.asarray(time, dtype=float)
+    except (TypeError, ValueError) as error:
+        raise TypeError("time must be numeric") from error
+
+    if array.ndim == 0:
+        if count != 1:
+            raise ValueError(f"time must have shape ({count},)")
+        array = np.atleast_1d(array)
+    elif array.ndim != 1:
+        raise ValueError("time must be a scalar or a 1-dimensional sequence")
+
+    if array.shape != (count,):
+        raise ValueError(f"time must have shape ({count},)")
+    if not np.all(np.isfinite(array)):
+        raise ValueError("time must contain only finite values")
+    if count > 1 and np.any(np.diff(array) <= 0.0):
+        raise ValueError("time must be strictly increasing")
+    return array.astype(float, copy=True)
 
 
 def _pack_initial_guess(

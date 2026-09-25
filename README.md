@@ -2,6 +2,8 @@
 
 Kimech is a small Python library for modeling and solving the kinematics of planar rigid-body mechanisms.
 
+Public documentation: https://jorgedelossantos.github.io/kimech/
+
 It provides declarative rigid-body models with revolute and prismatic joints, robust one-DOF position/velocity/acceleration solving, structural topology introspection, structured numerical diagnostics, driver-coordinate sensitivity analysis, and schematic plotting and animation.
 
 Kimech supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms driven by one `KinematicDriver`. The current `0.6.0` driver/time design is recorded in [`docs/study-0.6.0-kinematic-driver.md`](docs/study-0.6.0-kinematic-driver.md); earlier design baselines remain available in the `docs/` directory. [`docs/api.md`](docs/api.md) documents the implemented public API.

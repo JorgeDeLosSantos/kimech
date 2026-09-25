@@ -168,7 +168,7 @@ def test_acceleration_request_does_not_change_position_or_velocity_solution():
 def test_input_acceleration_without_velocity_is_rejected_before_solving():
     mechanism, _, _, joint, guess = _single_revolute()
 
-    with pytest.raises(ValueError, match="requires input_velocity"):
+    with pytest.raises(ValueError, match="requires velocity"):
         solve(
             mechanism,
             driver=KinematicDriver(

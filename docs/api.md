@@ -73,7 +73,7 @@ The package remains intentionally flat. Mechanism-specific solver classes, backe
 - `joints.py` owns immutable `RevoluteJoint` and `PrismaticJoint` domain objects.
 - `driver.py` owns `KinematicDriver`, the prescribed kinematic coordinate and its optional differential data.
 - `topology.py` owns immutable-from-the-caller's-perspective structural topology snapshots through `MechanismTopology`.
-- `sensitivity.py` provides explicit input-coordinate sensitivity analysis through `input_sensitivity()` and `InputSensitivity`.
+- `sensitivity.py` provides explicit driver-coordinate sensitivity analysis through `driver_sensitivity()` and `DriverSensitivity`.
 - `_geometry.py` contains private planar numerical helpers.
 - `_constraints.py` assembles private residual, Jacobian, and analytic second-order constraint contributions.
 - `_differential.py` solves private velocity and acceleration linear systems and independently verifies their residuals.
@@ -96,7 +96,7 @@ from kimech import (
     Configuration,
     Ground,
     KinematicDriver,
-    InputSensitivity,
+    DriverSensitivity,
     InvalidModelError,
     KimechError,
     KinematicSolution,
@@ -111,7 +111,7 @@ from kimech import (
     SolveDiagnostics,
     SolveFailureContext,
     ValidationReport,
-    input_sensitivity,
+    driver_sensitivity,
     solve,
 )
 ```
@@ -458,13 +458,13 @@ for config in solution:
 
 Fancy indexing and mutation operations such as item assignment, `append`, or `extend` are not part of the public API. Empty `KinematicSolution` objects are valid containers, although `solve()` does not produce them.
 
-## 9. Input-coordinate sensitivity
+## 9. Driver-coordinate sensitivity
 
-Input-coordinate sensitivity is an explicit downstream analysis of an accepted solution:
+Driver-coordinate sensitivity is an explicit downstream analysis of an accepted solution:
 
 ```python
 solution = solve(...)
-sensitivity = input_sensitivity(solution)
+sensitivity = driver_sensitivity(solution)
 ```
 
 It evaluates the local derivative
@@ -473,14 +473,13 @@ It evaluates the local derivative
 \frac{dq}{du}
 \]
 
-at every requested configuration, where `u` is the natural coordinate of the selected `input_joint`. Sensitivity is not a time derivative and does not require `input_velocity` or `input_acceleration`.
+at every requested configuration, where `u` is the coordinate prescribed by `solution.driver`. In 0.6.0 this is the natural coordinate of the selected revolute or prismatic joint. Sensitivity is not a time derivative and does not require driver velocity or acceleration data.
 
-`InputSensitivity` exposes:
+`DriverSensitivity` exposes:
 
 ```python
 sensitivity.mechanism
-sensitivity.input_joint
-sensitivity.input_positions
+sensitivity.driver
 sensitivity.coordinate_derivatives
 
 sensitivity.body_pose_derivatives(body)
@@ -488,11 +487,11 @@ sensitivity.point_position_derivatives(point)
 sensitivity.joint_coordinate_derivatives(joint)
 ```
 
-For `N` configurations and `n` mobile bodies, `coordinate_derivatives` has shape `(N, 3*n)`. The selected input joint has coordinate derivative one up to numerical precision.
+For `N` configurations and `n` mobile bodies, `coordinate_derivatives` has shape `(N, 3*n)`. The selected driver coordinate has derivative one up to numerical precision.
 
-The values are returned in the user's coordinate convention. With a revolute input, translational components are length per input angle; with a prismatic input, translational components are length per input displacement. Kimech does not attach a unit package.
+The values are returned in the user's coordinate convention. With a revolute driver, translational components are length per driver angle; with a prismatic driver, translational components are length per driver displacement. Kimech does not attach a unit package.
 
-Sensitivity reuses the dimensionless scaled driven Jacobian formulation. If a reliable tangent cannot be computed at a requested sample, `input_sensitivity()` raises `KinematicSolveError` with structured failure context. The original position solution remains valid and unchanged.
+Sensitivity reuses the dimensionless scaled driven Jacobian formulation. If a reliable tangent cannot be computed at a requested sample, `driver_sensitivity()` raises `KinematicSolveError` with structured failure context. The original position solution remains valid and unchanged.
 
 Sensitivity is deliberately not computed by every `solve()` call and no `compute_sensitivity` flag is provided. This keeps analysis optional and avoids redefining a valid position solution when the selected driven coordinate becomes locally singular.
 
@@ -516,6 +515,16 @@ Configuration.input_position
 Configuration.input_velocity
 Configuration.input_acceleration
     -> Configuration.driver
+
+input_sensitivity(...)
+InputSensitivity
+    -> driver_sensitivity(...)
+       DriverSensitivity
+
+SolveFailureContext.input_index
+SolveFailureContext.input_position
+    -> SolveFailureContext.driver_index
+       SolveFailureContext.driver_position
 ```
 
 For `0.3.0`:
@@ -572,7 +581,7 @@ The metrics are evaluated from Kimech's **dimensionless scaled solve Jacobian**,
 
 rather than from the raw dimensional Jacobian. Consequently, the diagnostics are intended to remain comparable when a mechanism is expressed in different but consistent linear units.
 
-The reported matrix is the Jacobian of the complete driven position problem: all joint-constraint rows plus the prescribed-input row. Therefore these quantities diagnose the conditioning and rank of the **chosen solve formulation**. They may depend on which joint is selected as `input_joint` and should not be interpreted as a driver-independent classification of the mechanism.
+The reported matrix is the Jacobian of the complete driven position problem: all joint-constraint rows plus the prescribed-driver row. Therefore these quantities diagnose the conditioning and rank of the **chosen solve formulation**. They may depend on which joint coordinate is selected by the driver and should not be interpreted as a driver-independent classification of the mechanism.
 
 The initial diagnostics are deliberately descriptive rather than prescriptive:
 
@@ -588,7 +597,7 @@ An exactly rank-deficient Jacobian can therefore appear as `condition_number = i
 
 Diagnostics are preserved when slicing a `KinematicSolution`. Manually constructed `KinematicSolution` objects may omit diagnostics, in which case `solution.diagnostics is None`.
 
-The strategy names describe continuation behavior rather than a numerical backend. `"predictor"` means a first-order tangent prediction was accepted by the nonlinear corrector. `"warm_start"` means the previous accepted configuration was used directly; this includes cases where tangent prediction was unavailable and therefore collapsed to the previous state. `"subdivision"` means one or more hidden intermediate input positions were needed before the requested sample could be reached.
+The strategy names describe continuation behavior rather than a numerical backend. `"predictor"` means a first-order tangent prediction was accepted by the nonlinear corrector. `"warm_start"` means the previous accepted configuration was used directly; this includes cases where tangent prediction was unavailable and therefore collapsed to the previous state. `"subdivision"` means one or more hidden intermediate driver positions were needed before the requested sample could be reached.
 
 Kimech deliberately does not expose SciPy-specific counters such as `nfev` or `njev` as part of `SolveDiagnostics`. Process diagnostics are intended to remain meaningful if the nonlinear backend changes.
 
@@ -618,12 +627,12 @@ Position sweeps use predictor-corrector continuation. If a requested sample cann
 
 The subdivision is an internal recovery mechanism:
 
-- user-supplied `input_positions` are never expanded in the returned solution;
+- user-supplied driver positions are never expanded in the returned solution;
 - internal intermediate configurations are discarded after they help reach the requested target;
 - subdivision depth is bounded internally;
 - if recovery fails, the original requested-target `KinematicSolveError` is preserved.
 
-Adaptive subdivision does not make unreachable targets solvable and does not cross folds where the selected `input_joint` ceases to be a valid local parameter. See `docs/study-0.4.0-singularity-diagnostics.md` for examples involving slider-crank dead-centers and four-bar rocker toggles.
+Adaptive subdivision does not make unreachable targets solvable and does not cross folds where the selected driver coordinate ceases to be a valid local parameter. See `docs/study-0.4.0-singularity-diagnostics.md` for examples involving slider-crank dead-centers and four-bar rocker toggles.
 
 ## 13. Errors
 
@@ -646,7 +655,7 @@ except KinematicSolveError as error:
     context = error.context
 ```
 
-When available, the context records the kinematic stage, requested input index and position, independently checked residual norm, scaled-Jacobian condition number / minimum singular value / rank, and requested-sample recovery information such as attempted strategies and corrector-attempt count.
+When available, the context records the kinematic stage, requested driver index and position, independently checked residual norm, scaled-Jacobian condition number / minimum singular value / rank, and requested-sample recovery information such as attempted strategies and corrector-attempt count.
 
 Unavailable quantities are represented by `None`; Kimech does not fabricate diagnostics when a reliable candidate or Jacobian cannot be evaluated. The structured context describes Kimech semantics and does not expose SciPy-specific counters.
 
@@ -728,7 +737,7 @@ Public `Configuration` and `KinematicSolution` constructors validate the structu
 
 For `Configuration`, optional prescribed metadata is represented by a single-sample `KinematicDriver`. A configuration driver must contain exactly one sample; acceleration data remain subject to the driver's requirement that velocity is also present.
 
-Result objects retain the link layout captured when they are constructed or solved. Solve-generated `KinematicSolution` objects retain the complete `KinematicDriver` snapshot together with the associated joint snapshot for downstream analyses such as input sensitivity. This keeps the mapping between entities and stored state stable even if the mechanism object is later extended. Queries require entities compatible with the retained snapshot.
+Result objects retain the link layout captured when they are constructed or solved. Solve-generated `KinematicSolution` objects retain the complete `KinematicDriver` snapshot together with the associated joint snapshot for downstream analyses such as driver sensitivity. This keeps the mapping between entities and stored state stable even if the mechanism object is later extended. Queries require entities compatible with the retained snapshot.
 
 ## 17. Examples and tests
 
@@ -752,4 +761,4 @@ The test suite covers model/constraint behavior, position solving, differential 
 
 ## 18. Deliberately absent API
 
-`0.6.0` currently provides one `KinematicDriver` and optional explicit solve-time histories, but not multiple simultaneous drivers, general multi-DOF solving, motion laws, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. The release adds structural topology introspection, structured solve observability, and explicit one-input sensitivity without defining a universal near-singularity policy.
+`0.6.0` currently provides one `KinematicDriver` and optional explicit solve-time histories, but not multiple simultaneous drivers, general multi-DOF solving, motion laws, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. The release adds structural topology introspection, structured solve observability, and explicit one-driver sensitivity without defining a universal near-singularity policy.

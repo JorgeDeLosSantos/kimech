@@ -232,6 +232,7 @@ solution = solve(
     *,
     driver=driver,
     initial_guess=initial_guess,
+    time=None,
 )
 ```
 
@@ -305,11 +306,28 @@ Kimech reuses the analytic position Jacobian and computes analytic second-order 
 
 ## 6. Time semantics
 
-`KinematicDriver.position` samples are configuration parameters, not a time array.
+`KinematicDriver.position` samples remain the continuation/configuration parameters. An optional `time=` argument to `solve()` associates those requested samples with physical instants.
 
-The dot notation has its standard physical meaning. Driver `velocity` and `acceleration`, generalized differential state, and derived differential queries are derivatives with respect to one common external physical time variable.
+For a multi-sample solve, `time` must be a finite one-dimensional array with the same length as the driver position history and must be strictly increasing. A scalar driver position may use a finite scalar time. Omitting `time` leaves the solution untimed.
 
-A user may externally sample a time law and pass corresponding `position`, `velocity`, and `acceleration` arrays to `KinematicDriver`. Explicit solve-time samples are not yet stored in this 0.6-C block.
+Supplying time does **not**:
+
+- change the continuation parameter from driver position to time;
+- alter predictor/corrector step selection;
+- trigger numerical integration;
+- numerically differentiate driver position;
+- verify consistency between supplied position, velocity, and acceleration histories.
+
+The dot notation keeps its standard physical meaning. Driver `velocity` and `acceleration`, generalized differential state, and derived differential queries are derivatives with respect to one common external physical time variable.
+
+When time is supplied:
+
+```python
+solution.time      # shape (N,)
+solution[i].time   # scalar
+```
+
+Slicing preserves the corresponding time samples. Result containers do not impose increasing order after slicing, so operations such as `solution[::-1]` retain the reversed time history.
 
 Animation `fps` remains presentation-only and is not a physical integration step.
 
@@ -325,6 +343,7 @@ config.input_joint
 config.input_position
 config.input_velocity
 config.input_acceleration
+config.time
 
 config.coordinates
 config.coordinate_velocities
@@ -383,6 +402,7 @@ solution.input_joint
 solution.input_positions
 solution.input_velocities
 solution.input_accelerations
+solution.time
 
 solution.coordinates
 solution.coordinate_velocities
@@ -396,6 +416,7 @@ Shapes are:
 
 - `input_positions`: `(N,)`;
 - optional differential input histories: `(N,)`;
+- optional `time`: `(N,)`;
 - `coordinates`: `(N, 3*n)`;
 - optional generalized differential histories: `(N, 3*n)`.
 
@@ -716,4 +737,4 @@ The test suite covers model/constraint behavior, position solving, differential 
 
 ## 18. Deliberately absent API
 
-`0.6.0` currently provides one `KinematicDriver` but not multiple simultaneous drivers, general multi-DOF solving, motion laws, explicit time histories, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. The release adds structural topology introspection, structured solve observability, and explicit one-input sensitivity without defining a universal near-singularity policy.
+`0.6.0` currently provides one `KinematicDriver` and optional explicit solve-time histories, but not multiple simultaneous drivers, general multi-DOF solving, motion laws, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. The release adds structural topology introspection, structured solve observability, and explicit one-input sensitivity without defining a universal near-singularity policy.

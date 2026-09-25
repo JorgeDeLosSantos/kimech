@@ -553,3 +553,85 @@ def test_impossible_target_preserves_original_failure_after_subdivision(monkeypa
             ),
             initial_guess={link: (0.0, 0.0, 0.0)},
         )
+
+
+def test_solve_accepts_optional_time_and_preserves_it_in_results():
+    mechanism, link, joint = _single_revolute()
+    driver = KinematicDriver(
+        joint,
+        position=[0.5, 0.7, 0.6],
+    )
+    times = np.array([0.0, 0.2, 0.5])
+
+    solution = solve(
+        mechanism,
+        driver=driver,
+        time=times,
+        initial_guess={link: (0.0, 0.0, 0.5)},
+    )
+
+    np.testing.assert_array_equal(solution.time, times)
+    assert solution[0].time == pytest.approx(0.0)
+    assert solution[-1].time == pytest.approx(0.5)
+    np.testing.assert_array_equal(solution.input_positions, [0.5, 0.7, 0.6])
+
+
+def test_solve_accepts_scalar_time_for_scalar_driver_position():
+    mechanism, link, joint = _single_revolute()
+
+    solution = solve(
+        mechanism,
+        driver=KinematicDriver(joint, position=0.5),
+        time=1.25,
+        initial_guess={link: (0.0, 0.0, 0.5)},
+    )
+
+    np.testing.assert_array_equal(solution.time, [1.25])
+    assert solution[0].time == pytest.approx(1.25)
+
+
+@pytest.mark.parametrize(
+    "time, message",
+    [
+        ([0.0], "shape"),
+        ([[0.0, 0.1]], "1-dimensional"),
+        ([0.0, np.nan], "finite"),
+        ([0.0, 0.0], "strictly increasing"),
+        ([0.1, 0.0], "strictly increasing"),
+        ("not-a-number", "numeric"),
+    ],
+)
+def test_solve_validates_time_history(time, message):
+    mechanism, link, joint = _single_revolute()
+
+    with pytest.raises((TypeError, ValueError), match=message):
+        solve(
+            mechanism,
+            driver=KinematicDriver(joint, position=[0.5, 0.6]),
+            time=time,
+            initial_guess={link: (0.0, 0.0, 0.5)},
+        )
+
+
+def test_time_does_not_change_position_continuation_or_solution_state():
+    mechanism, link, joint = _single_revolute()
+    driver = KinematicDriver(joint, position=[0.5, 0.7, 0.6])
+    guess = {link: (0.0, 0.0, 0.5)}
+
+    untimed = solve(
+        mechanism,
+        driver=driver,
+        initial_guess=guess,
+    )
+    timed = solve(
+        mechanism,
+        driver=driver,
+        time=[0.0, 0.2, 0.5],
+        initial_guess=guess,
+    )
+
+    np.testing.assert_array_equal(timed.coordinates, untimed.coordinates)
+    np.testing.assert_array_equal(
+        timed.diagnostics.strategies,
+        untimed.diagnostics.strategies,
+    )

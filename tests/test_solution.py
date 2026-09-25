@@ -467,3 +467,82 @@ def test_configuration_validates_differential_state_invariants():
             [0.0, 0.0, 0.0],
             coordinate_velocities=[0.0, np.inf, 0.0],
         )
+
+
+def test_solution_time_is_optional_and_propagates_through_indexing_and_slicing():
+    mechanism, link, joint = _revolute_mechanism()
+    inputs = np.array([0.0, 0.5, 1.0])
+    coordinates = np.array(
+        [[1.0, 2.0, 0.0], [2.0, 3.0, 0.5], [3.0, 4.0, 1.0]]
+    )
+    times = np.array([0.0, 0.25, 0.75])
+
+    untimed = KinematicSolution(mechanism, joint, inputs, coordinates)
+    assert untimed.time is None
+    assert untimed[0].time is None
+
+    solution = KinematicSolution(
+        mechanism,
+        joint,
+        inputs,
+        coordinates,
+        time=times,
+    )
+
+    np.testing.assert_array_equal(solution.time, times)
+    assert solution[1].time == pytest.approx(0.25)
+
+    sliced = solution[1:]
+    np.testing.assert_array_equal(sliced.time, times[1:])
+
+    reversed_solution = solution[::-1]
+    np.testing.assert_array_equal(reversed_solution.time, times[::-1])
+
+
+def test_solution_time_is_a_safe_copy_and_must_match_sample_count():
+    mechanism, _, joint = _revolute_mechanism()
+    inputs = np.array([0.0, 0.5])
+    coordinates = np.array([[1.0, 2.0, 0.0], [2.0, 3.0, 0.5]])
+    times = np.array([0.0, 0.5])
+
+    solution = KinematicSolution(
+        mechanism,
+        joint,
+        inputs,
+        coordinates,
+        time=times,
+    )
+    times[:] = 99.0
+    exposed = solution.time
+    exposed[:] = -1.0
+    np.testing.assert_array_equal(solution.time, [0.0, 0.5])
+
+    with pytest.raises(ValueError, match="time must have shape"):
+        KinematicSolution(
+            mechanism,
+            joint,
+            inputs,
+            coordinates,
+            time=[0.0],
+        )
+
+    with pytest.raises(ValueError, match="finite"):
+        KinematicSolution(
+            mechanism,
+            joint,
+            inputs,
+            coordinates,
+            time=[0.0, np.nan],
+        )
+
+
+def test_configuration_accepts_optional_finite_time_metadata():
+    mechanism = Mechanism()
+    link = mechanism.add_link("link")
+
+    config = Configuration(mechanism, [1.0, 2.0, 0.3], time=1.25)
+    assert config.time == pytest.approx(1.25)
+    assert config.body_pose(link)[2] == pytest.approx(0.3)
+
+    with pytest.raises(ValueError, match="time"):
+        Configuration(mechanism, [1.0, 2.0, 0.3], time=np.inf)

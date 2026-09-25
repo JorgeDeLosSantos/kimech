@@ -72,8 +72,7 @@ def test_solution_differential_entity_histories_have_expected_values():
     accelerations = np.array([[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]])
     solution = KinematicSolution(
         mechanism,
-        joint,
-        [0.0, 0.0],
+        KinematicDriver(joint, position=[0.0, 0.0]),
         coordinates,
         coordinate_velocities=velocities,
         coordinate_accelerations=accelerations,
@@ -172,8 +171,7 @@ def test_solution_validates_differential_shapes_and_invariants():
     with pytest.raises(ValueError, match="requires coordinate_velocities"):
         KinematicSolution(
             mechanism,
-            joint,
-            [0.0],
+            KinematicDriver(joint, position=[0.0]),
             coordinates,
             coordinate_accelerations=[[0.0, 0.0, 0.0]],
         )

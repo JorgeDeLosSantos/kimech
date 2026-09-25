@@ -1,8 +1,7 @@
 import numpy as np
 import pytest
 
-from kimech import Configuration, KinematicSolution, KinematicSolveError, Mechanism, solve
-from kimech.driver import KinematicDriver
+from kimech import Configuration, KinematicDriver, KinematicSolution, KinematicSolveError, Mechanism, solve
 from kimech._differential import solve_input_tangent
 from kimech._scaling import build_numerical_scaling
 

@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 
 from kimech import (
-    KinematicDriver,    KinematicSolveError,
+    KinematicDriver,
+    KinematicSolveError,
     Mechanism,
     SolveDiagnosticSummary,
     SolveDiagnostics,
@@ -32,8 +33,8 @@ def test_kinematic_solve_error_remains_compatible_without_context():
 def test_solve_failure_context_is_immutable_and_validated():
     context = SolveFailureContext(
         stage="position",
-        input_index=2,
-        input_position=0.7,
+        driver_index=2,
+        driver_position=0.7,
         residual_norm=1e-5,
         condition_number=12.0,
         min_singular_value=0.08,
@@ -43,7 +44,7 @@ def test_solve_failure_context_is_immutable_and_validated():
     )
 
     assert context.stage == "position"
-    assert context.input_index == 2
+    assert context.driver_index == 2
     assert context.attempted_strategies == ("predictor", "warm_start")
 
     with pytest.raises(AttributeError):
@@ -75,8 +76,8 @@ def test_position_failure_exposes_structured_context(monkeypatch):
     context = captured.value.context
     assert context is not None
     assert context.stage == "position"
-    assert context.input_index == 0
-    assert context.input_position == pytest.approx(0.5)
+    assert context.driver_index == 0
+    assert context.driver_position == pytest.approx(0.5)
     assert context.residual_norm == pytest.approx(0.5)
     assert context.condition_number == pytest.approx(1.0)
     assert context.min_singular_value == pytest.approx(1.0)
@@ -97,7 +98,7 @@ def test_failed_requested_sample_reports_recovery_path(monkeypatch):
         initial_q,
         scaling,
         *,
-        input_index=None,
+        driver_index=None,
     ):
         if input_value == pytest.approx(0.0):
             return np.array([0.0, 0.0, 0.0])
@@ -105,8 +106,8 @@ def test_failed_requested_sample_reports_recovery_path(monkeypatch):
             f"unreachable {input_value}",
             context=SolveFailureContext(
                 stage="position",
-                input_index=input_index,
-                input_position=input_value,
+                driver_index=driver_index,
+                driver_position=input_value,
                 residual_norm=1.0,
             ),
         )
@@ -129,8 +130,8 @@ def test_failed_requested_sample_reports_recovery_path(monkeypatch):
 
     context = captured.value.context
     assert context is not None
-    assert context.input_index == 1
-    assert context.input_position == pytest.approx(0.2)
+    assert context.driver_index == 1
+    assert context.driver_position == pytest.approx(0.2)
     assert context.attempted_strategies == ("warm_start", "subdivision")
     assert context.corrector_attempts > 1
     assert "unreachable 0.2" in str(captured.value)
@@ -158,8 +159,8 @@ def test_velocity_failure_exposes_structured_context(monkeypatch):
     context = captured.value.context
     assert context is not None
     assert context.stage == "velocity"
-    assert context.input_index == 0
-    assert context.input_position == pytest.approx(0.5)
+    assert context.driver_index == 0
+    assert context.driver_position == pytest.approx(0.5)
     assert context.condition_number == pytest.approx(1.0)
     assert context.min_singular_value == pytest.approx(1.0)
     assert context.rank == 3

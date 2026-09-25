@@ -636,7 +636,7 @@ def _with_recovery_context(
         context=SolveFailureContext(
             stage=context.stage,
             driver_index=context.driver_index,
-            driver_position=context.input_position,
+            driver_position=context.driver_position,
             residual_norm=context.residual_norm,
             condition_number=context.condition_number,
             min_singular_value=context.min_singular_value,

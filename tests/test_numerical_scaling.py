@@ -99,7 +99,7 @@ def test_problem_four_bar_sweep_is_scale_invariant(scale):
     )
 
     assert len(solution) == len(values)
-    np.testing.assert_allclose(solution.input_positions, values)
+    np.testing.assert_allclose(solution.driver.position, values)
 
 
 def test_characteristic_length_scales_with_problem_geometry():

@@ -62,6 +62,35 @@ class KinematicDriver:
         object.__setattr__(self, "_accelerations", accelerations)
         object.__setattr__(self, "_acceleration_is_scalar", acceleration_is_scalar)
 
+    @classmethod
+    def _from_history(
+        cls,
+        joint: _Joint,
+        positions: np.ndarray,
+        velocities: np.ndarray | None = None,
+        accelerations: np.ndarray | None = None,
+    ) -> KinematicDriver:
+        """Build an internal normalized history snapshot, including empty slices."""
+        driver = cls.__new__(cls)
+        object.__setattr__(driver, "_joint", joint)
+        object.__setattr__(driver, "_positions", np.asarray(positions, dtype=float).copy())
+        object.__setattr__(driver, "_position_is_scalar", False)
+        object.__setattr__(
+            driver,
+            "_velocities",
+            None if velocities is None else np.asarray(velocities, dtype=float).copy(),
+        )
+        object.__setattr__(driver, "_velocity_is_scalar", False)
+        object.__setattr__(
+            driver,
+            "_accelerations",
+            None
+            if accelerations is None
+            else np.asarray(accelerations, dtype=float).copy(),
+        )
+        object.__setattr__(driver, "_acceleration_is_scalar", False)
+        return driver
+
     def __setattr__(self, name, value) -> None:
         raise AttributeError("KinematicDriver is immutable")
 

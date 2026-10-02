@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.1
+
+Kimech `0.6.1` is a packaging and distribution release. It does not change solver behavior or the public kinematics API introduced in `0.6.0`.
+
+### Added
+
+- PyPI-oriented project metadata, keywords, and classifiers;
+- automated distribution validation with `twine check`;
+- a dedicated GitHub Actions workflow for PyPI Trusted Publishing using OIDC.
+
+### Changed
+
+- installation documentation now uses `pip install kimech` and `pip install "kimech[viz]"`;
+- package metadata now identifies the first PyPI release as `0.6.1`.
+
 ## 0.6.0
 
 Kimech `0.6.0` makes prescribed kinematic motion a first-class concept while preserving the existing one-DOF planar R/P solver.

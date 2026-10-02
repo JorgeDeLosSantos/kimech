@@ -7,5 +7,5 @@ def test_runtime_version_matches_distribution_metadata():
     assert kimech.__version__ == version("kimech")
 
 
-def test_release_version_is_0_6_0():
-    assert kimech.__version__ == "0.6.0"
+def test_release_version_is_0_6_1():
+    assert kimech.__version__ == "0.6.1"

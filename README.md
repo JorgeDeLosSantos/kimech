@@ -6,20 +6,20 @@ Public documentation: https://jorgedelossantos.github.io/kimech/
 
 It provides declarative rigid-body models with revolute and prismatic joints, robust one-DOF position/velocity/acceleration solving, structural topology introspection, structured numerical diagnostics, driver-coordinate sensitivity analysis, and schematic plotting and animation.
 
-Kimech supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms driven by one `KinematicDriver`. The current `0.6.0` driver/time design is recorded in [`docs/study-0.6.0-kinematic-driver.md`](docs/study-0.6.0-kinematic-driver.md); earlier design baselines remain available in the `docs/` directory. [`docs/api.md`](docs/api.md) documents the implemented public API.
+Kimech supports position, velocity, and acceleration analysis for one-DOF planar R/P mechanisms driven by one `KinematicDriver`. The current `0.6.x` driver/time design is recorded in [`docs/study-0.6.0-kinematic-driver.md`](docs/study-0.6.0-kinematic-driver.md); earlier design baselines remain available in the `docs/` directory. [`docs/api.md`](docs/api.md) documents the implemented public API.
 
 ## Installation
 
-Install the released `0.6.0` version directly from its GitHub tag:
+Install Kimech from PyPI:
 
 ```bash
-pip install "kimech @ git+https://github.com/JorgeDeLosSantos/kimech.git@v0.6.0"
+pip install kimech
 ```
 
 For plotting, animation, and GIF support:
 
 ```bash
-pip install "kimech[viz] @ git+https://github.com/JorgeDeLosSantos/kimech.git@v0.6.0"
+pip install "kimech[viz]"
 ```
 
 For local development, clone the repository and use an editable install:

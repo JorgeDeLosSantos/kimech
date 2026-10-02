@@ -2,16 +2,16 @@
 
 ## Installation
 
-Install Kimech 0.6.0 directly from the GitHub release tag:
+Install Kimech from PyPI:
 
 ```bash
-pip install "kimech @ git+https://github.com/JorgeDeLosSantos/kimech.git@v0.6.0"
+pip install kimech
 ```
 
 For plotting, animation, and GIF support:
 
 ```bash
-pip install "kimech[viz] @ git+https://github.com/JorgeDeLosSantos/kimech.git@v0.6.0"
+pip install "kimech[viz]"
 ```
 
 For a local development checkout instead:

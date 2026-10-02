@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kimech"
-version = "0.6.0"
+version = "0.6.1"
 description = "Planar mechanism kinematics for Python"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,6 +13,23 @@ authors = [
 ]
 license = "MIT"
 license-files = ["LICENSE"]
+keywords = [
+    "mechanisms",
+    "kinematics",
+    "mechanical engineering",
+    "robotics",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+]
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",

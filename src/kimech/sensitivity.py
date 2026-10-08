@@ -42,7 +42,7 @@ class DriverSensitivity:
         if not isinstance(solution, KinematicSolution):
             raise TypeError("solution must be a KinematicSolution")
 
-        if len(solution.drivers[0]s) != 1:
+        if len(solution.drivers) != 1:
             raise ValueError("driver sensitivity currently requires exactly one driver")
 
         derivatives = np.asarray(coordinate_derivatives, dtype=float)

@@ -275,13 +275,13 @@ def test_configuration_validates_arrays_driver_metadata_and_membership():
         Configuration(
             mechanism,
             [0.0, 0.0, 0.0],
-            driver=KinematicDriver(other_joint, position=0.5),
+            drivers=KinematicDriver(other_joint, position=0.5),
         )
     with pytest.raises(ValueError, match="exactly one sample"):
         Configuration(
             mechanism,
             [0.0, 0.0, 0.0],
-            driver=KinematicDriver(joint, position=[0.0, 0.5]),
+            drivers=KinematicDriver(joint, position=[0.0, 0.5]),
         )
 
     config = Configuration(mechanism, [0.0, 0.0, 0.0])
@@ -331,7 +331,7 @@ def test_configuration_stores_optional_differential_state_and_metadata_as_safe_c
         [1.0, 2.0, 0.5],
         coordinate_velocities=q_dot,
         coordinate_accelerations=q_ddot,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=0.5,
             velocity=9.0,

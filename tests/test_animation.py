@@ -189,7 +189,7 @@ def test_animate_rejects_invalid_solution_and_empty_solution():
     solution, _ = _four_bar_solution()
     empty = KinematicSolution(
         solution.mechanism,
-        KinematicDriver._from_history(solution.driver.joint, np.empty(0)),
+        KinematicDriver._from_history(solution.drivers[0].joint, np.empty(0)),
         np.empty((0, solution.coordinates.shape[1])),
     )
     with pytest.raises(ValueError, match="at least one"):

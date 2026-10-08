@@ -158,22 +158,22 @@ def test_solution_sequence_properties_and_negative_indexing():
 
     assert len(solution) == 3
     assert solution.mechanism is mechanism
-    assert solution.driver.joint is joint
-    assert solution[0].driver.joint is joint
-    assert solution[0].driver.position == pytest.approx(0.0)
+    assert solution.drivers[0].joint is joint
+    assert solution[0].drivers[0].joint is joint
+    assert solution[0].drivers[0].position == pytest.approx(0.0)
     np.testing.assert_allclose(solution[0].body_pose(link), coordinates[0])
     np.testing.assert_allclose(solution[-1].body_pose(link), coordinates[-1])
-    np.testing.assert_allclose(solution.driver.position, inputs)
+    np.testing.assert_allclose(solution.drivers[0].position, inputs)
     np.testing.assert_allclose(solution.coordinates, coordinates)
 
     sliced = solution[:2]
     assert isinstance(sliced, KinematicSolution)
     assert len(sliced) == 2
-    np.testing.assert_allclose(sliced.driver.position, inputs[:2])
+    np.testing.assert_allclose(sliced.drivers[0].position, inputs[:2])
     np.testing.assert_allclose(sliced.coordinates, coordinates[:2])
 
     reversed_solution = solution[::-1]
-    np.testing.assert_allclose(reversed_solution.driver.position, inputs[::-1])
+    np.testing.assert_allclose(reversed_solution.drivers[0].position, inputs[::-1])
     np.testing.assert_allclose(reversed_solution.coordinates, coordinates[::-1])
 
     configs = list(solution)
@@ -250,12 +250,12 @@ def test_public_arrays_cannot_mutate_stored_results_or_alias_constructor_inputs(
     solution = KinematicSolution(mechanism, KinematicDriver(joint, position=input_positions), coordinates)
     input_positions[:] = -1.0
     coordinates[:] = -1.0
-    exposed_values = solution.driver.position
+    exposed_values = solution.drivers[0].position
     exposed_coordinates = solution.coordinates
     exposed_values[:] = 99.0
     exposed_coordinates[:] = 99.0
 
-    np.testing.assert_allclose(solution.driver.position, [0.0, 0.5])
+    np.testing.assert_allclose(solution.drivers[0].position, [0.0, 0.5])
     np.testing.assert_allclose(solution.coordinates, [[1.0, 2.0, 0.0], [2.0, 3.0, 0.5]])
 
 
@@ -344,8 +344,8 @@ def test_configuration_stores_optional_differential_state_and_metadata_as_safe_c
 
     assert config.has_velocity is True
     assert config.has_acceleration is True
-    assert config.driver.velocity == pytest.approx(9.0)
-    assert config.driver.acceleration == pytest.approx(10.0)
+    assert config.drivers[0].velocity == pytest.approx(9.0)
+    assert config.drivers[0].acceleration == pytest.approx(10.0)
     np.testing.assert_allclose(config.coordinate_velocities, [3.0, 4.0, 5.0])
     np.testing.assert_allclose(config.coordinate_accelerations, [6.0, 7.0, 8.0])
     np.testing.assert_allclose(config.body_velocity(link), [3.0, 4.0, 5.0])

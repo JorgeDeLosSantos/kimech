@@ -64,9 +64,9 @@ def test_constant_speed_four_bar_time_history_matches_equivalent_kinematic_sweep
     )
 
     np.testing.assert_array_equal(timed.time, time)
-    np.testing.assert_array_equal(timed.driver.position, theta)
-    np.testing.assert_array_equal(timed.driver.velocity, np.full_like(time, omega))
-    np.testing.assert_array_equal(timed.driver.acceleration, np.full_like(time, alpha))
+    np.testing.assert_array_equal(timed.drivers[0].position, theta)
+    np.testing.assert_array_equal(timed.drivers[0].velocity, np.full_like(time, omega))
+    np.testing.assert_array_equal(timed.drivers[0].acceleration, np.full_like(time, alpha))
 
     np.testing.assert_allclose(
         timed.joint_coordinates(crank_joint),
@@ -100,4 +100,4 @@ def test_constant_speed_four_bar_time_history_matches_equivalent_kinematic_sweep
 
     assert timed[0].time == 0.0
     assert timed[-1].time == 2.0
-    assert timed[-1].driver.position == theta[-1]
+    assert timed[-1].drivers[0].position == theta[-1]

@@ -17,6 +17,11 @@ class SolveFailureContext:
     stage: str
     driver_index: int | None = None
     driver_position: float | None = None
+    sample_index: int | None = None
+    driver_positions: tuple[float, ...] | None = None
+    failure_kind: str | None = None
+    joint_rank: int | None = None
+    rank_issue: str | None = None
     residual_norm: float | None = None
     condition_number: float | None = None
     min_singular_value: float | None = None
@@ -31,6 +36,32 @@ class SolveFailureContext:
         if self.driver_index is not None:
             if not isinstance(self.driver_index, int) or self.driver_index < 0:
                 raise ValueError("driver_index must be a non-negative integer or None")
+
+        if self.sample_index is not None:
+            if not isinstance(self.sample_index, int) or self.sample_index < 0:
+                raise ValueError("sample_index must be a non-negative integer or None")
+        if (self.sample_index is not None and self.driver_index is not None
+                and self.sample_index != self.driver_index):
+            raise ValueError("sample_index and driver_index must refer to the same sample")
+
+        if self.driver_positions is not None:
+            if (not isinstance(self.driver_positions, tuple)
+                    or not self.driver_positions
+                    or not all(isinstance(value, (int, float)) and math.isfinite(value)
+                               for value in self.driver_positions)):
+                raise ValueError("driver_positions must be a nonempty tuple of finite numbers")
+
+        if self.failure_kind is not None and self.failure_kind not in (
+            "nonconvergence", "joint_rank_loss", "dependent_drivers", "linear_failure"
+        ):
+            raise ValueError("failure_kind is not a recognized failure classification")
+        if self.rank_issue is not None and self.rank_issue not in (
+            "regular", "joint_rank_loss", "dependent_drivers"
+        ):
+            raise ValueError("rank_issue is not a recognized rank classification")
+        if self.joint_rank is not None:
+            if not isinstance(self.joint_rank, int) or self.joint_rank < 0:
+                raise ValueError("joint_rank must be a non-negative integer or None")
 
         if self.driver_position is not None and not math.isfinite(self.driver_position):
             raise ValueError("driver_position must be finite or None")

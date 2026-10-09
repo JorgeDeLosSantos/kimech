@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
 
-from ._constraints import acceleration_rhs, jacobian
+from ._constraints import acceleration_rhs, jacobian, _finite_driver_sample
+from ._drivers import normalize_drivers
 from .driver import KinematicDriver
 from ._scaling import NumericalScaling
 from .diagnostics import _jacobian_metrics
@@ -20,19 +23,21 @@ def solve_velocity(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
+    driver: KinematicDriver | Sequence[KinematicDriver],
     q: np.ndarray,
-    driver_value: float,
-    driver_velocity: float,
+    driver_value: float | Sequence[float] | np.ndarray,
+    driver_velocity: float | Sequence[float] | np.ndarray,
     scaling: NumericalScaling,
     *,
     driver_index: int | None = None,
 ) -> np.ndarray:
     """Solve one generalized velocity state from differentiated constraints."""
-    velocity = _finite_scalar(driver_velocity, name="driver_velocity")
+    velocity = _finite_driver_sample(
+        driver_velocity, len(normalize_drivers(driver)), name="driver_velocity"
+    )
     matrix = jacobian(mechanism, links, joints, driver, q, driver_value)
     rhs = np.zeros(matrix.shape[0], dtype=float)
-    rhs[-1] = velocity
+    rhs[-len(velocity):] = velocity
     return _solve_linear_state(
         scaling.scale_jacobian(matrix),
         scaling.scale_rhs(rhs),
@@ -74,17 +79,19 @@ def solve_acceleration(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
+    driver: KinematicDriver | Sequence[KinematicDriver],
     q: np.ndarray,
     q_dot: np.ndarray,
-    driver_value: float,
-    driver_acceleration: float,
+    driver_value: float | Sequence[float] | np.ndarray,
+    driver_acceleration: float | Sequence[float] | np.ndarray,
     scaling: NumericalScaling,
     *,
     driver_index: int | None = None,
 ) -> np.ndarray:
     """Solve one generalized acceleration state from second-order constraints."""
-    prescribed = _finite_scalar(driver_acceleration, name="driver_acceleration")
+    prescribed = _finite_driver_sample(
+        driver_acceleration, len(normalize_drivers(driver)), name="driver_acceleration"
+    )
     matrix = jacobian(mechanism, links, joints, driver, q, driver_value)
     rhs = acceleration_rhs(
         mechanism,
@@ -114,7 +121,7 @@ def _solve_linear_state(
     scaling: NumericalScaling,
     link_count: int,
     stage: str,
-    driver_value: float,
+    driver_value: float | Sequence[float] | np.ndarray,
     driver_index: int | None,
 ) -> np.ndarray:
     try:
@@ -132,7 +139,7 @@ def _solve_linear_state(
             context=SolveFailureContext(
                 stage=stage,
                 driver_index=driver_index,
-                driver_position=driver_value,
+                driver_position=_scalar_driver_position(driver_value),
                 condition_number=condition,
                 min_singular_value=minimum,
                 rank=rank,
@@ -167,7 +174,7 @@ def _solve_linear_state(
         context=SolveFailureContext(
             stage=stage,
             driver_index=driver_index,
-            driver_position=driver_value,
+            driver_position=_scalar_driver_position(driver_value),
             residual_norm=(
                 residual_norm if np.isfinite(residual_norm) else None
             ),
@@ -180,16 +187,17 @@ def _solve_linear_state(
 
 def _failure_message(
     stage: str,
-    driver_value: float,
+    driver_value: float | Sequence[float] | np.ndarray,
     *,
     driver_index: int | None,
     residual_norm: float,
     reason: str,
 ) -> str:
+    formatted_value = _format_driver_values(driver_value)
     location = (
-        f"driver index {driver_index} (value={driver_value:.12g})"
+        f"driver index {driver_index} (value={formatted_value})"
         if driver_index is not None
-        else f"driver value {driver_value:.12g}"
+        else f"driver value {formatted_value}"
     )
     norm_text = f"{residual_norm:.12g}" if np.isfinite(residual_norm) else "unavailable"
     return (
@@ -209,3 +217,16 @@ def _finite_scalar(value: object, *, name: str) -> float:
     if not np.isfinite(result):
         raise ValueError(f"{name} must be finite")
     return result
+
+
+def _scalar_driver_position(value: float | Sequence[float] | np.ndarray) -> float | None:
+    """Keep scalar failure metadata; vectors are represented in the message."""
+    array = np.asarray(value, dtype=float)
+    return float(array) if array.ndim == 0 else None
+
+
+def _format_driver_values(value: float | Sequence[float] | np.ndarray) -> str:
+    array = np.asarray(value, dtype=float)
+    if array.ndim == 0:
+        return f"{float(array):.12g}"
+    return "[" + ", ".join(f"{float(item):.12g}" for item in array) + "]"

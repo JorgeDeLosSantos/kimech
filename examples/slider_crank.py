@@ -52,7 +52,7 @@ def main():
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             crank_joint,
             position=values,
         ),

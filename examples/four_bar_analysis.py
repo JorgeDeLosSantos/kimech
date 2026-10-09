@@ -50,7 +50,7 @@ def main():
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=input_angle,
             velocity=input_angular_velocity,

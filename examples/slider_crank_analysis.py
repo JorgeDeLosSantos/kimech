@@ -54,7 +54,7 @@ def main():
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             crank_joint,
             position=input_angle,
             velocity=input_angular_velocity,
@@ -102,7 +102,7 @@ def main():
     reference = solution[sample]
     reconstructed = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             prismatic_joint,
             position=slider_position[sample],
             velocity=slider_velocity[sample],

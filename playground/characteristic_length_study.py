@@ -176,7 +176,7 @@ def _ground_probe(translation: tuple[float, float], *, add_poi: bool) -> StudyCa
     return StudyCase(
         name="ground_translation_probe",
         mechanism=mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=np.array([0.0]),
         ),
@@ -204,7 +204,7 @@ def _single_revolute_offset(offset: float) -> StudyCase:
     return StudyCase(
         name="single_revolute_offset",
         mechanism=mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=np.linspace(0.0, 2.0 * np.pi, 361),
         ),
@@ -249,7 +249,7 @@ def _pure_prismatic(scale: float) -> StudyCase:
     return StudyCase(
         name="pure_prismatic",
         mechanism=mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=scale * np.linspace(0.0, 100.0, 101),
         ),
@@ -289,7 +289,7 @@ def fallback_check() -> None:
     case = StudyCase(
         name="zero_length_revolute",
         mechanism=mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=np.array([0.5]),
         ),

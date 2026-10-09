@@ -281,48 +281,62 @@ def _validate_prescriptions(
         if not any(driver.joint is joint for joint in joints):
             raise ValueError("driver joint must be included in the joints snapshot")
     coordinates = _finite_coordinates(q, len(links))
-    try:
-        values = np.asarray(driver_values, dtype=float)
-    except (TypeError, ValueError) as error:
-        raise TypeError("driver_values must be numeric") from error
-    if values.ndim == 0 and len(selected_drivers) == 1:
-        values = values.reshape(1)
-    if values.shape != (len(selected_drivers),):
-        raise ValueError(f"driver_values must have shape ({len(selected_drivers)},)")
-    if not np.all(np.isfinite(values)):
-        raise ValueError("driver_values must contain only finite values")
-    return coordinates, selected_drivers, values.copy()
+    values = _finite_driver_sample(
+        driver_values, len(selected_drivers), name="driver_values"
+    )
+    return coordinates, selected_drivers, values
 
 
 def acceleration_rhs(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
+    drivers: KinematicDriver | Sequence[KinematicDriver],
     q: np.ndarray,
     q_dot: np.ndarray,
-    driver_value: float,
-    driver_acceleration: float,
+    driver_values: float | Sequence[float] | np.ndarray,
+    driver_accelerations: float | Sequence[float] | np.ndarray,
 ) -> np.ndarray:
-    """Assemble the right-hand side of J q_ddot = b_a."""
-    coordinates, _ = _validate_system(
-        mechanism, links, joints, driver, q, driver_value
+    """Assemble J(q) q_ddot = [-joint_bias, prescribed_accelerations - driver_bias].
+
+    The order of the final rows matches the supplied driver order, including
+    when the single-driver scalar API is used.
+    """
+    coordinates, selected_drivers, _ = _validate_prescriptions(
+        mechanism, links, joints, drivers, q, driver_values
     )
     velocities = _finite_state(q_dot, len(links), name="q_dot")
-    prescribed_acceleration = _finite_scalar(
-        driver_acceleration, name="driver_acceleration"
+    prescribed = _finite_driver_sample(
+        driver_accelerations, len(selected_drivers), name="driver_acceleration"
     )
-    result = np.empty(2 * len(joints) + 1, dtype=float)
+    result = np.empty(2 * len(joints) + len(selected_drivers), dtype=float)
     for index, joint in enumerate(joints):
-        bias = joint_acceleration_bias(
+        result[2 * index : 2 * index + 2] = -joint_acceleration_bias(
             mechanism, links, joint, coordinates, velocities
         )
-        result[2 * index : 2 * index + 2] = -bias
-    driver_bias = driver_acceleration_bias(
-        mechanism, links, driver.joint, coordinates, velocities
-    )
-    result[-1] = prescribed_acceleration - driver_bias
+    offset = 2 * len(joints)
+    for index, driver in enumerate(selected_drivers):
+        result[offset + index] = prescribed[index] - driver_acceleration_bias(
+            mechanism, links, driver.joint, coordinates, velocities
+        )
     return result
+
+
+def _finite_driver_sample(
+    value: object, count: int, *, name: str
+) -> np.ndarray:
+    """Validate an ordered set of input values at one requested sample."""
+    try:
+        values = np.asarray(value, dtype=float)
+    except (TypeError, ValueError) as error:
+        raise TypeError(f"{name} must be numeric") from error
+    if values.ndim == 0 and count == 1:
+        values = values.reshape(1)
+    if values.shape != (count,):
+        raise ValueError(f"{name} must have shape ({count},)")
+    if not np.all(np.isfinite(values)):
+        raise ValueError(f"{name} must contain only finite values")
+    return values.copy()
 
 
 def _validate_system(

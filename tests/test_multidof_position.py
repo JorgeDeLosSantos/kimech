@@ -130,3 +130,69 @@ def test_five_bar_closed_chain_with_two_prescribed_cranks():
                                result.point_velocities(rc1), atol=1e-8)
     np.testing.assert_allclose(result.point_accelerations(lc1),
                                result.point_accelerations(rc1), atol=1e-8)
+
+
+def test_multidof_adaptive_subdivision_is_along_the_input_segment(monkeypatch):
+    """A requested vector step is subdivided without exposing internal samples."""
+    from kimech import KinematicSolveError
+
+    mechanism, first, second, _, j1, j2 = _serial_2r()
+    calls = []
+
+    def fake_correct(mechanism_arg, links, joints, input_drivers, values,
+                     initial_q, scaling, *, driver_index=None):
+        values = np.asarray(values, dtype=float)
+        calls.append(values.copy())
+        # Simulate a corrector that can accept only short steps.
+        if np.linalg.norm(values - [initial_q[2], initial_q[5] - initial_q[2]],
+                          ord=np.inf) > 0.07 + 1e-12:
+            raise KinematicSolveError("step too large")
+        a, b = values
+        return np.array([0.0, 0.0, a, 2.0*np.cos(a), 2.0*np.sin(a), a+b])
+
+    monkeypatch.setattr("kimech.solver._solve_configuration", fake_correct)
+    monkeypatch.setattr(
+        "kimech.solver._predict_next_configuration",
+        lambda mechanism, links, joints, drivers, q, start, target, scaling,
+               driver_index=None: q.copy(),
+    )
+    result = solve(
+        mechanism,
+        drivers=[
+            KinematicDriver(j1, position=[0.0, 0.2]),
+            KinematicDriver(j2, position=[0.0, 0.1]),
+        ],
+        initial_guess={first: (0.0, 0.0, 0.0), second: (2.0, 0.0, 0.0)},
+    )
+    assert len(result) == 2
+    np.testing.assert_allclose(result.joint_coordinates(j1), [0.0, 0.2])
+    np.testing.assert_allclose(result.joint_coordinates(j2), [0.0, 0.1])
+    assert result.diagnostics.strategies[1] == "subdivision"
+    assert result.diagnostics.subdivision_counts[1] == 3
+    assert result.diagnostics.corrector_attempts[1] == 7
+    assert any(np.allclose(sample, [0.1, 0.05]) for sample in calls)
+    assert any(np.allclose(sample, [0.05, 0.025]) for sample in calls)
+
+
+def test_single_driver_entrypoints_share_solver_and_diagnostics():
+    mechanism = Mechanism()
+    fixed = mechanism.ground.add_point("origin", (0.0, 0.0))
+    link = mechanism.add_link("link")
+    pivot = link.add_point("pivot", (0.0, 0.0))
+    revolute = mechanism.revolute(fixed, pivot)
+    input_driver = KinematicDriver(
+        revolute, position=[0.2, 0.25], velocity=1.5, acceleration=-0.4
+    )
+    guess = {link: (0.0, 0.0, 0.2)}
+    via_legacy = solve(mechanism, driver=input_driver, initial_guess=guess)
+    via_plural = solve(mechanism, drivers=input_driver, initial_guess=guess)
+    np.testing.assert_allclose(via_legacy.coordinates, via_plural.coordinates)
+    np.testing.assert_allclose(
+        via_legacy.coordinate_velocities, via_plural.coordinate_velocities
+    )
+    np.testing.assert_allclose(
+        via_legacy.coordinate_accelerations, via_plural.coordinate_accelerations
+    )
+    np.testing.assert_array_equal(
+        via_legacy.diagnostics.strategies, via_plural.diagnostics.strategies
+    )

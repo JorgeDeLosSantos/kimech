@@ -98,8 +98,14 @@ def test_five_bar_closed_chain_with_two_prescribed_cranks():
     result = solve(
         mechanism,
         drivers=[
-            KinematicDriver(jleft, position=[theta_left, theta_left + 0.02]),
-            KinematicDriver(jright, position=[theta_right, theta_right - 0.02]),
+            KinematicDriver(
+                jleft, position=[theta_left, theta_left + 0.02],
+                velocity=[0.7, 0.8], acceleration=[0.2, -0.3],
+            ),
+            KinematicDriver(
+                jright, position=[theta_right, theta_right - 0.02],
+                velocity=[-0.4, -0.5], acceleration=[-0.1, 0.4],
+            ),
         ],
         initial_guess={
             left_crank: (-1.0, 0.0, theta_left),
@@ -115,3 +121,12 @@ def test_five_bar_closed_chain_with_two_prescribed_cranks():
                                [theta_right, theta_right - 0.02], atol=1e-8)
     np.testing.assert_allclose(result.point_positions(lc1),
                                result.point_positions(rc1), atol=1e-8)
+    assert result.has_velocity and result.has_acceleration
+    np.testing.assert_allclose(result.joint_velocities(jleft), [0.7, 0.8], atol=1e-8)
+    np.testing.assert_allclose(result.joint_velocities(jright), [-0.4, -0.5], atol=1e-8)
+    np.testing.assert_allclose(result.joint_accelerations(jleft), [0.2, -0.3], atol=1e-8)
+    np.testing.assert_allclose(result.joint_accelerations(jright), [-0.1, 0.4], atol=1e-8)
+    np.testing.assert_allclose(result.point_velocities(lc1),
+                               result.point_velocities(rc1), atol=1e-8)
+    np.testing.assert_allclose(result.point_accelerations(lc1),
+                               result.point_accelerations(rc1), atol=1e-8)

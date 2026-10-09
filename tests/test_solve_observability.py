@@ -66,7 +66,7 @@ def test_position_failure_exposes_structured_context(monkeypatch):
     with pytest.raises(KinematicSolveError) as captured:
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=[0.5],
             ),
@@ -125,7 +125,7 @@ def test_failed_requested_sample_reports_recovery_path(monkeypatch):
     with pytest.raises(KinematicSolveError) as captured:
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=[0.0, 0.2],
             ),
@@ -152,7 +152,7 @@ def test_velocity_failure_exposes_structured_context(monkeypatch):
     with pytest.raises(KinematicSolveError) as captured:
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=0.5,
                 velocity=1.0,

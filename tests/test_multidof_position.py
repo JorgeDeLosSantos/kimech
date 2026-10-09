@@ -174,7 +174,7 @@ def test_multidof_adaptive_subdivision_is_along_the_input_segment(monkeypatch):
     assert any(np.allclose(sample, [0.05, 0.025]) for sample in calls)
 
 
-def test_single_driver_entrypoints_share_solver_and_diagnostics():
+def test_single_driver_and_singleton_sequence_share_solver_and_diagnostics():
     mechanism = Mechanism()
     fixed = mechanism.ground.add_point("origin", (0.0, 0.0))
     link = mechanism.add_link("link")
@@ -184,15 +184,22 @@ def test_single_driver_entrypoints_share_solver_and_diagnostics():
         revolute, position=[0.2, 0.25], velocity=1.5, acceleration=-0.4
     )
     guess = {link: (0.0, 0.0, 0.2)}
-    via_legacy = solve(mechanism, driver=input_driver, initial_guess=guess)
-    via_plural = solve(mechanism, drivers=input_driver, initial_guess=guess)
-    np.testing.assert_allclose(via_legacy.coordinates, via_plural.coordinates)
+    via_single = solve(mechanism, drivers=input_driver, initial_guess=guess)
+    via_plural = solve(mechanism, drivers=[input_driver], initial_guess=guess)
+    np.testing.assert_allclose(via_single.coordinates, via_plural.coordinates)
     np.testing.assert_allclose(
-        via_legacy.coordinate_velocities, via_plural.coordinate_velocities
+        via_single.coordinate_velocities, via_plural.coordinate_velocities
     )
     np.testing.assert_allclose(
-        via_legacy.coordinate_accelerations, via_plural.coordinate_accelerations
+        via_single.coordinate_accelerations, via_plural.coordinate_accelerations
     )
     np.testing.assert_array_equal(
-        via_legacy.diagnostics.strategies, via_plural.diagnostics.strategies
+        via_single.diagnostics.strategies, via_plural.diagnostics.strategies
     )
+
+
+def test_solve_rejects_removed_singular_driver_keyword():
+    mechanism, first, second, _, j1, j2 = _serial_2r()
+    guess = {first: (0., 0., 0.2), second: (2., 0., 0.5)}
+    with pytest.raises(TypeError, match="driver"):
+        solve(mechanism, driver=KinematicDriver(j1, position=0.2), initial_guess=guess)

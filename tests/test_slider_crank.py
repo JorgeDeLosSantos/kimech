@@ -80,9 +80,9 @@ def _assert_pose_history_is_continuous(poses):
 def test_slider_crank_revolute_input_scalar_and_sweep():
     mechanism, crank_joint, _, guess = _slider_crank()
 
-    config = solve(mechanism, driver=KinematicDriver(crank_joint, position=0.7), initial_guess=guess)[0]
+    config = solve(mechanism, drivers=KinematicDriver(crank_joint, position=0.7), initial_guess=guess)[0]
     values = np.linspace(0.7, 1.2, 35)
-    solution = solve(mechanism, driver=KinematicDriver(crank_joint, position=values), initial_guess=config)
+    solution = solve(mechanism, drivers=KinematicDriver(crank_joint, position=values), initial_guess=config)
 
     assert isinstance(config, Configuration)
     assert config.joint_coordinate(crank_joint) == pytest.approx(0.7, abs=1e-10)
@@ -102,7 +102,7 @@ def test_slider_crank_completes_full_revolution_and_returns_to_physical_configur
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             crank_joint,
             position=values,
         ),
@@ -129,12 +129,12 @@ def test_slider_crank_completes_full_revolution_and_returns_to_physical_configur
 
 def test_slider_crank_prismatic_input_accepts_solver_configuration_as_guess():
     mechanism, crank_joint, prismatic_joint, guess = _slider_crank()
-    crank_config = solve(mechanism, driver=KinematicDriver(crank_joint, position=0.7), initial_guess=guess)[0]
+    crank_config = solve(mechanism, drivers=KinematicDriver(crank_joint, position=0.7), initial_guess=guess)[0]
     slider_position = crank_config.joint_coordinate(prismatic_joint)
 
     slider_config = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             prismatic_joint,
             position=slider_position,
         ),
@@ -161,7 +161,7 @@ def test_slider_crank_velocity_and_acceleration_match_closed_form_slider_motion(
 
     config = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             crank_joint,
             position=theta,
             velocity=omega,

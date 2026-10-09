@@ -29,7 +29,7 @@ def test_scalar_position_returns_length_one_solution_and_complete_mapping_is_pac
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=np.float64(0.5),
         ),
@@ -51,7 +51,7 @@ def test_length_one_sequence_returns_kinematic_solution():
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.5],
         ),
@@ -79,7 +79,7 @@ def test_invalid_values_are_rejected(values, message):
     with pytest.raises((TypeError, ValueError), match=message):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=values,
             ),
@@ -91,13 +91,13 @@ def test_solve_rejects_incorrect_argument_types():
     mechanism, link, joint = _single_revolute()
 
     with pytest.raises(TypeError, match="mechanism"):
-        solve(object(), driver=KinematicDriver(joint, position=0.5), initial_guess={link: (0.0, 0.0, 0.5)})
+        solve(object(), drivers=KinematicDriver(joint, position=0.5), initial_guess={link: (0.0, 0.0, 0.5)})
     with pytest.raises(TypeError, match="joint"):
         KinematicDriver(object(), position=0.5)
     with pytest.raises(TypeError, match="driver"):
-        solve(mechanism, driver=object(), initial_guess={link: (0.0, 0.0, 0.5)})
+        solve(mechanism, drivers=object(), initial_guess={link: (0.0, 0.0, 0.5)})
     with pytest.raises(TypeError, match="initial_guess"):
-        solve(mechanism, driver=KinematicDriver(joint, position=0.5), initial_guess=[0.0, 0.0, 0.5])
+        solve(mechanism, drivers=KinematicDriver(joint, position=0.5), initial_guess=[0.0, 0.0, 0.5])
 
 
 def test_initial_guess_mapping_must_contain_exactly_snapshot_links():
@@ -105,11 +105,11 @@ def test_initial_guess_mapping_must_contain_exactly_snapshot_links():
     other, external_link, _ = _single_revolute()
 
     with pytest.raises(ValueError, match="exactly all links"):
-        solve(mechanism, driver=KinematicDriver(joint, position=0.5), initial_guess={})
+        solve(mechanism, drivers=KinematicDriver(joint, position=0.5), initial_guess={})
     with pytest.raises(ValueError, match="exactly all links"):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=0.5,
             ),
@@ -130,7 +130,7 @@ def test_initial_guess_poses_must_have_valid_shape_and_finite_values(pose, messa
     mechanism, link, joint = _single_revolute()
 
     with pytest.raises(ValueError, match=message):
-        solve(mechanism, driver=KinematicDriver(joint, position=0.5), initial_guess={link: pose})
+        solve(mechanism, drivers=KinematicDriver(joint, position=0.5), initial_guess={link: pose})
 
 
 def test_configuration_from_same_mechanism_can_be_reused_as_guess():
@@ -139,7 +139,7 @@ def test_configuration_from_same_mechanism_can_be_reused_as_guess():
 
     second = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=0.6,
         ),
@@ -156,7 +156,7 @@ def test_configuration_from_another_mechanism_is_rejected():
     other_config = Configuration(other, [0.0, 0.0, 0.5])
 
     with pytest.raises(ValueError, match="another mechanism"):
-        solve(mechanism, driver=KinematicDriver(joint, position=0.5), initial_guess=other_config)
+        solve(mechanism, drivers=KinematicDriver(joint, position=0.5), initial_guess=other_config)
 
 
 def test_stale_configuration_is_rejected_even_when_modified_model_still_has_mobility_one():
@@ -178,7 +178,7 @@ def test_stale_configuration_is_rejected_even_when_modified_model_still_has_mobi
     assert mechanism.validate().is_valid
     assert mechanism.mobility() == 1
     with pytest.raises(ValueError, match="incompatible"):
-        solve(mechanism, driver=KinematicDriver(input_joint, position=0.5), initial_guess=stale)
+        solve(mechanism, drivers=KinematicDriver(input_joint, position=0.5), initial_guess=stale)
 
 
 def test_disconnected_mechanism_is_rejected_with_validation_errors():
@@ -188,7 +188,7 @@ def test_disconnected_mechanism_is_rejected_with_validation_errors():
     with pytest.raises(InvalidModelError, match="disconnected.*orphan"):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=0.5,
             ),
@@ -206,7 +206,7 @@ def test_valid_mechanism_with_non_unit_mobility_is_rejected():
     with pytest.raises(InvalidModelError, match="mobility 1"):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=0.5,
             ),
@@ -221,7 +221,7 @@ def test_external_input_joint_is_rejected_by_identity():
     with pytest.raises(InvalidModelError, match="does not belong"):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 external_joint,
                 position=0.5,
             ),
@@ -243,7 +243,7 @@ def test_solver_failure_raises_kinematic_solve_error(monkeypatch):
     with pytest.raises(KinematicSolveError, match="deliberate failure"):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=[0.5],
             ),
@@ -264,7 +264,7 @@ def test_solver_success_with_bad_independently_recomputed_residual_is_rejected(m
     with pytest.raises(KinematicSolveError, match=r"residual_inf=0\.5"):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=0.5,
             ),
@@ -284,7 +284,7 @@ def test_solver_rejects_malformed_or_nonfinite_candidates(monkeypatch, candidate
     with pytest.raises(KinematicSolveError, match="residual_inf=unavailable"):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=[0.5],
             ),
@@ -330,7 +330,7 @@ def test_position_sweep_uses_input_tangent_predictor(monkeypatch):
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.5, 0.7],
         ),
@@ -378,7 +378,7 @@ def test_position_sweep_retries_warm_start_when_predictor_corrector_fails(monkey
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.5, 0.7],
         ),
@@ -419,7 +419,7 @@ def test_position_sweep_falls_back_to_warm_start_when_tangent_solve_fails(monkey
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.5, 0.7],
         ),
@@ -461,7 +461,7 @@ def test_adaptive_subdivision_recovers_failed_requested_step(monkeypatch):
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.0, 0.2],
         ),
@@ -505,7 +505,7 @@ def test_adaptive_subdivision_hides_internal_samples(monkeypatch):
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.0, 0.2],
         ),
@@ -547,7 +547,7 @@ def test_impossible_target_preserves_original_failure_after_subdivision(monkeypa
     with pytest.raises(KinematicSolveError, match=r"unreachable target 0\.2"):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=[0.0, 0.2],
             ),
@@ -565,7 +565,7 @@ def test_solve_accepts_optional_time_and_preserves_it_in_results():
 
     solution = solve(
         mechanism,
-        driver=driver,
+        drivers=driver,
         time=times,
         initial_guess={link: (0.0, 0.0, 0.5)},
     )
@@ -581,7 +581,7 @@ def test_solve_accepts_scalar_time_for_scalar_driver_position():
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(joint, position=0.5),
+        drivers=KinematicDriver(joint, position=0.5),
         time=1.25,
         initial_guess={link: (0.0, 0.0, 0.5)},
     )
@@ -607,7 +607,7 @@ def test_solve_validates_time_history(time, message):
     with pytest.raises((TypeError, ValueError), match=message):
         solve(
             mechanism,
-            driver=KinematicDriver(joint, position=[0.5, 0.6]),
+            drivers=KinematicDriver(joint, position=[0.5, 0.6]),
             time=time,
             initial_guess={link: (0.0, 0.0, 0.5)},
         )
@@ -620,12 +620,12 @@ def test_time_does_not_change_position_continuation_or_solution_state():
 
     untimed = solve(
         mechanism,
-        driver=driver,
+        drivers=driver,
         initial_guess=guess,
     )
     timed = solve(
         mechanism,
-        driver=driver,
+        drivers=driver,
         time=[0.0, 0.2, 0.5],
         initial_guess=guess,
     )

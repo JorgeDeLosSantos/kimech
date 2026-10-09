@@ -53,13 +53,13 @@ def test_constant_speed_four_bar_time_history_matches_equivalent_kinematic_sweep
 
     timed = solve(
         mechanism,
-        driver=driver,
+        drivers=driver,
         time=time,
         initial_guess=initial_guess,
     )
     untimed = solve(
         mechanism,
-        driver=driver,
+        drivers=driver,
         initial_guess=initial_guess,
     )
 

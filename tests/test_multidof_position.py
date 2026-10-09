@@ -60,3 +60,58 @@ def test_serial_2r_requires_two_drivers():
     with pytest.raises(InvalidModelError, match="mobility 1"):
         solve(mechanism, drivers=KinematicDriver(j1, position=0.2),
               initial_guess={first:(0,0,0),second:(2,0,0)})
+
+
+def test_five_bar_closed_chain_with_two_prescribed_cranks():
+    mechanism = Mechanism()
+    left_ground = mechanism.ground.add_point("LG", (-1.0, 0.0))
+    right_ground = mechanism.ground.add_point("RG", (1.0, 0.0))
+    left_crank = mechanism.add_link("left_crank")
+    right_crank = mechanism.add_link("right_crank")
+    left_coupler = mechanism.add_link("left_coupler")
+    right_coupler = mechanism.add_link("right_coupler")
+
+    la = left_crank.add_point("A", (0.0, 0.0))
+    lb = left_crank.add_point("B", (1.5, 0.0))
+    ra = right_crank.add_point("A", (0.0, 0.0))
+    rb = right_crank.add_point("B", (1.5, 0.0))
+    lc0 = left_coupler.add_point("base", (0.0, 0.0))
+    lc1 = left_coupler.add_point("tip", (1.5, 0.0))
+    rc0 = right_coupler.add_point("base", (0.0, 0.0))
+    rc1 = right_coupler.add_point("tip", (1.5, 0.0))
+    jleft = mechanism.revolute(left_ground, la)
+    mechanism.revolute(lb, lc0)
+    mechanism.revolute(lc1, rc1)
+    mechanism.revolute(rb, rc0)
+    jright = mechanism.revolute(right_ground, ra)
+
+    theta_left = 0.6
+    theta_right = np.pi - 0.6
+    pleft = np.array([-1.0 + 1.5 * np.cos(theta_left), 1.5 * np.sin(theta_left)])
+    pright = np.array([1.0 + 1.5 * np.cos(theta_right), 1.5 * np.sin(theta_right)])
+    middle = (pleft + pright) / 2
+    half_distance = np.linalg.norm(pright - pleft) / 2
+    apex = middle + np.array([0.0, np.sqrt(1.5 ** 2 - half_distance ** 2)])
+    aleft = np.arctan2(*(apex - pleft)[::-1])
+    aright = np.arctan2(*(apex - pright)[::-1])
+
+    result = solve(
+        mechanism,
+        drivers=[
+            KinematicDriver(jleft, position=[theta_left, theta_left + 0.02]),
+            KinematicDriver(jright, position=[theta_right, theta_right - 0.02]),
+        ],
+        initial_guess={
+            left_crank: (-1.0, 0.0, theta_left),
+            right_crank: (1.0, 0.0, theta_right),
+            left_coupler: (*pleft, aleft),
+            right_coupler: (*pright, aright),
+        },
+    )
+    assert len(result) == 2
+    np.testing.assert_allclose(result.joint_coordinates(jleft),
+                               [theta_left, theta_left + 0.02], atol=1e-8)
+    np.testing.assert_allclose(result.joint_coordinates(jright),
+                               [theta_right, theta_right - 0.02], atol=1e-8)
+    np.testing.assert_allclose(result.point_positions(lc1),
+                               result.point_positions(rc1), atol=1e-8)

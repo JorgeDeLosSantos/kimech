@@ -122,7 +122,7 @@ def _reference_configuration(
     values = np.linspace(start, target, sample_count)
     return solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=values,
         ),
@@ -147,7 +147,7 @@ def _record(
         driver=driver_name,
         angle_offset=angle_offset,
         reference_angle=reference_angle,
-        input_position=float(solution.input_positions[0]),
+        input_position=float(np.atleast_1d(solution.drivers[0].position)[0]),
         condition_number=float(diagnostics.condition_numbers[0]),
         min_singular_value=float(diagnostics.min_singular_values[0]),
         rank=int(diagnostics.ranks[0]),
@@ -179,7 +179,7 @@ def _compare_drivers(
 
         primary = solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 primary_joint,
                 position=reference_angle,
             ),
@@ -199,7 +199,7 @@ def _compare_drivers(
         alternate_value = config.joint_coordinate(alternate_joint)
         alternate = solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 alternate_joint,
                 position=alternate_value,
             ),
@@ -325,7 +325,7 @@ def _probe_beyond_limit() -> None:
     try:
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 slider_joint,
                 position=slider_limit + 1e-6,
             ),

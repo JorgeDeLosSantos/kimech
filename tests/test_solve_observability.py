@@ -76,6 +76,10 @@ def test_position_failure_exposes_structured_context(monkeypatch):
     context = captured.value.context
     assert context is not None
     assert context.stage == "position"
+    assert context.failure_kind == "nonconvergence"
+    assert context.rank_issue is None
+    assert context.sample_index == 0
+    assert context.driver_positions == pytest.approx((0.5,))
     assert context.driver_index == 0
     assert context.driver_position == pytest.approx(0.5)
     assert context.residual_norm == pytest.approx(0.5)

@@ -101,6 +101,9 @@ def test_feasible_toggle_position_retained_but_velocity_rank_is_not_unique():
     assert position.diagnostics.ranks[0] < 9
     assert position.diagnostics.joint_ranks[0] < 8
     assert position.diagnostics.rank_issues[0] == "joint_rank_loss"
+    summary = position.diagnostics.summary()
+    assert summary.minimum_joint_rank == position.diagnostics.joint_ranks[0]
+    assert summary.rank_issue_counts == (("joint_rank_loss", 1),)
     assert not position.has_velocity
 
     with pytest.raises(KinematicSolveError) as captured:

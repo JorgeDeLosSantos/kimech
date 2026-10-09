@@ -56,9 +56,14 @@ On branch `feat/0.7.0-multidof-contract`:
 - `_scaling.py` handles mixed revolute and prismatic prescriptions.
 - `_differential.py` solves `J q_dot = [0; u_dot]` and
   `J q_ddot = [-joint_bias; u_ddot - driver_bias]`.
-- `solver.py` has a Multi-DOF position/velocity/acceleration path. Its
-  `driver=` entry point remains temporarily for the existing 1-DOF solver
-  until the single implementation and public interface are consolidated.
+- `solver.py` now has one shared sampled-history pipeline for 1-DOF and
+  Multi-DOF: position correction, tangent prediction, adaptive subdivision,
+  accepted-sample diagnostics, velocity and acceleration. The vector continuation
+  predictor solves the analytical linearized system for the prescribed increment.
+  The old `_solve_multiple_positions()` duplicate has been removed.
+- `driver=` remains temporarily as an entry-point alias for existing 1-DOF
+  tests/examples; final API consolidation will remove it in favor of `drivers=`
+  before this branch is merged.
 - Automated acceptance covers analytic serial 2R and rotating prismatic-guide
   velocity/acceleration, in addition to closed-loop five-bar kinematics.
 

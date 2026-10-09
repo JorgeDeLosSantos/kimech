@@ -22,6 +22,8 @@ class SolveDiagnosticSummary:
     max_corrector_attempt_index: int | None
     max_corrector_attempts: int | None
     strategy_counts: tuple[tuple[str, int], ...]
+    minimum_joint_rank: int | None = None
+    rank_issue_counts: tuple[tuple[str, int], ...] = ()
 
 
 class SolveDiagnostics:
@@ -216,6 +218,16 @@ class SolveDiagnostics:
                 if np.any(self._strategies == strategy)
             )
 
+        rank_issue_counts = (
+            ()
+            if self._rank_issues is None
+            else tuple(
+                (kind, int(np.count_nonzero(self._rank_issues == kind)))
+                for kind in ("regular", "joint_rank_loss", "dependent_drivers")
+                if np.any(self._rank_issues == kind)
+            )
+        )
+
         return SolveDiagnosticSummary(
             sample_count=count,
             worst_condition_index=worst_condition_index,
@@ -232,6 +244,10 @@ class SolveDiagnostics:
             max_corrector_attempt_index=max_corrector_attempt_index,
             max_corrector_attempts=max_corrector_attempts,
             strategy_counts=strategy_counts,
+            minimum_joint_rank=(
+                None if self._joint_ranks is None else int(np.min(self._joint_ranks))
+            ),
+            rank_issue_counts=rank_issue_counts,
         )
 
     def _slice(self, index: slice) -> SolveDiagnostics:

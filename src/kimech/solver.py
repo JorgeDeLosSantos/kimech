@@ -31,154 +31,139 @@ def solve(
     initial_guess=None,
     time=None,
 ) -> KinematicSolution:
-    """Solve position and, when requested, differential kinematics."""
+    """Solve sampled position, velocity and acceleration for prescribed inputs.
+
+    The singular `driver=` spelling remains temporarily available while
+    pre-1.0 call sites are migrated to the final `drivers=` interface.
+    """
     if not isinstance(mechanism, Mechanism):
         raise TypeError("mechanism must be a Mechanism")
     if drivers is not None and driver is not None:
         raise TypeError("supply either drivers or legacy driver, not both")
     selected = normalize_drivers(drivers if drivers is not None else driver)
-    if len(selected) > 1:
-        return _solve_multiple_positions(
-            mechanism, selected, initial_guess=initial_guess, time=time
-        )
-    driver = selected[0]
 
     links = mechanism.links
     joints = mechanism.joints
-
     report = mechanism.validate()
     if not report.is_valid:
-        details = "; ".join(report.errors)
-        raise InvalidModelError(f"invalid mechanism: {details}")
+        raise InvalidModelError("invalid mechanism: " + "; ".join(report.errors))
 
     coordinate_count = 3 * len(links)
-    equation_count = 2 * len(joints) + 1
+    equation_count = 2 * len(joints) + len(selected)
     if coordinate_count != equation_count:
+        if len(selected) == 1:
+            raise InvalidModelError(
+                "solve() with one kinematic driver requires structural mobility 1 "
+                f"({coordinate_count} coordinates versus {equation_count} equations)"
+            )
         raise InvalidModelError(
-            "solve() with one kinematic driver requires structural mobility 1 "
+            f"solve() requires {coordinate_count - 2 * len(joints)} independent drivers "
             f"({coordinate_count} coordinates versus {equation_count} equations)"
         )
+    for prescribed in selected:
+        if not any(prescribed.joint is joint for joint in joints):
+            raise InvalidModelError(
+                "driver joint does not belong to the mechanism snapshot"
+            )
 
-    if not any(driver.joint is joint for joint in joints):
-        raise InvalidModelError(
-            "driver joint does not belong to the mechanism snapshot"
-        )
+    velocity_histories = tuple(d._velocity_history() for d in selected)
+    acceleration_histories = tuple(d._acceleration_history() for d in selected)
+    if any(h is not None for h in velocity_histories) and not all(
+        h is not None for h in velocity_histories
+    ):
+        raise ValueError("all drivers must prescribe velocity to solve Multi-DOF velocities")
+    if any(h is not None for h in acceleration_histories) and not all(
+        h is not None for h in acceleration_histories
+    ):
+        raise ValueError("all drivers must prescribe acceleration to solve Multi-DOF accelerations")
 
-    driver_positions = driver._position_history()
-    driver_velocities = driver._velocity_history()
-    driver_accelerations = driver._acceleration_history()
-    time_values = _coerce_time_history(time, count=len(driver_positions))
-
-    scaling = build_numerical_scaling(
-        mechanism,
-        links,
-        joints,
-        driver,
+    # Keep the one-driver scalar representation for the existing private
+    # regression hooks. Multi-DOF uses column-aligned N x m histories.
+    single = len(selected) == 1
+    solver_drivers = selected[0] if single else selected
+    positions = (
+        selected[0]._position_history()
+        if single
+        else np.column_stack([d._position_history() for d in selected])
     )
-    initial_q = _pack_initial_guess(mechanism, links, initial_guess)
+    prescribed_velocities = (
+        None if velocity_histories[0] is None
+        else velocity_histories[0] if single
+        else np.column_stack(velocity_histories)
+    )
+    prescribed_accelerations = (
+        None if acceleration_histories[0] is None
+        else acceleration_histories[0] if single
+        else np.column_stack(acceleration_histories)
+    )
+    time_values = _coerce_time_history(time, count=len(positions))
+    scaling = build_numerical_scaling(mechanism, links, joints, solver_drivers)
+    current_guess = _pack_initial_guess(mechanism, links, initial_guess)
 
-    coordinates = np.empty((len(driver_positions), coordinate_count), dtype=float)
-    subdivision_counts = np.zeros(len(driver_positions), dtype=int)
-    strategies = np.empty(len(driver_positions), dtype="<U16")
-    corrector_attempts = np.zeros(len(driver_positions), dtype=int)
-    current_guess = initial_q
-    previous_driver_value = None
+    coordinates = np.empty((len(positions), coordinate_count), dtype=float)
+    subdivision_counts = np.zeros(len(positions), dtype=int)
+    strategies = np.empty(len(positions), dtype="<U16")
+    corrector_attempts = np.zeros(len(positions), dtype=int)
+    previous_values = None
     previous_accepted = None
-    for index, driver_position_value in enumerate(driver_positions):
-        driver_value = float(driver_position_value)
-        accepted, subdivision_count, strategy, attempts = _solve_requested_configuration(
-            mechanism,
-            links,
-            joints,
-            driver,
-            driver_value,
-            current_guess,
-            scaling,
-            driver_index=index,
-            previous_driver_value=previous_driver_value,
+
+    for index, sampled_values in enumerate(positions):
+        values = float(sampled_values) if single else sampled_values.copy()
+        if previous_accepted is not None:
+            current_guess = _predict_next_configuration(
+                mechanism, links, joints, solver_drivers, previous_accepted,
+                previous_values, values, scaling, driver_index=index - 1,
+            )
+        accepted, subdivisions, strategy, attempts = _solve_requested_configuration(
+            mechanism, links, joints, solver_drivers, values,
+            current_guess, scaling, driver_index=index,
+            previous_driver_value=previous_values,
             previous_accepted=previous_accepted,
         )
         coordinates[index] = accepted
-        subdivision_counts[index] = subdivision_count
+        subdivision_counts[index] = subdivisions
         strategies[index] = strategy
         corrector_attempts[index] = attempts
-        previous_driver_value = driver_value
+        previous_values = values
         previous_accepted = accepted
 
-        if index + 1 < len(driver_positions):
-            next_driver_value = float(driver_positions[index + 1])
-            current_guess = _predict_next_configuration(
-                mechanism,
-                links,
-                joints,
-                driver,
-                accepted,
-                driver_value,
-                next_driver_value,
-                scaling,
-                driver_index=index,
-            )
-
     diagnostics = _build_solve_diagnostics(
-        mechanism,
-        links,
-        joints,
-        driver,
-        driver_positions,
-        coordinates,
-        scaling,
-        subdivision_counts=subdivision_counts,
-        strategies=strategies,
-        corrector_attempts=corrector_attempts,
+        mechanism, links, joints, solver_drivers, positions,
+        coordinates, scaling, subdivision_counts=subdivision_counts,
+        strategies=strategies, corrector_attempts=corrector_attempts,
     )
 
     coordinate_velocities = None
-    if driver_velocities is not None:
+    if prescribed_velocities is not None:
         coordinate_velocities = np.empty_like(coordinates)
-        for index, (driver_position_value, prescribed_velocity) in enumerate(
-            zip(driver_positions, driver_velocities)
+        for index, (q, values, rate) in enumerate(
+            zip(coordinates, positions, prescribed_velocities)
         ):
             coordinate_velocities[index] = solve_velocity(
-                mechanism,
-                links,
-                joints,
-                driver,
-                coordinates[index],
-                float(driver_position_value),
-                float(prescribed_velocity),
-                scaling,
+                mechanism, links, joints, solver_drivers, q,
+                float(values) if single else values,
+                float(rate) if single else rate, scaling,
                 driver_index=index,
             )
 
     coordinate_accelerations = None
-    if driver_accelerations is not None:
+    if prescribed_accelerations is not None:
         coordinate_accelerations = np.empty_like(coordinates)
-        for index, (driver_position_value, prescribed_acceleration) in enumerate(
-            zip(driver_positions, driver_accelerations)
+        for index, (q, q_dot, values, rate) in enumerate(
+            zip(coordinates, coordinate_velocities, positions, prescribed_accelerations)
         ):
             coordinate_accelerations[index] = solve_acceleration(
-                mechanism,
-                links,
-                joints,
-                driver,
-                coordinates[index],
-                coordinate_velocities[index],
-                float(driver_position_value),
-                float(prescribed_acceleration),
-                scaling,
+                mechanism, links, joints, solver_drivers, q, q_dot,
+                float(values) if single else values,
+                float(rate) if single else rate, scaling,
                 driver_index=index,
             )
 
     return KinematicSolution._from_snapshot(
-        mechanism,
-        links,
-        joints,
-        driver,
-        coordinates,
+        mechanism, links, joints, selected, coordinates,
         coordinate_velocities=coordinate_velocities,
         coordinate_accelerations=coordinate_accelerations,
-        time=time_values,
-        diagnostics=diagnostics,
+        time=time_values, diagnostics=diagnostics,
     )
 
 
@@ -737,212 +722,4 @@ def _solve_configuration(
             min_singular_value=min_singular_value,
             rank=rank,
         ),
-    )
-
-
-def _solve_multiple_positions(
-    mechanism: Mechanism,
-    drivers: tuple[KinematicDriver, ...],
-    *,
-    initial_guess,
-    time,
-) -> KinematicSolution:
-    """Solve fully prescribed multi-driver kinematics along an input-space path.
-
-    Positions are determined first; differential states use the same scaled
-    analytical Jacobian at each accepted configuration.
-    """
-    links = mechanism.links
-    joints = mechanism.joints
-    report = mechanism.validate()
-    if not report.is_valid:
-        raise InvalidModelError("invalid mechanism: " + "; ".join(report.errors))
-    n = 3 * len(links)
-    equations = 2 * len(joints) + len(drivers)
-    if equations != n:
-        raise InvalidModelError(
-            f"solve() requires {n - 2 * len(joints)} independent drivers "
-            f"({n} coordinates versus {equations} equations)"
-        )
-    for selected in drivers:
-        if not any(selected.joint is joint for joint in joints):
-            raise InvalidModelError("driver joint does not belong to the mechanism snapshot")
-
-    velocity_histories = tuple(item._velocity_history() for item in drivers)
-    acceleration_histories = tuple(item._acceleration_history() for item in drivers)
-    has_any_velocity = any(history is not None for history in velocity_histories)
-    has_all_velocity = all(history is not None for history in velocity_histories)
-    has_any_acceleration = any(history is not None for history in acceleration_histories)
-    has_all_acceleration = all(history is not None for history in acceleration_histories)
-    if has_any_velocity and not has_all_velocity:
-        raise ValueError("all drivers must prescribe velocity to solve Multi-DOF velocities")
-    if has_any_acceleration and not has_all_acceleration:
-        raise ValueError("all drivers must prescribe acceleration to solve Multi-DOF accelerations")
-
-    inputs = np.column_stack([item._position_history() for item in drivers])
-    input_velocities = (
-        np.column_stack(velocity_histories) if has_all_velocity else None
-    )
-    input_accelerations = (
-        np.column_stack(acceleration_histories) if has_all_acceleration else None
-    )
-    time_values = _coerce_time_history(time, count=len(inputs))
-    scaling = build_numerical_scaling(mechanism, links, joints, drivers)
-    q0 = _pack_initial_guess(mechanism, links, initial_guess)
-    states = np.empty((len(inputs), n), dtype=float)
-    subdivisions = np.zeros(len(inputs), dtype=int)
-    strategies = np.empty(len(inputs), dtype="<U16")
-    attempts = np.zeros(len(inputs), dtype=int)
-
-    def correct(initial_q: np.ndarray, values: np.ndarray) -> np.ndarray:
-        attempts_counter[0] += 1
-        def fun(q_hat: np.ndarray) -> np.ndarray:
-            return scaling.scale_residual(
-                residual(mechanism, links, joints, drivers,
-                         scaling.unscale_coordinates(q_hat), values)
-            )
-        def jac(q_hat: np.ndarray) -> np.ndarray:
-            return scaling.scale_jacobian(
-                jacobian(mechanism, links, joints, drivers,
-                         scaling.unscale_coordinates(q_hat), values)
-            )
-        result = optimize.root(fun, scaling.scale_coordinates(initial_q),
-                               jac=jac, method="hybr")
-        candidate = np.asarray(result.x, dtype=float)
-        if candidate.shape == (n,) and np.all(np.isfinite(candidate)):
-            if np.linalg.norm(fun(candidate), ord=np.inf) <= _RESIDUAL_TOL:
-                return scaling.unscale_coordinates(candidate).copy()
-        raise KinematicSolveError(
-            "failed to solve multi-driver position configuration: "
-            + str(getattr(result, "message", "non-convergent residual"))
-        )
-
-    def predict(q: np.ndarray, start: np.ndarray, target: np.ndarray) -> np.ndarray:
-        if np.array_equal(start, target):
-            return q.copy()
-        matrix = jacobian(mechanism, links, joints, drivers, q, start)
-        rhs = np.concatenate((np.zeros(2 * len(joints)), target - start))
-        try:
-            delta_hat = np.linalg.solve(
-                scaling.scale_jacobian(matrix), scaling.scale_rhs(rhs)
-            )
-            predicted = q + scaling.unscale_state(delta_hat)
-            if np.all(np.isfinite(predicted)):
-                return predicted
-        except np.linalg.LinAlgError:
-            pass
-        return q.copy()
-
-    def step(q: np.ndarray, start: np.ndarray, target: np.ndarray) -> np.ndarray:
-        guess = predict(q, start, target)
-        try:
-            return correct(guess, target)
-        except KinematicSolveError:
-            if np.array_equal(guess, q):
-                raise
-            return correct(q, target)
-
-    def subdivide(q: np.ndarray, start: np.ndarray,
-                  target: np.ndarray, depth: int) -> tuple[np.ndarray, int]:
-        if depth >= _MAX_SUBDIVISION_DEPTH:
-            raise KinematicSolveError(
-                f"multi-driver adaptive subdivision exhausted (depth={depth})"
-            )
-        midpoint = 0.5 * start + 0.5 * target
-        if np.array_equal(midpoint, start) or np.array_equal(midpoint, target):
-            raise KinematicSolveError("multi-driver subdivision reached floating-point limit")
-        try:
-            qmid = step(q, start, midpoint)
-            left_count = 0
-        except KinematicSolveError:
-            qmid, left_count = subdivide(q, start, midpoint, depth + 1)
-        try:
-            target_q = step(qmid, midpoint, target)
-            return target_q, left_count + 1
-        except KinematicSolveError:
-            target_q, right_count = subdivide(qmid, midpoint, target, depth + 1)
-            return target_q, left_count + right_count + 1
-
-    previous_q = None
-    previous_u = None
-    for index, target in enumerate(inputs):
-        attempts_counter = [0]
-        if previous_q is None:
-            try:
-                accepted = correct(q0, target)
-            except KinematicSolveError as error:
-                raise KinematicSolveError(
-                    f"multi-driver position solve failed at sample {index}: {error}"
-                ) from error
-            strategy = "initial_guess"
-            count = 0
-        else:
-            guess = predict(previous_q, previous_u, target)
-            try:
-                accepted = correct(guess, target)
-                strategy = "warm_start" if np.array_equal(guess, previous_q) else "predictor"
-                count = 0
-            except KinematicSolveError:
-                try:
-                    accepted = correct(previous_q, target)
-                    strategy = "warm_start"
-                    count = 0
-                except KinematicSolveError:
-                    try:
-                        accepted, count = subdivide(previous_q, previous_u, target, 0)
-                        strategy = "subdivision"
-                    except KinematicSolveError as error:
-                        raise KinematicSolveError(
-                            f"multi-driver position solve failed at sample {index}: {error}"
-                        ) from error
-        states[index] = accepted
-        previous_q, previous_u = accepted, target.copy()
-        subdivisions[index] = count
-        strategies[index] = strategy
-        attempts[index] = attempts_counter[0]
-
-    conditions = np.empty(len(inputs))
-    minima = np.empty(len(inputs))
-    ranks = np.empty(len(inputs), dtype=int)
-    norms = np.empty(len(inputs))
-    for index, (q, values) in enumerate(zip(states, inputs)):
-        matrix = scaling.scale_jacobian(jacobian(
-            mechanism, links, joints, drivers, q, values
-        ))
-        conditions[index], minima[index], ranks[index] = _jacobian_metrics(matrix)
-        norms[index] = np.linalg.norm(scaling.scale_residual(
-            residual(mechanism, links, joints, drivers, q, values)
-        ), ord=np.inf)
-
-    diagnostics = SolveDiagnostics(
-        conditions, minima, ranks, subdivision_counts=subdivisions,
-        strategies=strategies, corrector_attempts=attempts, residual_norms=norms,
-    )
-    coordinate_velocities = None
-    if input_velocities is not None:
-        coordinate_velocities = np.empty_like(states)
-        for index, (q, prescribed_positions, prescribed_rates) in enumerate(
-            zip(states, inputs, input_velocities)
-        ):
-            coordinate_velocities[index] = solve_velocity(
-                mechanism, links, joints, drivers, q, prescribed_positions,
-                prescribed_rates, scaling, driver_index=index,
-            )
-
-    coordinate_accelerations = None
-    if input_accelerations is not None:
-        coordinate_accelerations = np.empty_like(states)
-        for index, (q, q_dot, prescribed_positions, prescribed_accelerations) in enumerate(
-            zip(states, coordinate_velocities, inputs, input_accelerations)
-        ):
-            coordinate_accelerations[index] = solve_acceleration(
-                mechanism, links, joints, drivers, q, q_dot, prescribed_positions,
-                prescribed_accelerations, scaling, driver_index=index,
-            )
-
-    return KinematicSolution._from_snapshot(
-        mechanism, links, joints, drivers, states,
-        coordinate_velocities=coordinate_velocities,
-        coordinate_accelerations=coordinate_accelerations,
-        time=time_values, diagnostics=diagnostics,
     )

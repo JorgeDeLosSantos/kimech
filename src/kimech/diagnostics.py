@@ -40,6 +40,8 @@ class SolveDiagnostics:
         "_strategies",
         "_corrector_attempts",
         "_residual_norms",
+        "_joint_ranks",
+        "_rank_issues",
     )
 
     def __init__(
@@ -52,6 +54,8 @@ class SolveDiagnostics:
         strategies=None,
         corrector_attempts=None,
         residual_norms=None,
+        joint_ranks=None,
+        rank_issues=None,
     ) -> None:
         condition = _condition_array(condition_numbers)
         minimum = _finite_float_array(
@@ -89,9 +93,12 @@ class SolveDiagnostics:
             )
         )
 
+        joint_rank = None if joint_ranks is None else _rank_array(joint_ranks)
+        issues = None if rank_issues is None else _rank_issue_array(rank_issues)
+
         if minimum.shape != condition.shape or rank.shape != condition.shape:
             raise ValueError("all diagnostic histories must have the same shape")
-        for optional in (subdivisions, strategy, attempts, residual_history):
+        for optional in (subdivisions, strategy, attempts, residual_history, joint_rank, issues):
             if optional is not None and optional.shape != condition.shape:
                 raise ValueError("all diagnostic histories must have the same shape")
 
@@ -102,6 +109,8 @@ class SolveDiagnostics:
         self._strategies = strategy
         self._corrector_attempts = attempts
         self._residual_norms = residual_history
+        self._joint_ranks = joint_rank
+        self._rank_issues = issues
 
     @property
     def condition_numbers(self) -> np.ndarray:
@@ -117,6 +126,16 @@ class SolveDiagnostics:
     def ranks(self) -> np.ndarray:
         """Return numerical ranks of the scaled Jacobian."""
         return self._ranks.copy()
+
+    @property
+    def joint_ranks(self) -> np.ndarray | None:
+        """Return scaled geometric-constraint Jacobian ranks, if recorded."""
+        return None if self._joint_ranks is None else self._joint_ranks.copy()
+
+    @property
+    def rank_issues(self) -> np.ndarray | None:
+        """Classify regular, joint-rank-loss and driver-dependent samples."""
+        return None if self._rank_issues is None else self._rank_issues.copy()
 
     @property
     def subdivision_counts(self) -> np.ndarray | None:
@@ -243,7 +262,53 @@ class SolveDiagnostics:
                 if self._residual_norms is None
                 else self._residual_norms[index]
             ),
+            joint_ranks=(
+                None if self._joint_ranks is None else self._joint_ranks[index]
+            ),
+            rank_issues=(
+                None if self._rank_issues is None else self._rank_issues[index]
+            ),
         )
+
+
+_RANK_ISSUES = frozenset(("regular", "joint_rank_loss", "dependent_drivers"))
+
+
+def _rank_issue_array(value: object) -> np.ndarray:
+    try:
+        array = np.asarray(value, dtype=str)
+    except (TypeError, ValueError) as error:
+        raise TypeError("rank_issues must be string-valued") from error
+    if array.ndim != 1:
+        raise ValueError("rank_issues must be 1-dimensional")
+    if not all(item in _RANK_ISSUES for item in array):
+        raise ValueError("rank_issues must contain only recognized rank classifications")
+    return array.copy()
+
+
+def _rank_analysis(
+    scaled_jacobian: object, *, joint_row_count: int
+) -> tuple[float, float, int, int, str]:
+    """Classify the dimensionless geometric and driver-augmented Jacobians.
+
+    A joint-rank loss means geometric equations are locally dependent.
+    If those rows are independent but the full Jacobian loses column rank,
+    the prescribed drivers fail to constrain all remaining motions.
+    """
+    matrix = np.asarray(scaled_jacobian, dtype=float)
+    if matrix.ndim != 2:
+        raise ValueError("scaled_jacobian must be 2-dimensional")
+    if not isinstance(joint_row_count, int) or not 0 <= joint_row_count <= matrix.shape[0]:
+        raise ValueError("joint_row_count must be between zero and the total row count")
+    condition, minimum, rank = _jacobian_metrics(matrix)
+    _, _, joint_rank = _jacobian_metrics(matrix[:joint_row_count])
+    if joint_rank < joint_row_count:
+        issue = "joint_rank_loss"
+    elif rank < matrix.shape[1]:
+        issue = "dependent_drivers"
+    else:
+        issue = "regular"
+    return condition, minimum, rank, joint_rank, issue
 
 
 def _condition_array(value: object) -> np.ndarray:

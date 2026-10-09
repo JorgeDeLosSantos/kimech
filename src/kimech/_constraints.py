@@ -8,6 +8,7 @@ import numpy as np
 
 from ._geometry import perpendicular, rotation_matrix
 from .driver import KinematicDriver
+from ._drivers import normalize_drivers
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Ground, Link, Mechanism, Point
 
@@ -219,22 +220,24 @@ def residual(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
+    drivers: KinematicDriver | Sequence[KinematicDriver],
     q: np.ndarray,
-    driver_value: float,
+    driver_values: float | Sequence[float] | np.ndarray,
 ) -> np.ndarray:
-    """Assemble all joint equations followed by the driver equation."""
-    coordinates, value = _validate_system(
-        mechanism, links, joints, driver, q, driver_value
+    """Stack joint compatibility and ordered prescribed-coordinate equations."""
+    coordinates, selected_drivers, values = _validate_prescriptions(
+        mechanism, links, joints, drivers, q, driver_values
     )
-    result = np.empty(2 * len(joints) + 1, dtype=float)
+    result = np.empty(2 * len(joints) + len(selected_drivers), dtype=float)
     for index, joint in enumerate(joints):
         result[2 * index : 2 * index + 2] = joint_residual(
             mechanism, links, joint, coordinates
         )
-    result[-1:] = driver_residual(
-        mechanism, links, driver.joint, coordinates, value
-    )
+    offset = 2 * len(joints)
+    for index, driver in enumerate(selected_drivers):
+        result[offset + index] = driver_residual(
+            mechanism, links, driver.joint, coordinates, float(values[index])
+        )[0]
     return result
 
 
@@ -242,23 +245,53 @@ def jacobian(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
+    drivers: KinematicDriver | Sequence[KinematicDriver],
     q: np.ndarray,
-    driver_value: float,
+    driver_values: float | Sequence[float] | np.ndarray,
 ) -> np.ndarray:
-    """Assemble the analytical Jacobian in residual-row order."""
-    coordinates, _ = _validate_system(
-        mechanism, links, joints, driver, q, driver_value
+    """Stack analytical joint and prescribed-coordinate Jacobian rows."""
+    coordinates, selected_drivers, _ = _validate_prescriptions(
+        mechanism, links, joints, drivers, q, driver_values
     )
-    result = np.empty((2 * len(joints) + 1, 3 * len(links)), dtype=float)
+    result = np.empty((2 * len(joints) + len(selected_drivers), 3 * len(links)), dtype=float)
     for index, joint in enumerate(joints):
         result[2 * index : 2 * index + 2] = joint_jacobian(
             mechanism, links, joint, coordinates
         )
-    result[-1:] = driver_jacobian(
-        mechanism, links, driver.joint, coordinates
-    )
+    offset = 2 * len(joints)
+    for index, driver in enumerate(selected_drivers):
+        result[offset + index] = driver_jacobian(
+            mechanism, links, driver.joint, coordinates
+        )[0]
     return result
+
+
+def _validate_prescriptions(
+    mechanism: Mechanism,
+    links: tuple[Link, ...],
+    joints: tuple[_Joint, ...],
+    drivers: KinematicDriver | Sequence[KinematicDriver],
+    q: object,
+    driver_values: object,
+) -> tuple[np.ndarray, tuple[KinematicDriver, ...], np.ndarray]:
+    """Validate one aligned sample for a set of prescribed coordinates."""
+    _validate_snapshots(mechanism, links, joints)
+    selected_drivers = normalize_drivers(drivers)
+    for driver in selected_drivers:
+        if not any(driver.joint is joint for joint in joints):
+            raise ValueError("driver joint must be included in the joints snapshot")
+    coordinates = _finite_coordinates(q, len(links))
+    try:
+        values = np.asarray(driver_values, dtype=float)
+    except (TypeError, ValueError) as error:
+        raise TypeError("driver_values must be numeric") from error
+    if values.ndim == 0 and len(selected_drivers) == 1:
+        values = values.reshape(1)
+    if values.shape != (len(selected_drivers),):
+        raise ValueError(f"driver_values must have shape ({len(selected_drivers)},)")
+    if not np.all(np.isfinite(values)):
+        raise ValueError("driver_values must contain only finite values")
+    return coordinates, selected_drivers, values.copy()
 
 
 def acceleration_rhs(

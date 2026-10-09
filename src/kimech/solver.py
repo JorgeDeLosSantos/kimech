@@ -747,10 +747,10 @@ def _solve_multiple_positions(
     initial_guess,
     time,
 ) -> KinematicSolution:
-    """Solve position histories along an ordered path in prescribed-input space.
+    """Solve fully prescribed multi-driver kinematics along an input-space path.
 
-    Differential multi-driver states will be implemented in the next block.
-    The existing single-driver implementation remains the regression baseline.
+    Positions are determined first; differential states use the same scaled
+    analytical Jacobian at each accepted configuration.
     """
     links = mechanism.links
     joints = mechanism.joints
@@ -767,12 +767,25 @@ def _solve_multiple_positions(
     for selected in drivers:
         if not any(selected.joint is joint for joint in joints):
             raise InvalidModelError("driver joint does not belong to the mechanism snapshot")
-        if selected._velocity_history() is not None or selected._acceleration_history() is not None:
-            raise NotImplementedError(
-                "multi-driver velocity and acceleration solving is not implemented in this block"
-            )
+
+    velocity_histories = tuple(item._velocity_history() for item in drivers)
+    acceleration_histories = tuple(item._acceleration_history() for item in drivers)
+    has_any_velocity = any(history is not None for history in velocity_histories)
+    has_all_velocity = all(history is not None for history in velocity_histories)
+    has_any_acceleration = any(history is not None for history in acceleration_histories)
+    has_all_acceleration = all(history is not None for history in acceleration_histories)
+    if has_any_velocity and not has_all_velocity:
+        raise ValueError("all drivers must prescribe velocity to solve Multi-DOF velocities")
+    if has_any_acceleration and not has_all_acceleration:
+        raise ValueError("all drivers must prescribe acceleration to solve Multi-DOF accelerations")
 
     inputs = np.column_stack([item._position_history() for item in drivers])
+    input_velocities = (
+        np.column_stack(velocity_histories) if has_all_velocity else None
+    )
+    input_accelerations = (
+        np.column_stack(acceleration_histories) if has_all_acceleration else None
+    )
     time_values = _coerce_time_history(time, count=len(inputs))
     scaling = build_numerical_scaling(mechanism, links, joints, drivers)
     q0 = _pack_initial_guess(mechanism, links, initial_guess)
@@ -905,7 +918,31 @@ def _solve_multiple_positions(
         conditions, minima, ranks, subdivision_counts=subdivisions,
         strategies=strategies, corrector_attempts=attempts, residual_norms=norms,
     )
+    coordinate_velocities = None
+    if input_velocities is not None:
+        coordinate_velocities = np.empty_like(states)
+        for index, (q, prescribed_positions, prescribed_rates) in enumerate(
+            zip(states, inputs, input_velocities)
+        ):
+            coordinate_velocities[index] = solve_velocity(
+                mechanism, links, joints, drivers, q, prescribed_positions,
+                prescribed_rates, scaling, driver_index=index,
+            )
+
+    coordinate_accelerations = None
+    if input_accelerations is not None:
+        coordinate_accelerations = np.empty_like(states)
+        for index, (q, q_dot, prescribed_positions, prescribed_accelerations) in enumerate(
+            zip(states, coordinate_velocities, inputs, input_accelerations)
+        ):
+            coordinate_accelerations[index] = solve_acceleration(
+                mechanism, links, joints, drivers, q, q_dot, prescribed_positions,
+                prescribed_accelerations, scaling, driver_index=index,
+            )
+
     return KinematicSolution._from_snapshot(
-        mechanism, links, joints, drivers, states, time=time_values,
-        diagnostics=diagnostics,
+        mechanism, links, joints, drivers, states,
+        coordinate_velocities=coordinate_velocities,
+        coordinate_accelerations=coordinate_accelerations,
+        time=time_values, diagnostics=diagnostics,
     )

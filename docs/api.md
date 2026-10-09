@@ -2,7 +2,7 @@
 
 > Status: development API for `0.7.0` (unreleased).
 >
-> Kimech remains a young project, and this API may evolve in future versions. [`study-0.6.0-kinematic-driver.md`](study-0.6.0-kinematic-driver.md) records the current Driver/time design decisions; earlier design documents remain available for historical context.
+> This document describes the **unreleased 0.7.0 development branch**. The PyPI 0.6.x release still uses `driver=`. [`study-0.6.0-kinematic-driver.md`](study-0.6.0-kinematic-driver.md) is retained as historical context.
 
 ## 1. Overview
 
@@ -28,7 +28,7 @@ driver = KinematicDriver(
 
 solution = solve(
     mechanism,
-    driver=driver,
+    drivers=driver,
     initial_guess=initial_guess,
 )
 
@@ -37,7 +37,7 @@ velocities = solution.point_velocities(point_p)
 accelerations = solution.point_accelerations(point_p)
 ```
 
-`KinematicDriver.position` parameterizes configurations; it is not interpreted as physical time. Each driver targets the natural coordinate of one revolute or prismatic joint. Optional `velocity` and `acceleration` values are physical derivatives with respect to a common external time variable.
+An ordered set of `KinematicDriver.position` histories parameterizes the requested path through input-coordinate space; it is not interpreted as physical time. Each driver targets the natural coordinate of one revolute or prismatic joint. Optional `velocity` and `acceleration` values are physical derivatives with respect to a common external time variable.
 
 ## 2. Package structure
 
@@ -242,21 +242,21 @@ Every prescribed joint must belong to the mechanism. Drivers cannot prescribe th
 
 `position` is required and may be either a finite scalar or a finite, non-empty one-dimensional sequence. All driver position histories must have the same number of samples; samples are synchronized by index, without automatic interpolation or position broadcasting. `solve()` always returns a `KinematicSolution`:
 
-- scalar `position` produces a one-sample solution;
-- one-dimensional `position` produces an ordered multi-sample solution.
+- scalar positions for all drivers produce a one-sample solution;
+- one-dimensional histories of matching length produce an ordered multi-sample solution.
 
 For a scalar solve, access the configuration with `solution[0]`.
 
 The requested kinematic level is determined by the optional differential data, which must be available for **all** drivers at each requested level:
 
 ```text
-position only
+positions only
     -> position
 
-position + velocity
+positions + all driver velocities
     -> position + velocity
 
-position + velocity + acceleration
+positions + all driver velocities + all driver accelerations
     -> position + velocity + acceleration
 ```
 
@@ -271,7 +271,7 @@ General NumPy broadcasting is not part of the public contract. Individual histor
 
 ### Position semantics
 
-For sweeps, user order is preserved and each accepted position configuration warm-starts the next position solve. Differential phases run only after the complete position history has been accepted, so requesting velocity or acceleration does not alter branch continuation.
+For sweeps, user sample order is preserved; continuation proceeds along the straight segment between successive prescribed-input vectors and each accepted configuration warm-starts the next position solve. Differential phases run only after the complete position history has been accepted, so requesting velocity or acceleration does not alter branch continuation.
 
 `initial_guess` is required because it selects the numerical starting state and, in mechanisms with multiple assembly branches, helps select the intended branch. It may be either:
 
@@ -349,7 +349,7 @@ driver = KinematicDriver(
 
 solution = solve(
     mechanism,
-    driver=driver,
+    drivers=driver,
     time=time,
     initial_guess=initial_guess,
 )

@@ -12,7 +12,7 @@ machinery.
 ## Agreed public contract
 
 - `solve(mechanism, drivers=driver_or_sequence, initial_guess=..., time=...)`
-  will replace the singular `driver=` keyword in the completed release.
+  is now the only supported public solver interface, with no `driver=` alias.
 - A single `KinematicDriver` is accepted without wrapping it in a list.
 - Samples are aligned **by index**; every driver has the same sample count.
 - `time` remains optional, global, and strictly increasing if supplied.
@@ -61,9 +61,8 @@ On branch `feat/0.7.0-multidof-contract`:
   accepted-sample diagnostics, velocity and acceleration. The vector continuation
   predictor solves the analytical linearized system for the prescribed increment.
   The old `_solve_multiple_positions()` duplicate has been removed.
-- `driver=` remains temporarily as an entry-point alias for existing 1-DOF
-  tests/examples; final API consolidation will remove it in favor of `drivers=`
-  before this branch is merged.
+- The public `solve(..., drivers=...)` API is now exclusive. All one-driver
+  tests, user examples, and primary documentation have been migrated.
 - Automated acceptance covers analytic serial 2R and rotating prismatic-guide
   velocity/acceleration, in addition to closed-loop five-bar kinematics.
 
@@ -75,8 +74,8 @@ specifies a differential order, do not compute that order. Partially prescribed
 velocity or acceleration across drivers is rejected explicitly: Kimech does not
 publish incomplete generalized differential states.
 
-This branch must not be released or merged until API migration, numerical
-diagnostics, continued regression and documentation are complete.
+This branch must not be released or merged until the full regression suite,
+documentation, and remaining 0.7.0 acceptance criteria are verified.
 
 ## Acceptance scenarios
 

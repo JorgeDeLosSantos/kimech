@@ -27,3 +27,9 @@ including Whitworth, Watt six-bar, Klann, Theo Jansen, scale robustness,
 singularity diagnostics, and branch-continuity experiments. These are valuable
 engineering studies but are intentionally separate from the compact public
 user guide.
+
+## Multi-DOF serial 2R
+
+`examples/serial_two_revolute.py` demonstrates two revolute drivers,
+aligned input histories, and analytic checks of the end-effector's position,
+velocity, and acceleration. This example requires the unreleased 0.7.0 API.

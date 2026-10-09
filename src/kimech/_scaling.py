@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Sequence
 from itertools import combinations
 
 import numpy as np
 
 from .driver import KinematicDriver
+from ._drivers import normalize_drivers
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Link, Mechanism, Point
 
@@ -48,7 +50,7 @@ def build_numerical_scaling(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
+    driver: KinematicDriver | Sequence[KinematicDriver],
 ) -> NumericalScaling:
     """Build one global dimensionless scaling for a complete solve call."""
     length = infer_characteristic_length(
@@ -69,12 +71,13 @@ def build_numerical_scaling(
         else:  # pragma: no cover - guarded by the public model
             raise TypeError(f"unsupported joint type: {type(joint).__name__}")
 
-    if isinstance(driver.joint, RevoluteJoint):
-        residual_entries.append(1.0)
-    elif isinstance(driver.joint, PrismaticJoint):
-        residual_entries.append(length)
-    else:  # pragma: no cover - guarded by KinematicDriver
-        raise TypeError(f"unsupported driver joint type: {type(driver.joint).__name__}")
+    for selected in normalize_drivers(driver):
+        if isinstance(selected.joint, RevoluteJoint):
+            residual_entries.append(1.0)
+        elif isinstance(selected.joint, PrismaticJoint):
+            residual_entries.append(length)
+        else:  # pragma: no cover - guarded by KinematicDriver
+            raise TypeError(f"unsupported driver joint type: {type(selected.joint).__name__}")
 
     residual_scale = np.asarray(residual_entries, dtype=float)
     return NumericalScaling(length, coordinate_scale, residual_scale)
@@ -84,7 +87,7 @@ def infer_characteristic_length(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
+    driver: KinematicDriver | Sequence[KinematicDriver],
 ) -> float:
     """Infer a positive linear scale from solve-relevant mechanism geometry."""
     grouped = _structural_points_by_body(joints)
@@ -102,10 +105,11 @@ def infer_characteristic_length(
 
     # A pure prismatic mechanism can have no geometric span at all.  The
     # prescribed displacement history then supplies the only linear scale.
-    if isinstance(driver.joint, PrismaticJoint):
-        values = driver._position_history()
-        if values.size:
-            candidates.append(float(np.max(np.abs(values))))
+    for selected in normalize_drivers(driver):
+        if isinstance(selected.joint, PrismaticJoint):
+            values = selected._position_history()
+            if values.size:
+                candidates.append(float(np.max(np.abs(values))))
 
     positive = [
         value

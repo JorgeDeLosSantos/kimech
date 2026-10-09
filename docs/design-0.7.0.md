@@ -45,13 +45,33 @@ Jacobian; do not misdiagnose ordinary nonlinear nonconvergence as a singularity.
 5. Rank/conditioning diagnostics and error semantics.
 6. Ground visualization, docs, examples, regression, release.
 
-## First-block status
+## Implementation status (in progress)
 
-The branch `feat/0.7.0-multidof-contract` introduces `_drivers.py` and
-adapts `solution.py` to multiple drivers with focused contract tests.
-The numerical solver still has the legacy 1-DOF `driver=` signature. The
-legacy tests and call sites also require coordinated migration before this
-branch is ready to merge. Do not release this partial branch.
+On branch `feat/0.7.0-multidof-contract`:
+
+- `_drivers.py` normalizes synchronized prescribed histories.
+- `solution.py` stores and slices multiple drivers together with generalized states.
+- `_constraints.py` assembles driver-position rows and second-order driver biases
+  in stable supplied-driver order.
+- `_scaling.py` handles mixed revolute and prismatic prescriptions.
+- `_differential.py` solves `J q_dot = [0; u_dot]` and
+  `J q_ddot = [-joint_bias; u_ddot - driver_bias]`.
+- `solver.py` has a Multi-DOF position/velocity/acceleration path. Its
+  `driver=` entry point remains temporarily for the existing 1-DOF solver
+  until the single implementation and public interface are consolidated.
+- Automated acceptance covers analytic serial 2R and rotating prismatic-guide
+  velocity/acceleration, in addition to closed-loop five-bar kinematics.
+
+**Differential history contract:** differential values are prescribed by the
+user, not inferred from differences of position and time. If every driver
+specifies velocity, compute the full generalized velocity. If every driver also
+specifies acceleration, compute the full generalized acceleration. If no driver
+specifies a differential order, do not compute that order. Partially prescribed
+velocity or acceleration across drivers is rejected explicitly: Kimech does not
+publish incomplete generalized differential states.
+
+This branch must not be released or merged until API migration, numerical
+diagnostics, continued regression and documentation are complete.
 
 ## Acceptance scenarios
 

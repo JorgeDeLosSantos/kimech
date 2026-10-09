@@ -86,3 +86,43 @@ diagnostics, continued regression and documentation are complete.
 - Sample-count mismatch and duplicate/foreign driver rejection.
 - Position-only solves, optional differential histories and slicing.
 - Existing four-bar, slider-crank and complex mechanism regressions.
+
+## D17 — Local rank and differential uniqueness
+
+Let `n = 3 * len(links)`, `r = 2 * len(joints)`, and let `m`
+be the number of prescribed drivers. The present release requires
+`r + m = n` (a structurally square system); this count alone is
+**not** a numerical proof that the chosen drivers are independent.
+
+At each accepted position sample, evaluate the *dimensionless scaled*
+Jacobian `J = [J_c; J_d]`:
+
+- `rank(J_c) < r`: `joint_rank_loss`. Geometric joint equations
+  are locally rank-deficient (e.g. at a toggle or due to redundancy).
+- `rank(J_c) == r` but `rank(J) < n`: `dependent_drivers`.
+  The prescribed driver set does not determine all local motions.
+- `rank(J) == n`: `regular` at the numerical SVD rank tolerance.
+
+The structural mobility estimate is `n - r`; the instantaneous
+geometric mobility is `n - rank(J_c)`. They may disagree at special
+configurations. `SolveDiagnostics.ranks` retains full-Jacobian ranks;
+`joint_ranks` and `rank_issues` provide the decomposition, also
+preserved by slicing. `summary()` includes minimum joint rank and
+counts by issue type. Condition numbers and minimum singular values
+remain continuous indicators of *near* singularity; a high finite
+condition number is not automatically treated as exact rank loss.
+
+A *feasible position* can be returned even if its Jacobian is singular.
+Velocity/acceleration are rejected if the linearized system cannot
+uniquely determine the differential state. They are never manufactured
+with a pseudoinverse or least-squares solution.
+
+A **failed nonlinear position corrector** is reported as
+`failure_kind="nonconvergence"`, not as a proven kinematic singularity:
+an unconverged candidate does not establish a feasible singular
+configuration. Differential failures distinguish
+`joint_rank_loss`, `dependent_drivers`, and other
+`linear_failure` cases in the structured failure context. That
+context also provides `sample_index` and an ordered tuple of
+`driver_positions`; legacy singular-driver context field names
+remain temporarily available until the final API cleanup.

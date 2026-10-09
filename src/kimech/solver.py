@@ -12,6 +12,7 @@ from ._differential import solve_acceleration, solve_driver_tangent, solve_veloc
 from ._scaling import NumericalScaling, build_numerical_scaling
 from .diagnostics import SolveDiagnostics, _jacobian_metrics
 from .driver import KinematicDriver
+from ._drivers import normalize_drivers
 from .errors import InvalidModelError, KinematicSolveError, SolveFailureContext
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Link, Mechanism
@@ -25,15 +26,22 @@ _MAX_SUBDIVISION_DEPTH = 8
 def solve(
     mechanism: Mechanism,
     *,
-    driver: KinematicDriver,
-    initial_guess,
+    driver: KinematicDriver | None = None,
+    drivers: KinematicDriver | tuple[KinematicDriver, ...] | list[KinematicDriver] | None = None,
+    initial_guess=None,
     time=None,
 ) -> KinematicSolution:
     """Solve position and, when requested, differential kinematics."""
     if not isinstance(mechanism, Mechanism):
         raise TypeError("mechanism must be a Mechanism")
-    if not isinstance(driver, KinematicDriver):
-        raise TypeError("driver must be a KinematicDriver")
+    if drivers is not None and driver is not None:
+        raise TypeError("supply either drivers or legacy driver, not both")
+    selected = normalize_drivers(drivers if drivers is not None else driver)
+    if len(selected) > 1:
+        return _solve_multiple_positions(
+            mechanism, selected, initial_guess=initial_guess, time=time
+        )
+    driver = selected[0]
 
     links = mechanism.links
     joints = mechanism.joints
@@ -729,4 +737,175 @@ def _solve_configuration(
             min_singular_value=min_singular_value,
             rank=rank,
         ),
+    )
+
+
+def _solve_multiple_positions(
+    mechanism: Mechanism,
+    drivers: tuple[KinematicDriver, ...],
+    *,
+    initial_guess,
+    time,
+) -> KinematicSolution:
+    """Solve position histories along an ordered path in prescribed-input space.
+
+    Differential multi-driver states will be implemented in the next block.
+    The existing single-driver implementation remains the regression baseline.
+    """
+    links = mechanism.links
+    joints = mechanism.joints
+    report = mechanism.validate()
+    if not report.is_valid:
+        raise InvalidModelError("invalid mechanism: " + "; ".join(report.errors))
+    n = 3 * len(links)
+    equations = 2 * len(joints) + len(drivers)
+    if equations != n:
+        raise InvalidModelError(
+            f"solve() requires {n - 2 * len(joints)} independent drivers "
+            f"({n} coordinates versus {equations} equations)"
+        )
+    for selected in drivers:
+        if not any(selected.joint is joint for joint in joints):
+            raise InvalidModelError("driver joint does not belong to the mechanism snapshot")
+        if selected._velocity_history() is not None or selected._acceleration_history() is not None:
+            raise NotImplementedError(
+                "multi-driver velocity and acceleration solving is not implemented in this block"
+            )
+
+    inputs = np.column_stack([item._position_history() for item in drivers])
+    time_values = _coerce_time_history(time, count=len(inputs))
+    scaling = build_numerical_scaling(mechanism, links, joints, drivers)
+    q0 = _pack_initial_guess(mechanism, links, initial_guess)
+    states = np.empty((len(inputs), n), dtype=float)
+    subdivisions = np.zeros(len(inputs), dtype=int)
+    strategies = np.empty(len(inputs), dtype="<U16")
+    attempts = np.zeros(len(inputs), dtype=int)
+
+    def correct(initial_q: np.ndarray, values: np.ndarray) -> np.ndarray:
+        attempts_counter[0] += 1
+        def fun(q_hat: np.ndarray) -> np.ndarray:
+            return scaling.scale_residual(
+                residual(mechanism, links, joints, drivers,
+                         scaling.unscale_coordinates(q_hat), values)
+            )
+        def jac(q_hat: np.ndarray) -> np.ndarray:
+            return scaling.scale_jacobian(
+                jacobian(mechanism, links, joints, drivers,
+                         scaling.unscale_coordinates(q_hat), values)
+            )
+        result = optimize.root(fun, scaling.scale_coordinates(initial_q),
+                               jac=jac, method="hybr")
+        candidate = np.asarray(result.x, dtype=float)
+        if candidate.shape == (n,) and np.all(np.isfinite(candidate)):
+            if np.linalg.norm(fun(candidate), ord=np.inf) <= _RESIDUAL_TOL:
+                return scaling.unscale_coordinates(candidate).copy()
+        raise KinematicSolveError(
+            "failed to solve multi-driver position configuration: "
+            + str(getattr(result, "message", "non-convergent residual"))
+        )
+
+    def predict(q: np.ndarray, start: np.ndarray, target: np.ndarray) -> np.ndarray:
+        if np.array_equal(start, target):
+            return q.copy()
+        matrix = jacobian(mechanism, links, joints, drivers, q, start)
+        rhs = np.concatenate((np.zeros(2 * len(joints)), target - start))
+        try:
+            delta_hat = np.linalg.solve(
+                scaling.scale_jacobian(matrix), scaling.scale_rhs(rhs)
+            )
+            predicted = q + scaling.unscale_state(delta_hat)
+            if np.all(np.isfinite(predicted)):
+                return predicted
+        except np.linalg.LinAlgError:
+            pass
+        return q.copy()
+
+    def step(q: np.ndarray, start: np.ndarray, target: np.ndarray) -> np.ndarray:
+        guess = predict(q, start, target)
+        try:
+            return correct(guess, target)
+        except KinematicSolveError:
+            if np.array_equal(guess, q):
+                raise
+            return correct(q, target)
+
+    def subdivide(q: np.ndarray, start: np.ndarray,
+                  target: np.ndarray, depth: int) -> tuple[np.ndarray, int]:
+        if depth >= _MAX_SUBDIVISION_DEPTH:
+            raise KinematicSolveError(
+                f"multi-driver adaptive subdivision exhausted (depth={depth})"
+            )
+        midpoint = 0.5 * start + 0.5 * target
+        if np.array_equal(midpoint, start) or np.array_equal(midpoint, target):
+            raise KinematicSolveError("multi-driver subdivision reached floating-point limit")
+        try:
+            qmid = step(q, start, midpoint)
+            left_count = 0
+        except KinematicSolveError:
+            qmid, left_count = subdivide(q, start, midpoint, depth + 1)
+        try:
+            target_q = step(qmid, midpoint, target)
+            return target_q, left_count + 1
+        except KinematicSolveError:
+            target_q, right_count = subdivide(qmid, midpoint, target, depth + 1)
+            return target_q, left_count + right_count + 1
+
+    previous_q = None
+    previous_u = None
+    for index, target in enumerate(inputs):
+        attempts_counter = [0]
+        if previous_q is None:
+            try:
+                accepted = correct(q0, target)
+            except KinematicSolveError as error:
+                raise KinematicSolveError(
+                    f"multi-driver position solve failed at sample {index}: {error}"
+                ) from error
+            strategy = "initial_guess"
+            count = 0
+        else:
+            guess = predict(previous_q, previous_u, target)
+            try:
+                accepted = correct(guess, target)
+                strategy = "warm_start" if np.array_equal(guess, previous_q) else "predictor"
+                count = 0
+            except KinematicSolveError:
+                try:
+                    accepted = correct(previous_q, target)
+                    strategy = "warm_start"
+                    count = 0
+                except KinematicSolveError:
+                    try:
+                        accepted, count = subdivide(previous_q, previous_u, target, 0)
+                        strategy = "subdivision"
+                    except KinematicSolveError as error:
+                        raise KinematicSolveError(
+                            f"multi-driver position solve failed at sample {index}: {error}"
+                        ) from error
+        states[index] = accepted
+        previous_q, previous_u = accepted, target.copy()
+        subdivisions[index] = count
+        strategies[index] = strategy
+        attempts[index] = attempts_counter[0]
+
+    conditions = np.empty(len(inputs))
+    minima = np.empty(len(inputs))
+    ranks = np.empty(len(inputs), dtype=int)
+    norms = np.empty(len(inputs))
+    for index, (q, values) in enumerate(zip(states, inputs)):
+        matrix = scaling.scale_jacobian(jacobian(
+            mechanism, links, joints, drivers, q, values
+        ))
+        conditions[index], minima[index], ranks[index] = _jacobian_metrics(matrix)
+        norms[index] = np.linalg.norm(scaling.scale_residual(
+            residual(mechanism, links, joints, drivers, q, values)
+        ), ord=np.inf)
+
+    diagnostics = SolveDiagnostics(
+        conditions, minima, ranks, subdivision_counts=subdivisions,
+        strategies=strategies, corrector_attempts=attempts, residual_norms=norms,
+    )
+    return KinematicSolution._from_snapshot(
+        mechanism, links, joints, drivers, states, time=time_values,
+        diagnostics=diagnostics,
     )

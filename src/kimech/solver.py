@@ -26,21 +26,18 @@ _MAX_SUBDIVISION_DEPTH = 8
 def solve(
     mechanism: Mechanism,
     *,
-    driver: KinematicDriver | None = None,
-    drivers: KinematicDriver | tuple[KinematicDriver, ...] | list[KinematicDriver] | None = None,
+    drivers: KinematicDriver | Sequence[KinematicDriver],
     initial_guess=None,
     time=None,
 ) -> KinematicSolution:
-    """Solve sampled position, velocity and acceleration for prescribed inputs.
+    """Solve sampled planar kinematics with one or more prescribed drivers.
 
-    The singular `driver=` spelling remains temporarily available while
-    pre-1.0 call sites are migrated to the final `drivers=` interface.
+    The `drivers` argument accepts a single KinematicDriver or a sequence of
+    independent prescriptions, all with aligned position samples.
     """
     if not isinstance(mechanism, Mechanism):
         raise TypeError("mechanism must be a Mechanism")
-    if drivers is not None and driver is not None:
-        raise TypeError("supply either drivers or legacy driver, not both")
-    selected = normalize_drivers(drivers if drivers is not None else driver)
+    selected = normalize_drivers(drivers)
 
     links = mechanism.links
     joints = mechanism.joints

@@ -73,7 +73,7 @@ def test_four_bar_velocity_and_speed_acceleration_scale_with_input_rate():
 
     base = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=theta,
             velocity=omega,
@@ -83,7 +83,7 @@ def test_four_bar_velocity_and_speed_acceleration_scale_with_input_rate():
     )[0]
     doubled = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=theta,
             velocity=2.0 * omega,
@@ -126,7 +126,7 @@ def test_four_bar_acceleration_is_linear_in_prescribed_input_acceleration():
 
     base = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=theta,
             velocity=0.0,
@@ -136,7 +136,7 @@ def test_four_bar_acceleration_is_linear_in_prescribed_input_acceleration():
     )[0]
     doubled = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=theta,
             velocity=0.0,
@@ -163,7 +163,7 @@ def test_four_bar_acceleration_splits_into_speed_and_input_acceleration_terms():
 
     speed_only = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=theta,
             velocity=omega,
@@ -173,7 +173,7 @@ def test_four_bar_acceleration_splits_into_speed_and_input_acceleration_terms():
     )[0]
     alpha_only = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=theta,
             velocity=0.0,
@@ -183,7 +183,7 @@ def test_four_bar_acceleration_splits_into_speed_and_input_acceleration_terms():
     )[0]
     combined = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=theta,
             velocity=omega,
@@ -208,7 +208,7 @@ def test_four_bar_differential_sweep_preserves_input_and_position_history():
 
     position_only = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=values,
         ),
@@ -216,7 +216,7 @@ def test_four_bar_differential_sweep_preserves_input_and_position_history():
     )
     differential = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=values,
             velocity=velocities,
@@ -247,7 +247,7 @@ def test_slider_crank_prismatic_inverse_reconstructs_full_differential_state():
 
     forward = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             crank_joint,
             position=crank_values,
             velocity=1.1,
@@ -261,7 +261,7 @@ def test_slider_crank_prismatic_inverse_reconstructs_full_differential_state():
 
     inverse = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             prismatic_joint,
             position=slider_values,
             velocity=slider_velocities,
@@ -312,7 +312,7 @@ def test_sweep_acceleration_failure_reports_stage_and_sample_index(monkeypatch):
     ):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 input_joint,
                 position=[0.9, 1.0, 1.1],
                 velocity=1.0,

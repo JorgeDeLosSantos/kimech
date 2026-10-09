@@ -48,7 +48,7 @@ def test_solve_returns_structured_full_rank_diagnostics():
     mechanism, link, joint = _single_revolute()
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.2, 0.4, 0.6],
         ),
@@ -73,7 +73,7 @@ def test_diagnostics_follow_solution_slicing():
     mechanism, link, joint = _single_revolute()
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.2, 0.4, 0.6],
         ),
@@ -116,7 +116,7 @@ def test_scaled_jacobian_diagnostics_are_invariant_to_linear_units(scale):
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=values,
         ),
@@ -129,7 +129,7 @@ def test_scaled_jacobian_diagnostics_are_invariant_to_linear_units(scale):
     reference_mechanism, reference_input, reference_guess = _four_bar(1.0)
     reference = solve(
         reference_mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             reference_input,
             position=values,
         ),

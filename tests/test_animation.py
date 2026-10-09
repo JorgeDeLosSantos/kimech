@@ -51,7 +51,7 @@ def _four_bar_solution():
     mechanism.revolute(rocker_d, ground_d)
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=np.linspace(0.8, 1.3, 4),
         ),
@@ -90,7 +90,7 @@ def _slider_crank_solution():
     )
     return solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=np.linspace(0.7, 1.2, 4),
         ),

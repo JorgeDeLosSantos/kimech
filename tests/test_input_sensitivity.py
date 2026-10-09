@@ -75,7 +75,7 @@ def test_revolute_driver_sensitivity_is_exact_and_derives_point_motion():
     mechanism, link, point, joint, guess = _single_revolute()
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.3, 0.7],
         ),
@@ -118,7 +118,7 @@ def test_prismatic_driver_sensitivity_is_exact():
     mechanism, slider, point, joint, guess = _single_prismatic()
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.2, 0.8],
         ),
@@ -159,7 +159,7 @@ def test_four_bar_sensitivity_matches_central_finite_difference():
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=values,
         ),
@@ -204,7 +204,7 @@ def test_revolute_driver_sensitivity_scales_consistently_with_geometry(scale):
     mechanism, input_joint, _, point, guess = _four_bar(scale)
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=[0.9],
         ),
@@ -215,7 +215,7 @@ def test_revolute_driver_sensitivity_scales_consistently_with_geometry(scale):
     reference_mechanism, reference_input, _, reference_point, reference_guess = _four_bar(1.0)
     reference_solution = solve(
         reference_mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             reference_input,
             position=[0.9],
         ),
@@ -244,7 +244,7 @@ def test_returned_sensitivity_arrays_are_safe_copies():
     mechanism, _, _, joint, guess = _single_revolute()
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.5],
         ),
@@ -262,7 +262,7 @@ def test_sensitivity_uses_solution_joint_snapshot_after_mechanism_extension():
     mechanism, link, _, joint, guess = _single_revolute()
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.5],
         ),
@@ -291,7 +291,7 @@ def test_sensitivity_failure_does_not_mutate_or_invalidate_solution(monkeypatch)
     mechanism, link, _, joint, guess = _single_revolute()
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.5],
         ),

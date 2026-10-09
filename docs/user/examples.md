@@ -33,3 +33,7 @@ user guide.
 `examples/serial_two_revolute.py` demonstrates two revolute drivers,
 aligned input histories, and analytic checks of the end-effector's position,
 velocity, and acceleration. This example requires the unreleased 0.7.0 API.
+
+The [theory-to-API workflow](kinematic-analysis.md) and
+[visual conventions](visualization.md) explain the underlying equations and
+how fixed ground supports are drawn.

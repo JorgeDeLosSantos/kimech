@@ -125,3 +125,16 @@ configuration. Differential failures distinguish
 context also provides `sample_index` and an ordered tuple of
 `driver_positions`; legacy singular-driver context field names
 remain temporarily available until the final API cleanup.
+
+## Ground and documentation (0.7.0)
+
+Plotting and animation no longer connect separate ground anchors using a gray
+body scaffold. A revolute pivot anchored to ground gets its own small triangular
+support; prismatic guide/slider glyphs remain unchanged. Auxiliary ground
+reference points remain visible, with no implicit physical connection drawn.
+
+The user guide now contains a theory-to-API workflow (concept diagram,
+input-history workflow, theory/API table, and minimal cheat sheet) and a
+separate explanation of the kinematic versus structural-topology views.
+Ground symbols are only visualization; they do not change equations, body
+geometry, topology, or solved states.

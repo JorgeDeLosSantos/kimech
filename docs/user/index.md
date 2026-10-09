@@ -48,6 +48,8 @@ getting-started
 :caption: User guide
 
 concepts
+kinematic-analysis
+visualization
 time-aware-kinematics
 examples
 ```

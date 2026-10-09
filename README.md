@@ -78,7 +78,7 @@ driver = KinematicDriver(
 
 solution = solve(
     mechanism,
-    driver=driver,
+    drivers=driver,
     initial_guess=initial_guess,
 )
 

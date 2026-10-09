@@ -19,8 +19,9 @@ Kimech renders **kinematic schematics**, not detailed part geometry.
 - Extra ground reference points remain separately visible without introducing
   geometry connecting them to the mechanism.
 
-The support triangles are deliberately subdued to emphasize the mechanism's
-moving structure. They are geometrically fixed throughout animations; they
+The support triangles are deliberately subdued and adapt to nearby anchor
+spacing, so neighboring supports do not merge visually when the rest of the
+mechanism spans a much larger distance. This emphasizes the moving structure. They are geometrically fixed throughout animations; they
 do **not** represent added physical bodies or constraints.
 
 ## Plot and animate

@@ -356,8 +356,21 @@ def _ground_revolute_support_vertices(
     ):
         return None
     center = _revolute_center(config, joint)
-    half_width = 0.028 * scale
-    height = 0.048 * scale
+    # Keep neighboring fixed supports distinct even when other geometry
+    # makes the global mechanism scale much larger than their spacing.
+    nearby = [
+        float(np.linalg.norm(_revolute_center(config, other) - center))
+        for other in config.mechanism.joints
+        if isinstance(other, RevoluteJoint)
+        and other is not joint
+        and (
+            isinstance(other.point_a.body, Ground)
+            or isinstance(other.point_b.body, Ground)
+        )
+    ]
+    positive = [distance for distance in nearby if distance > 1e-10 * scale]
+    half_width = min(0.028 * scale, 0.22 * min(positive)) if positive else 0.028 * scale
+    height = half_width * (0.048 / 0.028)
     return np.asarray([
         center,
         center + (-half_width, -height),

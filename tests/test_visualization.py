@@ -412,3 +412,32 @@ def test_prismatic_ground_guide_is_preserved_without_ground_skeleton():
         assert len(_artists_with_gid(ax, "kimech-ground:revolute-support")) == 1
     finally:
         plt.close(fig)
+
+
+def test_nearby_ground_pivots_do_not_overlap_supports_when_extent_is_large():
+    mechanism = Mechanism()
+    anchors = [
+        mechanism.ground.add_point(name, (position, 0.0))
+        for name, position in (("A", 0.0), ("B", 0.2), ("C", 100.0))
+    ]
+    links = []
+    for index, anchor in enumerate(anchors):
+        link = mechanism.add_link(f"link_{index}")
+        moving = link.add_point("pivot", (0.0, 0.0))
+        mechanism.revolute(anchor, moving)
+        links.append(link)
+    config = Configuration(
+        mechanism,
+        [0.0, 0.0, 0.0, 0.2, 0.0, 0.0, 100.0, 0.0, 0.0],
+    )
+
+    fig, ax = plot(config)
+    try:
+        supports = _artists_with_gid(ax, "kimech-ground:revolute-support")
+        assert len(supports) == 3
+        left = supports[0].get_xy()[:, 0]
+        right = supports[1].get_xy()[:, 0]
+        assert left.max() < right.min()
+        assert not _artists_with_gid(ax, "kimech-body:ground")
+    finally:
+        plt.close(fig)

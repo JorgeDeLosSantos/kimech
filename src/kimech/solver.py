@@ -10,7 +10,7 @@ from scipy import optimize
 from ._constraints import jacobian, residual
 from ._differential import solve_acceleration, solve_driver_tangent, solve_velocity
 from ._scaling import NumericalScaling, build_numerical_scaling
-from .diagnostics import SolveDiagnostics, _jacobian_metrics
+from .diagnostics import SolveDiagnostics, _jacobian_metrics, _rank_analysis
 from .driver import KinematicDriver
 from ._drivers import normalize_drivers
 from .errors import InvalidModelError, KinematicSolveError, SolveFailureContext
@@ -374,6 +374,9 @@ def _solve_with_subdivision(
                 stage="position",
                 driver_index=driver_index,
                 driver_position=_scalar_driver_position(target_driver_value),
+                sample_index=driver_index,
+                driver_positions=_driver_positions_tuple(target_driver_value),
+                failure_kind="nonconvergence",
             ),
         )
 
@@ -387,6 +390,9 @@ def _solve_with_subdivision(
                 stage="position",
                 driver_index=driver_index,
                 driver_position=_scalar_driver_position(target_driver_value),
+                sample_index=driver_index,
+                driver_positions=_driver_positions_tuple(target_driver_value),
+                failure_kind="nonconvergence",
             ),
         )
 
@@ -510,6 +516,8 @@ def _build_solve_diagnostics(
     min_singular_values = np.empty(count, dtype=float)
     ranks = np.empty(count, dtype=int)
     residual_norms = np.empty(count, dtype=float)
+    joint_ranks = np.empty(count, dtype=int)
+    rank_issues = np.empty(count, dtype="<U20")
 
     for index, (driver_value, q) in enumerate(zip(driver_positions, coordinates)):
         matrix = jacobian(
@@ -532,10 +540,14 @@ def _build_solve_diagnostics(
             np.linalg.norm(scaling.scale_residual(phi), ord=np.inf)
         )
         matrix_hat = scaling.scale_jacobian(matrix)
-        condition, minimum, rank = _jacobian_metrics(matrix_hat)
+        condition, minimum, rank, joint_rank, issue = _rank_analysis(
+            matrix_hat, joint_row_count=2 * len(joints)
+        )
         condition_numbers[index] = condition
         min_singular_values[index] = minimum
         ranks[index] = rank
+        joint_ranks[index] = joint_rank
+        rank_issues[index] = issue
 
     return SolveDiagnostics(
         condition_numbers,
@@ -545,6 +557,8 @@ def _build_solve_diagnostics(
         strategies=strategies,
         corrector_attempts=corrector_attempts,
         residual_norms=residual_norms,
+        joint_ranks=joint_ranks,
+        rank_issues=rank_issues,
     )
 
 
@@ -635,6 +649,11 @@ def _with_recovery_context(
             stage=context.stage,
             driver_index=context.driver_index,
             driver_position=context.driver_position,
+            sample_index=context.sample_index,
+            driver_positions=context.driver_positions,
+            failure_kind=context.failure_kind,
+            joint_rank=context.joint_rank,
+            rank_issue=context.rank_issue,
             residual_norm=context.residual_norm,
             condition_number=context.condition_number,
             min_singular_value=context.min_singular_value,
@@ -720,6 +739,9 @@ def _solve_configuration(
             stage="position",
             driver_index=driver_index,
             driver_position=_scalar_driver_position(driver_value),
+            sample_index=driver_index,
+            driver_positions=_driver_positions_tuple(driver_value),
+            failure_kind="nonconvergence",
             residual_norm=(
                 residual_norm if np.isfinite(residual_norm) else None
             ),
@@ -728,6 +750,11 @@ def _solve_configuration(
             rank=rank,
         ),
     )
+
+def _driver_positions_tuple(value: float | np.ndarray) -> tuple[float, ...]:
+    array = np.atleast_1d(np.asarray(value, dtype=float))
+    return tuple(float(item) for item in array)
+
 
 def _same_driver_values(a: float | np.ndarray, b: float | np.ndarray) -> bool:
     return bool(np.array_equal(a, b))

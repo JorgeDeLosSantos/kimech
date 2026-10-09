@@ -174,7 +174,9 @@ def test_four_bar_has_body_skeletons_pivots_and_auxiliary_point():
 
     fig, ax = plot(config)
 
-    assert len([line for line in ax.lines if line.get_gid().startswith("kimech-body:")]) == 4
+    assert len([line for line in ax.lines if line.get_gid().startswith("kimech-body:")]) == 3
+    assert not _artists_with_gid(ax, "kimech-body:ground")
+    assert len(_artists_with_gid(ax, "kimech-ground:revolute-support")) == 2
     assert len(_artists_with_gid(ax, "kimech-joint:revolute")) == 4
     auxiliary_artists = _artists_with_gid(ax, "kimech-auxiliary:coupler")
     assert len(auxiliary_artists) == 1
@@ -367,3 +369,46 @@ def test_glyph_scale_is_uniformly_scale_invariant():
     metre_scale = make(1.0)
 
     assert millimetre_scale / metre_scale == pytest.approx(1000.0)
+
+
+def test_fixed_revolute_anchors_use_independent_supports_not_connected_ground_bars():
+    mechanism = Mechanism()
+    fixed_a = mechanism.ground.add_point("A", (0.0, 0.0))
+    fixed_b = mechanism.ground.add_point("B", (0.18, 0.0))
+    first = mechanism.add_link("first")
+    first_pivot = first.add_point("A", (0.0, 0.0))
+    second = mechanism.add_link("second")
+    second_pivot = second.add_point("B", (0.0, 0.0))
+    mechanism.revolute(fixed_a, first_pivot)
+    mechanism.revolute(fixed_b, second_pivot)
+    config = Configuration(mechanism, [0.0, 0.0, 0.2, 0.18, 0.0, -0.1])
+
+    fig, ax = plot(config)
+    try:
+        assert not _artists_with_gid(ax, "kimech-body:ground")
+        supports = _artists_with_gid(ax, "kimech-ground:revolute-support")
+        assert len(supports) == 2
+        assert all(isinstance(patch, Polygon) for patch in supports)
+        np.testing.assert_allclose(
+            [patch.get_xy()[0] for patch in supports],
+            [[0.0, 0.0], [0.18, 0.0]],
+        )
+        assert all(np.min(patch.get_xy()[:, 1]) < 0.0 for patch in supports)
+        assert len(_artists_with_gid(ax, "kimech-joint:revolute")) == 2
+    finally:
+        plt.close(fig)
+
+
+def test_prismatic_ground_guide_is_preserved_without_ground_skeleton():
+    mechanism, joint, guess = _slider_crank()
+    config = solve(
+        mechanism, drivers=KinematicDriver(joint, position=0.7),
+        initial_guess=guess,
+    )[0]
+    fig, ax = plot(config)
+    try:
+        assert not _artists_with_gid(ax, "kimech-body:ground")
+        assert len(_artists_with_gid(ax, "kimech-joint:prismatic-guide")) == 1
+        assert len(_artists_with_gid(ax, "kimech-ground:revolute-support")) == 1
+    finally:
+        plt.close(fig)

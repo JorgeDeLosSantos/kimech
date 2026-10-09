@@ -422,3 +422,21 @@ def test_trace_artists_and_viewport_remain_fixed_while_data_updates():
         assert ax.get_ylim() == ylim
 
     _finish(animation)
+
+
+def test_animation_ground_supports_are_static_across_frames():
+    solution, _ = _four_bar_solution()
+    animation = animate(solution)
+    ax = animation._fig.axes[0]
+    supports = _artists_with_gid(ax, "kimech-ground:revolute-support")
+    assert len(supports) == 2
+    assert not _artists_with_gid(ax, "kimech-body:ground")
+    reference_vertices = [support.get_xy().copy() for support in supports]
+    initial_counts = (len(ax.lines), len(ax.collections), len(ax.patches))
+    for index in range(len(solution)):
+        animation._func(index)
+        assert _artists_with_gid(ax, "kimech-ground:revolute-support") == supports
+        for patch, vertices in zip(supports, reference_vertices):
+            np.testing.assert_allclose(patch.get_xy(), vertices)
+        assert (len(ax.lines), len(ax.collections), len(ax.patches)) == initial_counts
+    _finish(animation)

@@ -21,6 +21,7 @@ from .plot import (
     _draw_body,
     _draw_prismatic_joint,
     _draw_revolute_joint,
+    _draw_ground_revolute_support,
     _link_color_cycle,
     _coordinate_extent,
     _point_positions,
@@ -208,8 +209,6 @@ def _create_artists(
     body_colors = {mechanism.ground: "0.4"}
 
     ground_spec = specs[mechanism.ground]
-    _draw_body(config, mechanism.ground, ground_spec.scaffold_points, "0.4", ax)
-    _draw_auxiliary_connectors(config, mechanism.ground, ground_spec, "0.4", ax)
     _draw_auxiliary_points(
         config,
         mechanism.ground,
@@ -254,6 +253,7 @@ def _create_artists(
             prismatic_artists[joint] = (guide, slider, guide_range)
     for joint in mechanism.joints:
         if isinstance(joint, RevoluteJoint):
+            _draw_ground_revolute_support(config, joint, scale, ax)
             revolute_artists[joint] = _draw_revolute_joint(config, joint, ax)
 
     for point, positions in trace_data:

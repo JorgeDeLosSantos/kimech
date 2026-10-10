@@ -6,7 +6,7 @@ Public documentation: https://jorgedelossantos.github.io/kimech/
 
 It provides declarative rigid-body models with revolute and prismatic joints, robust position/velocity/acceleration solving with one or more prescribed inputs, structural topology introspection, structured numerical diagnostics, driver-coordinate sensitivity analysis, and schematic plotting and animation.
 
-The development branch for **0.7.0** extends fully prescribed planar R/P kinematics to Multi-DOF mechanisms. One `KinematicDriver` or an ordered collection is passed to `solve(..., drivers=...)`. The PyPI release remains on the 0.6.x API until 0.7.0 is published. The preceding driver/time design is documented in [`docs/study-0.6.0-kinematic-driver.md`](docs/study-0.6.0-kinematic-driver.md); [`docs/api.md`](docs/api.md) documents the development API.
+Kimech **0.7.0** supports fully prescribed Multi-DOF planar R/P mechanisms: pass one `KinematicDriver` or an ordered sequence to `solve(..., drivers=...)`. This is a breaking change from 0.6.x; see the [changelog](CHANGELOG.md) for migration details. The [API reference](docs/api.md) documents the 0.7.0 contract.
 
 ## Installation
 
@@ -151,12 +151,14 @@ The example set separates **motion/geometry** from **kinematic analysis** and va
 examples/
 ├── four_bar.py
 ├── four_bar_analysis.py
+├── serial_two_revolute.py
 ├── slider_crank.py
 ├── slider_crank_analysis.py
 └── slider_crank_analysis_comparison.py
 ```
 
 - [`examples/four_bar.py`](examples/four_bar.py) and [`examples/slider_crank.py`](examples/slider_crank.py) focus on position solving and animation.
+- [`examples/serial_two_revolute.py`](examples/serial_two_revolute.py) checks the 2R Multi-DOF solver against analytic position, velocity and acceleration.
 - [`examples/four_bar_analysis.py`](examples/four_bar_analysis.py) plots rocker angle, angular velocity, angular acceleration, and coupler-point speed/acceleration magnitude versus the prescribed crank angle.
 - [`examples/slider_crank_analysis.py`](examples/slider_crank_analysis.py) plots slider displacement, velocity, and acceleration versus crank angle and demonstrates reconstruction of the same state with the prismatic coordinate prescribed instead.
 - [`examples/slider_crank_analysis_comparison.py`](examples/slider_crank_analysis_comparison.py) compares Kimech's slider displacement, velocity, and acceleration with the independent closed-form slider-crank solution and reports the maximum absolute errors.

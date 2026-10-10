@@ -2,7 +2,7 @@
 
 ## Installation
 
-Install the currently released Kimech (0.6.x) from PyPI:
+Install the packaged Kimech release from PyPI:
 
 ```bash
 pip install kimech
@@ -14,7 +14,7 @@ For plotting, animation, and GIF support:
 pip install "kimech[viz]"
 ```
 
-To run examples using the **0.7.0 `drivers=` API**, use a local development checkout instead:
+To test an unreleased development checkout (including the 0.7.0 branch before publication), install locally:
 
 ```bash
 pip install -e ".[dev,viz,docs]"

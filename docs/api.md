@@ -1,8 +1,8 @@
 # Kimech — Package structure and public API
 
-> Status: development API for `0.7.0` (unreleased).
+> Status: public API prepared for `0.7.0` (publication pending).
 >
-> This document describes the **unreleased 0.7.0 development branch**. The PyPI 0.6.x release still uses `driver=`. [`study-0.6.0-kinematic-driver.md`](study-0.6.0-kinematic-driver.md) is retained as historical context.
+> Kimech `0.7.0` intentionally breaks the older `0.6.x` `driver=` API. See [`CHANGELOG.md`](../CHANGELOG.md) for migration guidance. [`study-0.6.0-kinematic-driver.md`](study-0.6.0-kinematic-driver.md) is historical.
 
 ## 1. Overview
 

@@ -1,6 +1,6 @@
 # Kimech 0.7.0 — Multi-DOF implementation design (draft)
 
-Status: implementation and stabilization; **unreleased**, PR #48.
+Status: implementation validated, release preparation underway; **not yet published**, PR #48.
 
 ## Scope
 
@@ -45,7 +45,7 @@ Jacobian; do not misdiagnose ordinary nonlinear nonconvergence as a singularity.
 5. Rank/conditioning diagnostics and error semantics.
 6. Ground visualization, docs, examples, regression, release.
 
-## Implementation status (in progress)
+## Implementation status (validated)
 
 On branch `feat/0.7.0-multidof-contract`:
 
@@ -74,8 +74,7 @@ specifies a differential order, do not compute that order. Partially prescribed
 velocity or acceleration across drivers is rejected explicitly: Kimech does not
 publish incomplete generalized differential states.
 
-This branch must not be released or merged until the full regression suite,
-documentation, and remaining 0.7.0 acceptance criteria are verified.
+All planned functional blocks have passed CI and ground visualization was reviewed in Colab. Final packaging and integration remain separate release steps.
 
 ## Acceptance scenarios
 

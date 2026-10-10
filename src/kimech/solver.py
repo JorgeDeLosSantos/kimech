@@ -641,8 +641,6 @@ def _with_recovery_context(
         context=SolveFailureContext(
             stage=context.stage,
             sample_index=context.sample_index,
-            sample_position=context.sample_position,
-            sample_index=context.sample_index,
             driver_positions=context.driver_positions,
             failure_kind=context.failure_kind,
             joint_rank=context.joint_rank,

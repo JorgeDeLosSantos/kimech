@@ -108,3 +108,58 @@ def test_mixed_revolute_prismatic_differentials_scale_consistently(scale):
     np.testing.assert_allclose(result.body_accelerations(slider)[:, :2], expected_a, rtol=1e-8, atol=2e-9*scale)
     assert np.all(result.diagnostics.rank_issues == "regular")
     np.testing.assert_allclose(result.joint_coordinates(p), scale*travel, rtol=1e-8, atol=2e-9*scale)
+
+
+def test_five_bar_approach_to_toggle_reports_worsening_condition_without_branch_jump():
+    """Track a physically valid closed chain toward (but not into) a toggle."""
+    mechanism = Mechanism()
+    lg = mechanism.ground.add_point("left", (-1., 0.))
+    rg = mechanism.ground.add_point("right", (1., 0.))
+    lcrank = mechanism.add_link("left_crank")
+    rcrank = mechanism.add_link("right_crank")
+    lc = mechanism.add_link("left_coupler")
+    rc = mechanism.add_link("right_coupler")
+    la = lcrank.add_point("pivot", (0., 0.))
+    lb = lcrank.add_point("tip", (1.5, 0.))
+    ra = rcrank.add_point("pivot", (0., 0.))
+    rb = rcrank.add_point("tip", (1.5, 0.))
+    lcbase = lc.add_point("start", (0., 0.))
+    lctip = lc.add_point("apex", (1.5, 0.))
+    rcbase = rc.add_point("start", (0., 0.))
+    rctip = rc.add_point("apex", (1.5, 0.))
+    jleft = mechanism.revolute(lg, la)
+    mechanism.revolute(lb, lcbase)
+    mechanism.revolute(lctip, rctip)
+    mechanism.revolute(rb, rcbase)
+    jright = mechanism.revolute(rg, ra)
+
+    critical = float(np.arcsin(np.sqrt(5.) / 3.))
+    angles = np.array([0.65, 0.77, 0.81, critical - 0.005])
+    first = float(angles[0])
+    pleft = np.array([-1. + 1.5*np.cos(first), 1.5*np.sin(first)])
+    pright = np.array([1. + 1.5*np.cos(first), -1.5*np.sin(first)])
+    delta = pright - pleft
+    distance = np.linalg.norm(delta)
+    height = np.sqrt(1.5**2 - (distance/2)**2)
+    apex = 0.5*(pleft+pright) + height*np.array([-delta[1],delta[0]])/distance
+    angle_lc = np.arctan2(apex[1]-pleft[1], apex[0]-pleft[0])
+    angle_rc = np.arctan2(apex[1]-pright[1], apex[0]-pright[0])
+    solution = solve(
+        mechanism,
+        drivers=[
+            KinematicDriver(jleft, position=angles),
+            KinematicDriver(jright, position=-angles),
+        ],
+        initial_guess={
+            lcrank: (-1., 0., first),
+            rcrank: (1., 0., -first),
+            lc: (*pleft, angle_lc),
+            rc: (*pright, angle_rc),
+        },
+    )
+    assert len(solution) == len(angles)
+    np.testing.assert_allclose(solution.point_positions(lctip),
+                               solution.point_positions(rctip), atol=2e-8)
+    assert np.all(solution.diagnostics.rank_issues == "regular")
+    assert solution.diagnostics.condition_numbers[-1] > solution.diagnostics.condition_numbers[0]
+    assert solution.diagnostics.min_singular_values[-1] < solution.diagnostics.min_singular_values[0]

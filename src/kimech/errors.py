@@ -10,13 +10,12 @@ import math
 class SolveFailureContext:
     """Structured context attached to a kinematic solve failure.
 
-    Fields are descriptive and may be unavailable when a failure occurs before
-    a reliable candidate state or Jacobian can be evaluated.
+    The sample_index refers to the requested history sample, not an input
+    driver's ordinal. The driver_positions tuple follows the driver order.
+    Fields may be unavailable without a reliable candidate or Jacobian.
     """
 
     stage: str
-    driver_index: int | None = None
-    driver_position: float | None = None
     sample_index: int | None = None
     driver_positions: tuple[float, ...] | None = None
     failure_kind: str | None = None
@@ -33,16 +32,9 @@ class SolveFailureContext:
         if not isinstance(self.stage, str) or not self.stage.strip():
             raise ValueError("stage must be a non-empty string")
 
-        if self.driver_index is not None:
-            if not isinstance(self.driver_index, int) or self.driver_index < 0:
-                raise ValueError("driver_index must be a non-negative integer or None")
-
         if self.sample_index is not None:
             if not isinstance(self.sample_index, int) or self.sample_index < 0:
                 raise ValueError("sample_index must be a non-negative integer or None")
-        if (self.sample_index is not None and self.driver_index is not None
-                and self.sample_index != self.driver_index):
-            raise ValueError("sample_index and driver_index must refer to the same sample")
 
         if self.driver_positions is not None:
             if (not isinstance(self.driver_positions, tuple)
@@ -62,9 +54,6 @@ class SolveFailureContext:
         if self.joint_rank is not None:
             if not isinstance(self.joint_rank, int) or self.joint_rank < 0:
                 raise ValueError("joint_rank must be a non-negative integer or None")
-
-        if self.driver_position is not None and not math.isfinite(self.driver_position):
-            raise ValueError("driver_position must be finite or None")
 
         if self.residual_norm is not None:
             if not math.isfinite(self.residual_norm) or self.residual_norm < 0.0:

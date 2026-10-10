@@ -109,11 +109,11 @@ def solve(
         if previous_accepted is not None:
             current_guess = _predict_next_configuration(
                 mechanism, links, joints, solver_drivers, previous_accepted,
-                previous_values, values, scaling, driver_index=index - 1,
+                previous_values, values, scaling, sample_index=index - 1,
             )
         accepted, subdivisions, strategy, attempts = _solve_requested_configuration(
             mechanism, links, joints, solver_drivers, values,
-            current_guess, scaling, driver_index=index,
+            current_guess, scaling, sample_index=index,
             previous_driver_value=previous_values,
             previous_accepted=previous_accepted,
         )
@@ -140,7 +140,7 @@ def solve(
                 mechanism, links, joints, solver_drivers, q,
                 float(values) if single else values,
                 float(rate) if single else rate, scaling,
-                driver_index=index,
+                sample_index=index,
             )
 
     coordinate_accelerations = None
@@ -153,7 +153,7 @@ def solve(
                 mechanism, links, joints, solver_drivers, q, q_dot,
                 float(values) if single else values,
                 float(rate) if single else rate, scaling,
-                driver_index=index,
+                sample_index=index,
             )
 
     return KinematicSolution._from_snapshot(
@@ -173,7 +173,7 @@ def _solve_requested_configuration(
     preferred_guess: np.ndarray,
     scaling: NumericalScaling,
     *,
-    driver_index: int,
+    sample_index: int,
     previous_driver_value: float | np.ndarray | None,
     previous_accepted: np.ndarray | None,
 ) -> tuple[np.ndarray, int, str, int]:
@@ -200,7 +200,7 @@ def _solve_requested_configuration(
             driver_value,
             preferred_guess,
             scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
         )
         return accepted, 0, preferred_strategy, attempt_counter[0]
     except KinematicSolveError as error:
@@ -224,7 +224,7 @@ def _solve_requested_configuration(
                 driver_value,
                 previous_accepted,
                 scaling,
-                driver_index=driver_index,
+                sample_index=sample_index,
             )
             return accepted, 0, "warm_start", attempt_counter[0]
         except KinematicSolveError:
@@ -252,7 +252,7 @@ def _solve_requested_configuration(
             start_q=previous_accepted,
             target_driver_value=driver_value,
             scaling=scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
             depth=0,
             attempt_counter=attempt_counter,
         )
@@ -279,7 +279,7 @@ def _attempt_configuration(
     initial_q: np.ndarray,
     scaling: NumericalScaling,
     *,
-    driver_index: int,
+    sample_index: int,
 ) -> np.ndarray:
     """Call the nonlinear corrector while recording one attempted solve."""
     attempt_counter[0] += 1
@@ -291,7 +291,7 @@ def _attempt_configuration(
         driver_value,
         initial_q,
         scaling,
-        driver_index=driver_index,
+        sample_index=sample_index,
     )
 
 
@@ -305,7 +305,7 @@ def _solve_step_from_accepted(
     start_q: np.ndarray,
     target_driver_value: float | np.ndarray,
     scaling: NumericalScaling,
-    driver_index: int,
+    sample_index: int,
     attempt_counter: list[int],
 ) -> np.ndarray:
     """Attempt one continuation step using predictor first, then warm start."""
@@ -318,7 +318,7 @@ def _solve_step_from_accepted(
         start_driver_value,
         target_driver_value,
         scaling,
-        driver_index=driver_index,
+        sample_index=sample_index,
     )
     try:
         return _attempt_configuration(
@@ -330,7 +330,7 @@ def _solve_step_from_accepted(
             target_driver_value,
             predicted,
             scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
         )
     except KinematicSolveError:
         if np.array_equal(predicted, start_q):
@@ -344,7 +344,7 @@ def _solve_step_from_accepted(
             target_driver_value,
             start_q,
             scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
         )
 
 
@@ -358,20 +358,18 @@ def _solve_with_subdivision(
     start_q: np.ndarray,
     target_driver_value: float | np.ndarray,
     scaling: NumericalScaling,
-    driver_index: int,
+    sample_index: int,
     depth: int,
     attempt_counter: list[int],
 ) -> tuple[np.ndarray, int]:
     """Recover a failed requested step by recursively bisecting its input interval."""
     if depth >= _MAX_SUBDIVISION_DEPTH:
         raise KinematicSolveError(
-            f"adaptive subdivision exhausted at driver index {driver_index} "
+            f"adaptive subdivision exhausted at sample index {sample_index} "
             f"(target={_format_driver_values(target_driver_value)}, depth={depth})",
             context=SolveFailureContext(
                 stage="position",
-                driver_index=driver_index,
-                driver_position=_scalar_driver_position(target_driver_value),
-                sample_index=driver_index,
+                sample_index=sample_index,
                 driver_positions=_driver_positions_tuple(target_driver_value),
                 failure_kind="nonconvergence",
             ),
@@ -381,13 +379,11 @@ def _solve_with_subdivision(
     if (_same_driver_values(midpoint, start_driver_value)
             or _same_driver_values(midpoint, target_driver_value)):
         raise KinematicSolveError(
-            f"adaptive subdivision reached floating-point step limit at driver index "
-            f"{driver_index} (target={_format_driver_values(target_driver_value)})",
+            f"adaptive subdivision reached floating-point step limit at sample index "
+            f"{sample_index} (target={_format_driver_values(target_driver_value)})",
             context=SolveFailureContext(
                 stage="position",
-                driver_index=driver_index,
-                driver_position=_scalar_driver_position(target_driver_value),
-                sample_index=driver_index,
+                sample_index=sample_index,
                 driver_positions=_driver_positions_tuple(target_driver_value),
                 failure_kind="nonconvergence",
             ),
@@ -403,7 +399,7 @@ def _solve_with_subdivision(
             start_q=start_q,
             target_driver_value=midpoint,
             scaling=scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
             attempt_counter=attempt_counter,
         )
     except KinematicSolveError:
@@ -416,7 +412,7 @@ def _solve_with_subdivision(
             start_q=start_q,
             target_driver_value=midpoint,
             scaling=scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
             depth=depth + 1,
             attempt_counter=attempt_counter,
         )
@@ -433,7 +429,7 @@ def _solve_with_subdivision(
             start_q=midpoint_q,
             target_driver_value=target_driver_value,
             scaling=scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
             attempt_counter=attempt_counter,
         )
         return target_q, left_count + 1
@@ -447,7 +443,7 @@ def _solve_with_subdivision(
             start_q=midpoint_q,
             target_driver_value=target_driver_value,
             scaling=scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
             depth=depth + 1,
             attempt_counter=attempt_counter,
         )
@@ -464,7 +460,7 @@ def _predict_next_configuration(
     next_driver_value: float | np.ndarray,
     scaling: NumericalScaling,
     *,
-    driver_index: int | None = None,
+    sample_index: int | None = None,
 ) -> np.ndarray:
     """Predict a displacement along one prescribed-input segment."""
     delta = np.asarray(next_driver_value) - np.asarray(driver_value)
@@ -476,7 +472,7 @@ def _predict_next_configuration(
             # Preserve the calibrated single-driver tangent and its diagnostics.
             tangent = solve_driver_tangent(
                 mechanism, links, joints, driver, q,
-                driver_value, scaling, driver_index=driver_index,
+                driver_value, scaling, sample_index=sample_index,
             )
             predicted = q + float(delta) * tangent
         else:
@@ -484,7 +480,7 @@ def _predict_next_configuration(
             # any vector of prescribed increments, without finite differences.
             displacement = solve_velocity(
                 mechanism, links, joints, driver, q,
-                driver_value, delta, scaling, driver_index=driver_index,
+                driver_value, delta, scaling, sample_index=sample_index,
             )
             predicted = q + displacement
     except KinematicSolveError:
@@ -644,8 +640,8 @@ def _with_recovery_context(
         str(error),
         context=SolveFailureContext(
             stage=context.stage,
-            driver_index=context.driver_index,
-            driver_position=context.driver_position,
+            sample_index=context.sample_index,
+            sample_position=context.sample_position,
             sample_index=context.sample_index,
             driver_positions=context.driver_positions,
             failure_kind=context.failure_kind,
@@ -670,7 +666,7 @@ def _solve_configuration(
     initial_q: np.ndarray,
     scaling: NumericalScaling,
     *,
-    driver_index: int | None = None,
+    sample_index: int | None = None,
 ) -> np.ndarray:
     def unpack(q_hat: np.ndarray) -> np.ndarray:
         return scaling.unscale_coordinates(q_hat)
@@ -712,8 +708,8 @@ def _solve_configuration(
         return unpack(candidate_hat).copy()
 
     location = (
-        f"driver index {driver_index} (value={_format_driver_values(driver_value)})"
-        if driver_index is not None
+        f"sample index {sample_index} (value={_format_driver_values(driver_value)})"
+        if sample_index is not None
         else f"driver value {_format_driver_values(driver_value)}"
     )
     norm_text = f"{residual_norm:.12g}" if np.isfinite(residual_norm) else "unavailable"
@@ -734,9 +730,7 @@ def _solve_configuration(
         f"solver success={success}; solver message={message}",
         context=SolveFailureContext(
             stage="position",
-            driver_index=driver_index,
-            driver_position=_scalar_driver_position(driver_value),
-            sample_index=driver_index,
+            sample_index=sample_index,
             driver_positions=_driver_positions_tuple(driver_value),
             failure_kind="nonconvergence",
             residual_norm=(
@@ -756,10 +750,6 @@ def _driver_positions_tuple(value: float | np.ndarray) -> tuple[float, ...]:
 def _same_driver_values(a: float | np.ndarray, b: float | np.ndarray) -> bool:
     return bool(np.array_equal(a, b))
 
-
-def _scalar_driver_position(value: float | np.ndarray) -> float | None:
-    values = np.asarray(value, dtype=float)
-    return float(values) if values.ndim == 0 else None
 
 
 def _format_driver_values(value: float | np.ndarray) -> str:

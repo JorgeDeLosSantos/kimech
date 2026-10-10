@@ -140,7 +140,7 @@ def test_multidof_adaptive_subdivision_is_along_the_input_segment(monkeypatch):
     calls = []
 
     def fake_correct(mechanism_arg, links, joints, input_drivers, values,
-                     initial_q, scaling, *, driver_index=None):
+                     initial_q, scaling, *, sample_index=None):
         values = np.asarray(values, dtype=float)
         calls.append(values.copy())
         # Simulate a corrector that can accept only short steps.
@@ -154,7 +154,7 @@ def test_multidof_adaptive_subdivision_is_along_the_input_segment(monkeypatch):
     monkeypatch.setattr(
         "kimech.solver._predict_next_configuration",
         lambda mechanism, links, joints, drivers, q, start, target, scaling,
-               driver_index=None: q.copy(),
+               sample_index=None: q.copy(),
     )
     result = solve(
         mechanism,

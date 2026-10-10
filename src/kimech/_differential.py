@@ -29,7 +29,7 @@ def solve_velocity(
     driver_velocity: float | Sequence[float] | np.ndarray,
     scaling: NumericalScaling,
     *,
-    driver_index: int | None = None,
+    sample_index: int | None = None,
 ) -> np.ndarray:
     """Solve one generalized velocity state from differentiated constraints."""
     velocity = _finite_driver_sample(
@@ -46,7 +46,7 @@ def solve_velocity(
         joint_row_count=2 * len(joints),
         stage="velocity",
         driver_value=driver_value,
-        driver_index=driver_index,
+        sample_index=sample_index,
     )
 
 
@@ -59,7 +59,7 @@ def solve_driver_tangent(
     driver_value: float,
     scaling: NumericalScaling,
     *,
-    driver_index: int | None = None,
+    sample_index: int | None = None,
 ) -> np.ndarray:
     """Solve the configuration tangent dq/du for continuation."""
     matrix = jacobian(mechanism, links, joints, driver, q, driver_value)
@@ -73,7 +73,7 @@ def solve_driver_tangent(
         joint_row_count=2 * len(joints),
         stage="driver tangent",
         driver_value=driver_value,
-        driver_index=driver_index,
+        sample_index=sample_index,
     )
 
 
@@ -88,7 +88,7 @@ def solve_acceleration(
     driver_acceleration: float | Sequence[float] | np.ndarray,
     scaling: NumericalScaling,
     *,
-    driver_index: int | None = None,
+    sample_index: int | None = None,
 ) -> np.ndarray:
     """Solve one generalized acceleration state from second-order constraints."""
     prescribed = _finite_driver_sample(
@@ -113,7 +113,7 @@ def solve_acceleration(
         joint_row_count=2 * len(joints),
         stage="acceleration",
         driver_value=driver_value,
-        driver_index=driver_index,
+        sample_index=sample_index,
     )
 
 
@@ -126,7 +126,7 @@ def _solve_linear_state(
     joint_row_count: int,
     stage: str,
     driver_value: float | Sequence[float] | np.ndarray,
-    driver_index: int | None,
+    sample_index: int | None,
 ) -> np.ndarray:
     """Solve only when geometric constraints and prescribed inputs are regular.
 
@@ -140,9 +140,7 @@ def _solve_linear_state(
     def context(kind: str, *, residual: float | None = None) -> SolveFailureContext:
         return SolveFailureContext(
             stage=stage,
-            driver_index=driver_index,
-            driver_position=_scalar_driver_position(driver_value),
-            sample_index=driver_index,
+            sample_index=sample_index,
             driver_positions=_driver_positions_tuple(driver_value),
             failure_kind=kind,
             rank_issue=issue,
@@ -161,7 +159,7 @@ def _solve_linear_state(
         )
         raise KinematicSolveError(
             _failure_message(
-                stage, driver_value, driver_index=driver_index,
+                stage, driver_value, sample_index=sample_index,
                 residual_norm=float("nan"), reason=description,
             ),
             context=context(issue),
@@ -172,7 +170,7 @@ def _solve_linear_state(
     except np.linalg.LinAlgError as error:
         raise KinematicSolveError(
             _failure_message(
-                stage, driver_value, driver_index=driver_index,
+                stage, driver_value, sample_index=sample_index,
                 residual_norm=float("nan"), reason=f"linear solve failed: {error}",
             ),
             context=context("linear_failure"),
@@ -196,7 +194,7 @@ def _solve_linear_state(
 
     raise KinematicSolveError(
         _failure_message(
-            stage, driver_value, driver_index=driver_index,
+            stage, driver_value, sample_index=sample_index,
             residual_norm=residual_norm,
             reason="invalid or inaccurate linear solution",
         ),
@@ -211,14 +209,14 @@ def _failure_message(
     stage: str,
     driver_value: float | Sequence[float] | np.ndarray,
     *,
-    driver_index: int | None,
+    sample_index: int | None,
     residual_norm: float,
     reason: str,
 ) -> str:
     formatted_value = _format_driver_values(driver_value)
     location = (
-        f"driver index {driver_index} (value={formatted_value})"
-        if driver_index is not None
+        f"sample index {sample_index} (value={formatted_value})"
+        if sample_index is not None
         else f"driver value {formatted_value}"
     )
     norm_text = f"{residual_norm:.12g}" if np.isfinite(residual_norm) else "unavailable"
@@ -240,11 +238,6 @@ def _finite_scalar(value: object, *, name: str) -> float:
         raise ValueError(f"{name} must be finite")
     return result
 
-
-def _scalar_driver_position(value: float | Sequence[float] | np.ndarray) -> float | None:
-    """Keep scalar failure metadata; vectors are represented in the message."""
-    array = np.asarray(value, dtype=float)
-    return float(array) if array.ndim == 0 else None
 
 
 def _format_driver_values(value: float | Sequence[float] | np.ndarray) -> str:

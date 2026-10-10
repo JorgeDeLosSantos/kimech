@@ -48,7 +48,7 @@ def test_differential_rank_loss_is_reported_without_pseudoinverse(matrix, expect
         _solve_linear_state(
             matrix, np.array([0.0, 0.0, 0.0]),
             scaling=scaling, link_count=1, joint_row_count=2,
-            stage="velocity", driver_value=np.array([0.3, 0.4]), driver_index=3,
+            stage="velocity", driver_value=np.array([0.3, 0.4]), sample_index=3,
         )
     ctx = captured.value.context
     assert ctx.failure_kind == expected_issue
@@ -57,7 +57,7 @@ def test_differential_rank_loss_is_reported_without_pseudoinverse(matrix, expect
     assert ctx.rank == 2
     assert ctx.sample_index == 3
     assert ctx.driver_positions == pytest.approx((0.3, 0.4))
-    assert ctx.driver_position is None
+    assert not hasattr(ctx, "driver_position")
 
 
 def test_high_condition_number_does_not_automatically_imply_rank_deficiency():
@@ -66,7 +66,7 @@ def test_high_condition_number_does_not_automatically_imply_rank_deficiency():
     velocity = _solve_linear_state(
         matrix, np.array([2., 3., 0.]),
         scaling=scaling, link_count=1, joint_row_count=2,
-        stage="velocity", driver_value=0.1, driver_index=0,
+        stage="velocity", driver_value=0.1, sample_index=0,
     )
     np.testing.assert_allclose(velocity, [2.0, 3.0, 0.0])
     assert _rank_analysis(matrix, joint_row_count=2)[0] >= 1e9

@@ -305,7 +305,7 @@ def test_position_sweep_uses_input_tangent_predictor(monkeypatch):
         initial_q,
         scaling,
         *,
-        driver_index=None,
+        sample_index=None,
     ):
         assert mechanism_arg is mechanism
         guesses.append(initial_q.copy())
@@ -320,7 +320,7 @@ def test_position_sweep_uses_input_tangent_predictor(monkeypatch):
         input_value,
         scaling,
         *,
-        driver_index=None,
+        sample_index=None,
     ):
         assert mechanism_arg is mechanism
         return np.array([0.0, 0.0, 1.0])
@@ -363,10 +363,10 @@ def test_position_sweep_retries_warm_start_when_predictor_corrector_fails(monkey
         initial_q,
         scaling,
         *,
-        driver_index=None,
+        sample_index=None,
     ):
         guesses.append(initial_q.copy())
-        if driver_index == 1 and initial_q[2] == pytest.approx(0.7):
+        if sample_index == 1 and initial_q[2] == pytest.approx(0.7):
             raise KinematicSolveError("deliberate predictor failure")
         return np.array([0.0, 0.0, input_value])
 
@@ -406,7 +406,7 @@ def test_position_sweep_falls_back_to_warm_start_when_tangent_solve_fails(monkey
         initial_q,
         scaling,
         *,
-        driver_index=None,
+        sample_index=None,
     ):
         guesses.append(initial_q.copy())
         return np.array([0.0, 0.0, input_value])
@@ -445,7 +445,7 @@ def test_adaptive_subdivision_recovers_failed_requested_step(monkeypatch):
         initial_q,
         scaling,
         *,
-        driver_index=None,
+        sample_index=None,
     ):
         calls.append(float(input_value))
         current = float(initial_q[2])
@@ -489,7 +489,7 @@ def test_adaptive_subdivision_hides_internal_samples(monkeypatch):
         initial_q,
         scaling,
         *,
-        driver_index=None,
+        sample_index=None,
     ):
         current = float(initial_q[2])
         if abs(input_value - current) > 0.06:
@@ -499,7 +499,7 @@ def test_adaptive_subdivision_hides_internal_samples(monkeypatch):
     monkeypatch.setattr("kimech.solver._solve_configuration", fake_solve_configuration)
     monkeypatch.setattr(
         "kimech.solver._predict_next_configuration",
-        lambda mechanism_arg, links, joints, input_joint, q, input_value, next_input_value, scaling, driver_index=None:
+        lambda mechanism_arg, links, joints, input_joint, q, input_value, next_input_value, scaling, sample_index=None:
             q.copy(),
     )
 
@@ -531,7 +531,7 @@ def test_impossible_target_preserves_original_failure_after_subdivision(monkeypa
         initial_q,
         scaling,
         *,
-        driver_index=None,
+        sample_index=None,
     ):
         if input_value > 0.1:
             raise KinematicSolveError(f"unreachable target {input_value}")
@@ -540,7 +540,7 @@ def test_impossible_target_preserves_original_failure_after_subdivision(monkeypa
     monkeypatch.setattr("kimech.solver._solve_configuration", fake_solve_configuration)
     monkeypatch.setattr(
         "kimech.solver._predict_next_configuration",
-        lambda mechanism_arg, links, joints, input_joint, q, input_value, next_input_value, scaling, driver_index=None:
+        lambda mechanism_arg, links, joints, input_joint, q, input_value, next_input_value, scaling, sample_index=None:
             q.copy(),
     )
 

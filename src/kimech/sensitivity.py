@@ -154,7 +154,7 @@ def driver_sensitivity(solution: KinematicSolution) -> DriverSensitivity:
             q,
             float(driver_value),
             scaling,
-            driver_index=index,
+            sample_index=index,
         )
 
     return DriverSensitivity(solution, derivatives)

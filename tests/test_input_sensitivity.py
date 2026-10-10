@@ -304,8 +304,8 @@ def test_sensitivity_failure_does_not_mutate_or_invalidate_solution(monkeypatch)
             "deliberate tangent failure",
             context=SolveFailureContext(
                 stage="driver tangent",
-                driver_index=0,
-                driver_position=0.5,
+                sample_index=0,
+                driver_positions=(0.5,),
             ),
         )
 

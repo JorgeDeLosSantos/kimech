@@ -33,8 +33,8 @@ def test_kinematic_solve_error_remains_compatible_without_context():
 def test_solve_failure_context_is_immutable_and_validated():
     context = SolveFailureContext(
         stage="position",
-        driver_index=2,
-        driver_position=0.7,
+        sample_index=2,
+        driver_positions=(0.7,),
         residual_norm=1e-5,
         condition_number=12.0,
         min_singular_value=0.08,
@@ -44,7 +44,8 @@ def test_solve_failure_context_is_immutable_and_validated():
     )
 
     assert context.stage == "position"
-    assert context.driver_index == 2
+    assert context.sample_index == 2
+    assert context.driver_positions == pytest.approx((0.7,))
     assert context.attempted_strategies == ("predictor", "warm_start")
 
     with pytest.raises(AttributeError):
@@ -66,7 +67,7 @@ def test_position_failure_exposes_structured_context(monkeypatch):
     with pytest.raises(KinematicSolveError) as captured:
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=[0.5],
             ),
@@ -76,8 +77,10 @@ def test_position_failure_exposes_structured_context(monkeypatch):
     context = captured.value.context
     assert context is not None
     assert context.stage == "position"
-    assert context.driver_index == 0
-    assert context.driver_position == pytest.approx(0.5)
+    assert context.failure_kind == "nonconvergence"
+    assert context.rank_issue is None
+    assert context.sample_index == 0
+    assert context.driver_positions == pytest.approx((0.5,))
     assert context.residual_norm == pytest.approx(0.5)
     assert context.condition_number == pytest.approx(1.0)
     assert context.min_singular_value == pytest.approx(1.0)
@@ -98,7 +101,7 @@ def test_failed_requested_sample_reports_recovery_path(monkeypatch):
         initial_q,
         scaling,
         *,
-        driver_index=None,
+        sample_index=None,
     ):
         if input_value == pytest.approx(0.0):
             return np.array([0.0, 0.0, 0.0])
@@ -106,8 +109,8 @@ def test_failed_requested_sample_reports_recovery_path(monkeypatch):
             f"unreachable {input_value}",
             context=SolveFailureContext(
                 stage="position",
-                driver_index=driver_index,
-                driver_position=input_value,
+                sample_index=sample_index,
+                driver_positions=(input_value,),
                 residual_norm=1.0,
             ),
         )
@@ -121,7 +124,7 @@ def test_failed_requested_sample_reports_recovery_path(monkeypatch):
     with pytest.raises(KinematicSolveError) as captured:
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=[0.0, 0.2],
             ),
@@ -130,8 +133,7 @@ def test_failed_requested_sample_reports_recovery_path(monkeypatch):
 
     context = captured.value.context
     assert context is not None
-    assert context.driver_index == 1
-    assert context.driver_position == pytest.approx(0.2)
+    assert context.sample_index == 1
     assert context.attempted_strategies == ("warm_start", "subdivision")
     assert context.corrector_attempts > 1
     assert "unreachable 0.2" in str(captured.value)
@@ -148,7 +150,7 @@ def test_velocity_failure_exposes_structured_context(monkeypatch):
     with pytest.raises(KinematicSolveError) as captured:
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=0.5,
                 velocity=1.0,
@@ -159,8 +161,7 @@ def test_velocity_failure_exposes_structured_context(monkeypatch):
     context = captured.value.context
     assert context is not None
     assert context.stage == "velocity"
-    assert context.driver_index == 0
-    assert context.driver_position == pytest.approx(0.5)
+    assert context.sample_index == 0
     assert context.condition_number == pytest.approx(1.0)
     assert context.min_singular_value == pytest.approx(1.0)
     assert context.rank == 3

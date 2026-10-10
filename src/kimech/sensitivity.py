@@ -42,6 +42,9 @@ class DriverSensitivity:
         if not isinstance(solution, KinematicSolution):
             raise TypeError("solution must be a KinematicSolution")
 
+        if len(solution.drivers) != 1:
+            raise ValueError("driver sensitivity currently requires exactly one driver")
+
         derivatives = np.asarray(coordinate_derivatives, dtype=float)
         expected_shape = solution.coordinates.shape
         if derivatives.shape != expected_shape:
@@ -54,8 +57,8 @@ class DriverSensitivity:
         self._mechanism = solution.mechanism
         self._links = solution._links
         self._joints = solution._joints
-        self._driver = solution.driver
-        self._driver_positions = solution.driver._position_history().copy()
+        self._driver = solution.drivers[0]
+        self._driver_positions = solution.drivers[0]._position_history().copy()
         self._coordinates = solution.coordinates
         self._coordinate_derivatives = derivatives.copy()
 
@@ -112,7 +115,7 @@ class DriverSensitivity:
             self._links,
             self._coordinates[index],
             coordinate_velocities=self._coordinate_derivatives[index],
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 self._driver.joint,
                 position=float(self._driver_positions[index]),
                 velocity=1.0,
@@ -125,9 +128,12 @@ def driver_sensitivity(solution: KinematicSolution) -> DriverSensitivity:
     if not isinstance(solution, KinematicSolution):
         raise TypeError("solution must be a KinematicSolution")
 
+    if len(solution.drivers) != 1:
+        raise ValueError("driver_sensitivity currently requires exactly one driver")
+
     links = solution._links
     joints = solution._joints
-    driver = solution.driver
+    driver = solution.drivers[0]
     driver_positions = driver._position_history()
     coordinates = solution.coordinates
 
@@ -148,7 +154,7 @@ def driver_sensitivity(solution: KinematicSolution) -> DriverSensitivity:
             q,
             float(driver_value),
             scaling,
-            driver_index=index,
+            sample_index=index,
         )
 
     return DriverSensitivity(solution, derivatives)

@@ -141,7 +141,7 @@ def run_case(name: str, builder) -> ContinuityRecord:
 
     forward = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=values,
         ),
@@ -149,7 +149,7 @@ def run_case(name: str, builder) -> ContinuityRecord:
     )
     reverse = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=values[::-1],
         ),

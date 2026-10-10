@@ -91,7 +91,7 @@ def test_problem_four_bar_sweep_is_scale_invariant(scale):
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=values,
         ),
@@ -99,7 +99,7 @@ def test_problem_four_bar_sweep_is_scale_invariant(scale):
     )
 
     assert len(solution) == len(values)
-    np.testing.assert_allclose(solution.driver.position, values)
+    np.testing.assert_allclose(solution.drivers[0].position, values)
 
 
 def test_characteristic_length_scales_with_problem_geometry():
@@ -141,7 +141,7 @@ def test_prismatic_sweep_accepts_verified_root_even_if_hybr_reports_no_progress(
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=values,
         ),
@@ -160,7 +160,7 @@ def test_differential_solution_preserves_physical_scaling(scale):
 
     config = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=theta,
             velocity=omega,

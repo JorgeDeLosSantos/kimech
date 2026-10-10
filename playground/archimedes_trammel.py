@@ -93,14 +93,14 @@ def main():
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=values,
         ),
         initial_guess=initial_guess,
     )
 
-    theta = solution.input_positions
+    theta = solution.drivers[0].position
     path = solution.point_positions(tracer)
     horizontal_positions = solution.joint_coordinates(horizontal_joint)
     vertical_positions = solution.joint_coordinates(vertical_joint)

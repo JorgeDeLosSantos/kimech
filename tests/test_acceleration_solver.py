@@ -36,7 +36,7 @@ def test_scalar_revolute_acceleration_matches_prescribed_angular_acceleration():
 
     config = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=0.7,
             velocity=2.5,
@@ -48,7 +48,7 @@ def test_scalar_revolute_acceleration_matches_prescribed_angular_acceleration():
     assert isinstance(config, Configuration)
     assert config.has_velocity
     assert config.has_acceleration
-    assert config.driver.acceleration == pytest.approx(-1.2)
+    assert config.drivers[0].acceleration == pytest.approx(-1.2)
     np.testing.assert_allclose(config.body_acceleration(link), [0.0, 0.0, -1.2])
     assert config.joint_acceleration(joint) == pytest.approx(-1.2)
 
@@ -58,7 +58,7 @@ def test_scalar_prismatic_acceleration_matches_prescribed_translation_accelerati
 
     config = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=1.2,
             velocity=-0.4,
@@ -78,7 +78,7 @@ def test_point_acceleration_includes_centripetal_term_for_constant_input_speed()
 
     config = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=theta,
             velocity=omega,
@@ -97,7 +97,7 @@ def test_sweep_scalar_acceleration_broadcasts_and_preserves_result_shape():
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=values,
             velocity=2.0,
@@ -108,7 +108,7 @@ def test_sweep_scalar_acceleration_broadcasts_and_preserves_result_shape():
 
     assert isinstance(solution, KinematicSolution)
     assert solution.has_acceleration
-    np.testing.assert_allclose(solution.driver.acceleration, [-0.5, -0.5, -0.5])
+    np.testing.assert_allclose(solution.drivers[0].acceleration, [-0.5, -0.5, -0.5])
     np.testing.assert_allclose(solution.body_accelerations(link)[:, 2], [-0.5, -0.5, -0.5])
 
 
@@ -120,7 +120,7 @@ def test_sweep_accepts_elementwise_acceleration_history():
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=values,
             velocity=velocities,
@@ -129,9 +129,9 @@ def test_sweep_accepts_elementwise_acceleration_history():
         initial_guess=guess,
     )
 
-    np.testing.assert_array_equal(solution.driver.acceleration, accelerations)
+    np.testing.assert_array_equal(solution.drivers[0].acceleration, accelerations)
     np.testing.assert_allclose(solution.body_accelerations(link)[:, 2], accelerations)
-    assert solution[1].driver.acceleration == pytest.approx(-0.25)
+    assert solution[1].drivers[0].acceleration == pytest.approx(-0.25)
 
 
 def test_acceleration_request_does_not_change_position_or_velocity_solution():
@@ -140,7 +140,7 @@ def test_acceleration_request_does_not_change_position_or_velocity_solution():
 
     velocity_only = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=values,
             velocity=4.0,
@@ -149,7 +149,7 @@ def test_acceleration_request_does_not_change_position_or_velocity_solution():
     )
     with_acceleration = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=values,
             velocity=4.0,
@@ -171,7 +171,7 @@ def test_input_acceleration_without_velocity_is_rejected_before_solving():
     with pytest.raises(ValueError, match="requires velocity"):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=0.5,
                 acceleration=1.0,
@@ -196,7 +196,7 @@ def test_input_acceleration_shape_and_finiteness_validation(values, acceleration
     with pytest.raises((TypeError, ValueError), match=message):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=values,
                 velocity=1.0,
@@ -226,7 +226,7 @@ def test_acceleration_linear_algebra_failure_is_translated(monkeypatch):
     ):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=0.5,
                 velocity=1.0,

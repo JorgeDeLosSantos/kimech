@@ -91,7 +91,7 @@ def main():
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             crank_joint,
             position=input_angle,
             velocity=input_angular_velocity,

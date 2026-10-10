@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 from scipy import optimize
@@ -10,8 +10,9 @@ from scipy import optimize
 from ._constraints import jacobian, residual
 from ._differential import solve_acceleration, solve_driver_tangent, solve_velocity
 from ._scaling import NumericalScaling, build_numerical_scaling
-from .diagnostics import SolveDiagnostics, _jacobian_metrics
+from .diagnostics import SolveDiagnostics, _jacobian_metrics, _rank_analysis
 from .driver import KinematicDriver
+from ._drivers import normalize_drivers
 from .errors import InvalidModelError, KinematicSolveError, SolveFailureContext
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Link, Mechanism
@@ -25,152 +26,141 @@ _MAX_SUBDIVISION_DEPTH = 8
 def solve(
     mechanism: Mechanism,
     *,
-    driver: KinematicDriver,
-    initial_guess,
+    drivers: KinematicDriver | Sequence[KinematicDriver],
+    initial_guess=None,
     time=None,
 ) -> KinematicSolution:
-    """Solve position and, when requested, differential kinematics."""
+    """Solve sampled planar kinematics with one or more prescribed drivers.
+
+    The `drivers` argument accepts a single KinematicDriver or a sequence of
+    independent prescriptions, all with aligned position samples.
+    """
     if not isinstance(mechanism, Mechanism):
         raise TypeError("mechanism must be a Mechanism")
-    if not isinstance(driver, KinematicDriver):
-        raise TypeError("driver must be a KinematicDriver")
+    selected = normalize_drivers(drivers)
 
     links = mechanism.links
     joints = mechanism.joints
-
     report = mechanism.validate()
     if not report.is_valid:
-        details = "; ".join(report.errors)
-        raise InvalidModelError(f"invalid mechanism: {details}")
+        raise InvalidModelError("invalid mechanism: " + "; ".join(report.errors))
 
     coordinate_count = 3 * len(links)
-    equation_count = 2 * len(joints) + 1
+    equation_count = 2 * len(joints) + len(selected)
     if coordinate_count != equation_count:
+        if len(selected) == 1:
+            raise InvalidModelError(
+                "solve() with one kinematic driver requires structural mobility 1 "
+                f"({coordinate_count} coordinates versus {equation_count} equations)"
+            )
         raise InvalidModelError(
-            "solve() with one kinematic driver requires structural mobility 1 "
+            f"solve() requires {coordinate_count - 2 * len(joints)} independent drivers "
             f"({coordinate_count} coordinates versus {equation_count} equations)"
         )
+    for prescribed in selected:
+        if not any(prescribed.joint is joint for joint in joints):
+            raise InvalidModelError(
+                "driver joint does not belong to the mechanism snapshot"
+            )
 
-    if not any(driver.joint is joint for joint in joints):
-        raise InvalidModelError(
-            "driver joint does not belong to the mechanism snapshot"
-        )
+    velocity_histories = tuple(d._velocity_history() for d in selected)
+    acceleration_histories = tuple(d._acceleration_history() for d in selected)
+    if any(h is not None for h in velocity_histories) and not all(
+        h is not None for h in velocity_histories
+    ):
+        raise ValueError("all drivers must prescribe velocity to solve Multi-DOF velocities")
+    if any(h is not None for h in acceleration_histories) and not all(
+        h is not None for h in acceleration_histories
+    ):
+        raise ValueError("all drivers must prescribe acceleration to solve Multi-DOF accelerations")
 
-    driver_positions = driver._position_history()
-    driver_velocities = driver._velocity_history()
-    driver_accelerations = driver._acceleration_history()
-    time_values = _coerce_time_history(time, count=len(driver_positions))
-
-    scaling = build_numerical_scaling(
-        mechanism,
-        links,
-        joints,
-        driver,
+    # Keep the one-driver scalar representation for the existing private
+    # regression hooks. Multi-DOF uses column-aligned N x m histories.
+    single = len(selected) == 1
+    solver_drivers = selected[0] if single else selected
+    positions = (
+        selected[0]._position_history()
+        if single
+        else np.column_stack([d._position_history() for d in selected])
     )
-    initial_q = _pack_initial_guess(mechanism, links, initial_guess)
+    prescribed_velocities = (
+        None if velocity_histories[0] is None
+        else velocity_histories[0] if single
+        else np.column_stack(velocity_histories)
+    )
+    prescribed_accelerations = (
+        None if acceleration_histories[0] is None
+        else acceleration_histories[0] if single
+        else np.column_stack(acceleration_histories)
+    )
+    time_values = _coerce_time_history(time, count=len(positions))
+    scaling = build_numerical_scaling(mechanism, links, joints, solver_drivers)
+    current_guess = _pack_initial_guess(mechanism, links, initial_guess)
 
-    coordinates = np.empty((len(driver_positions), coordinate_count), dtype=float)
-    subdivision_counts = np.zeros(len(driver_positions), dtype=int)
-    strategies = np.empty(len(driver_positions), dtype="<U16")
-    corrector_attempts = np.zeros(len(driver_positions), dtype=int)
-    current_guess = initial_q
-    previous_driver_value = None
+    coordinates = np.empty((len(positions), coordinate_count), dtype=float)
+    subdivision_counts = np.zeros(len(positions), dtype=int)
+    strategies = np.empty(len(positions), dtype="<U16")
+    corrector_attempts = np.zeros(len(positions), dtype=int)
+    previous_values = None
     previous_accepted = None
-    for index, driver_position_value in enumerate(driver_positions):
-        driver_value = float(driver_position_value)
-        accepted, subdivision_count, strategy, attempts = _solve_requested_configuration(
-            mechanism,
-            links,
-            joints,
-            driver,
-            driver_value,
-            current_guess,
-            scaling,
-            driver_index=index,
-            previous_driver_value=previous_driver_value,
+
+    for index, sampled_values in enumerate(positions):
+        values = float(sampled_values) if single else sampled_values.copy()
+        if previous_accepted is not None:
+            current_guess = _predict_next_configuration(
+                mechanism, links, joints, solver_drivers, previous_accepted,
+                previous_values, values, scaling, sample_index=index - 1,
+            )
+        accepted, subdivisions, strategy, attempts = _solve_requested_configuration(
+            mechanism, links, joints, solver_drivers, values,
+            current_guess, scaling, sample_index=index,
+            previous_driver_value=previous_values,
             previous_accepted=previous_accepted,
         )
         coordinates[index] = accepted
-        subdivision_counts[index] = subdivision_count
+        subdivision_counts[index] = subdivisions
         strategies[index] = strategy
         corrector_attempts[index] = attempts
-        previous_driver_value = driver_value
+        previous_values = values
         previous_accepted = accepted
 
-        if index + 1 < len(driver_positions):
-            next_driver_value = float(driver_positions[index + 1])
-            current_guess = _predict_next_configuration(
-                mechanism,
-                links,
-                joints,
-                driver,
-                accepted,
-                driver_value,
-                next_driver_value,
-                scaling,
-                driver_index=index,
-            )
-
     diagnostics = _build_solve_diagnostics(
-        mechanism,
-        links,
-        joints,
-        driver,
-        driver_positions,
-        coordinates,
-        scaling,
-        subdivision_counts=subdivision_counts,
-        strategies=strategies,
-        corrector_attempts=corrector_attempts,
+        mechanism, links, joints, solver_drivers, positions,
+        coordinates, scaling, subdivision_counts=subdivision_counts,
+        strategies=strategies, corrector_attempts=corrector_attempts,
     )
 
     coordinate_velocities = None
-    if driver_velocities is not None:
+    if prescribed_velocities is not None:
         coordinate_velocities = np.empty_like(coordinates)
-        for index, (driver_position_value, prescribed_velocity) in enumerate(
-            zip(driver_positions, driver_velocities)
+        for index, (q, values, rate) in enumerate(
+            zip(coordinates, positions, prescribed_velocities)
         ):
             coordinate_velocities[index] = solve_velocity(
-                mechanism,
-                links,
-                joints,
-                driver,
-                coordinates[index],
-                float(driver_position_value),
-                float(prescribed_velocity),
-                scaling,
-                driver_index=index,
+                mechanism, links, joints, solver_drivers, q,
+                float(values) if single else values,
+                float(rate) if single else rate, scaling,
+                sample_index=index,
             )
 
     coordinate_accelerations = None
-    if driver_accelerations is not None:
+    if prescribed_accelerations is not None:
         coordinate_accelerations = np.empty_like(coordinates)
-        for index, (driver_position_value, prescribed_acceleration) in enumerate(
-            zip(driver_positions, driver_accelerations)
+        for index, (q, q_dot, values, rate) in enumerate(
+            zip(coordinates, coordinate_velocities, positions, prescribed_accelerations)
         ):
             coordinate_accelerations[index] = solve_acceleration(
-                mechanism,
-                links,
-                joints,
-                driver,
-                coordinates[index],
-                coordinate_velocities[index],
-                float(driver_position_value),
-                float(prescribed_acceleration),
-                scaling,
-                driver_index=index,
+                mechanism, links, joints, solver_drivers, q, q_dot,
+                float(values) if single else values,
+                float(rate) if single else rate, scaling,
+                sample_index=index,
             )
 
     return KinematicSolution._from_snapshot(
-        mechanism,
-        links,
-        joints,
-        driver,
-        coordinates,
+        mechanism, links, joints, selected, coordinates,
         coordinate_velocities=coordinate_velocities,
         coordinate_accelerations=coordinate_accelerations,
-        time=time_values,
-        diagnostics=diagnostics,
+        time=time_values, diagnostics=diagnostics,
     )
 
 
@@ -178,13 +168,13 @@ def _solve_requested_configuration(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
-    driver_value: float,
+    driver: KinematicDriver | Sequence[KinematicDriver],
+    driver_value: float | np.ndarray,
     preferred_guess: np.ndarray,
     scaling: NumericalScaling,
     *,
-    driver_index: int,
-    previous_driver_value: float | None,
+    sample_index: int,
+    previous_driver_value: float | np.ndarray | None,
     previous_accepted: np.ndarray | None,
 ) -> tuple[np.ndarray, int, str, int]:
     """Solve one requested sample and report its accepted recovery path."""
@@ -210,7 +200,7 @@ def _solve_requested_configuration(
             driver_value,
             preferred_guess,
             scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
         )
         return accepted, 0, preferred_strategy, attempt_counter[0]
     except KinematicSolveError as error:
@@ -234,13 +224,13 @@ def _solve_requested_configuration(
                 driver_value,
                 previous_accepted,
                 scaling,
-                driver_index=driver_index,
+                sample_index=sample_index,
             )
             return accepted, 0, "warm_start", attempt_counter[0]
         except KinematicSolveError:
             pass
 
-    if previous_driver_value is None or driver_value == previous_driver_value:
+    if previous_driver_value is None or _same_driver_values(driver_value, previous_driver_value):
         attempted = (
             (preferred_strategy, "warm_start")
             if preferred_strategy != "warm_start"
@@ -262,7 +252,7 @@ def _solve_requested_configuration(
             start_q=previous_accepted,
             target_driver_value=driver_value,
             scaling=scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
             depth=0,
             attempt_counter=attempt_counter,
         )
@@ -284,12 +274,12 @@ def _attempt_configuration(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
-    driver_value: float,
+    driver: KinematicDriver | Sequence[KinematicDriver],
+    driver_value: float | np.ndarray,
     initial_q: np.ndarray,
     scaling: NumericalScaling,
     *,
-    driver_index: int,
+    sample_index: int,
 ) -> np.ndarray:
     """Call the nonlinear corrector while recording one attempted solve."""
     attempt_counter[0] += 1
@@ -301,7 +291,7 @@ def _attempt_configuration(
         driver_value,
         initial_q,
         scaling,
-        driver_index=driver_index,
+        sample_index=sample_index,
     )
 
 
@@ -309,13 +299,13 @@ def _solve_step_from_accepted(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
+    driver: KinematicDriver | Sequence[KinematicDriver],
     *,
-    start_driver_value: float,
+    start_driver_value: float | np.ndarray,
     start_q: np.ndarray,
-    target_driver_value: float,
+    target_driver_value: float | np.ndarray,
     scaling: NumericalScaling,
-    driver_index: int,
+    sample_index: int,
     attempt_counter: list[int],
 ) -> np.ndarray:
     """Attempt one continuation step using predictor first, then warm start."""
@@ -328,7 +318,7 @@ def _solve_step_from_accepted(
         start_driver_value,
         target_driver_value,
         scaling,
-        driver_index=driver_index,
+        sample_index=sample_index,
     )
     try:
         return _attempt_configuration(
@@ -340,7 +330,7 @@ def _solve_step_from_accepted(
             target_driver_value,
             predicted,
             scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
         )
     except KinematicSolveError:
         if np.array_equal(predicted, start_q):
@@ -354,7 +344,7 @@ def _solve_step_from_accepted(
             target_driver_value,
             start_q,
             scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
         )
 
 
@@ -362,37 +352,40 @@ def _solve_with_subdivision(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
+    driver: KinematicDriver | Sequence[KinematicDriver],
     *,
-    start_driver_value: float,
+    start_driver_value: float | np.ndarray,
     start_q: np.ndarray,
-    target_driver_value: float,
+    target_driver_value: float | np.ndarray,
     scaling: NumericalScaling,
-    driver_index: int,
+    sample_index: int,
     depth: int,
     attempt_counter: list[int],
 ) -> tuple[np.ndarray, int]:
     """Recover a failed requested step by recursively bisecting its input interval."""
     if depth >= _MAX_SUBDIVISION_DEPTH:
         raise KinematicSolveError(
-            f"adaptive subdivision exhausted at driver index {driver_index} "
-            f"(target={target_driver_value:.12g}, depth={depth})",
+            f"adaptive subdivision exhausted at sample index {sample_index} "
+            f"(target={_format_driver_values(target_driver_value)}, depth={depth})",
             context=SolveFailureContext(
                 stage="position",
-                driver_index=driver_index,
-                driver_position=target_driver_value,
+                sample_index=sample_index,
+                driver_positions=_driver_positions_tuple(target_driver_value),
+                failure_kind="nonconvergence",
             ),
         )
 
-    midpoint = 0.5 * (start_driver_value + target_driver_value)
-    if midpoint == start_driver_value or midpoint == target_driver_value:
+    midpoint = 0.5 * (np.asarray(start_driver_value) + np.asarray(target_driver_value))
+    if (_same_driver_values(midpoint, start_driver_value)
+            or _same_driver_values(midpoint, target_driver_value)):
         raise KinematicSolveError(
-            f"adaptive subdivision reached floating-point step limit at driver index "
-            f"{driver_index} (target={target_driver_value:.12g})",
+            f"adaptive subdivision reached floating-point step limit at sample index "
+            f"{sample_index} (target={_format_driver_values(target_driver_value)})",
             context=SolveFailureContext(
                 stage="position",
-                driver_index=driver_index,
-                driver_position=target_driver_value,
+                sample_index=sample_index,
+                driver_positions=_driver_positions_tuple(target_driver_value),
+                failure_kind="nonconvergence",
             ),
         )
 
@@ -406,7 +399,7 @@ def _solve_with_subdivision(
             start_q=start_q,
             target_driver_value=midpoint,
             scaling=scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
             attempt_counter=attempt_counter,
         )
     except KinematicSolveError:
@@ -419,7 +412,7 @@ def _solve_with_subdivision(
             start_q=start_q,
             target_driver_value=midpoint,
             scaling=scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
             depth=depth + 1,
             attempt_counter=attempt_counter,
         )
@@ -436,7 +429,7 @@ def _solve_with_subdivision(
             start_q=midpoint_q,
             target_driver_value=target_driver_value,
             scaling=scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
             attempt_counter=attempt_counter,
         )
         return target_q, left_count + 1
@@ -450,7 +443,7 @@ def _solve_with_subdivision(
             start_q=midpoint_q,
             target_driver_value=target_driver_value,
             scaling=scaling,
-            driver_index=driver_index,
+            sample_index=sample_index,
             depth=depth + 1,
             attempt_counter=attempt_counter,
         )
@@ -461,34 +454,38 @@ def _predict_next_configuration(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
+    driver: KinematicDriver | Sequence[KinematicDriver],
     q: np.ndarray,
-    driver_value: float,
-    next_driver_value: float,
+    driver_value: float | np.ndarray,
+    next_driver_value: float | np.ndarray,
     scaling: NumericalScaling,
     *,
-    driver_index: int | None = None,
+    sample_index: int | None = None,
 ) -> np.ndarray:
-    """Return a first-order continuation predictor, falling back to warm start."""
-    delta_driver = next_driver_value - driver_value
-    if delta_driver == 0.0:
+    """Predict a displacement along one prescribed-input segment."""
+    delta = np.asarray(next_driver_value) - np.asarray(driver_value)
+    if not np.any(delta):
         return q.copy()
 
     try:
-        tangent = solve_driver_tangent(
-            mechanism,
-            links,
-            joints,
-            driver,
-            q,
-            driver_value,
-            scaling,
-            driver_index=driver_index,
-        )
+        if isinstance(driver, KinematicDriver):
+            # Preserve the calibrated single-driver tangent and its diagnostics.
+            tangent = solve_driver_tangent(
+                mechanism, links, joints, driver, q,
+                driver_value, scaling, sample_index=sample_index,
+            )
+            predicted = q + float(delta) * tangent
+        else:
+            # One scaled linear solve yields the tangent displacement for
+            # any vector of prescribed increments, without finite differences.
+            displacement = solve_velocity(
+                mechanism, links, joints, driver, q,
+                driver_value, delta, scaling, sample_index=sample_index,
+            )
+            predicted = q + displacement
     except KinematicSolveError:
         return q.copy()
 
-    predicted = q + delta_driver * tangent
     if predicted.shape != q.shape or not np.all(np.isfinite(predicted)):
         return q.copy()
     return predicted
@@ -498,7 +495,7 @@ def _build_solve_diagnostics(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
+    driver: KinematicDriver | Sequence[KinematicDriver],
     driver_positions: np.ndarray,
     coordinates: np.ndarray,
     scaling: NumericalScaling,
@@ -512,6 +509,8 @@ def _build_solve_diagnostics(
     min_singular_values = np.empty(count, dtype=float)
     ranks = np.empty(count, dtype=int)
     residual_norms = np.empty(count, dtype=float)
+    joint_ranks = np.empty(count, dtype=int)
+    rank_issues = np.empty(count, dtype="<U20")
 
     for index, (driver_value, q) in enumerate(zip(driver_positions, coordinates)):
         matrix = jacobian(
@@ -520,7 +519,7 @@ def _build_solve_diagnostics(
             joints,
             driver,
             q,
-            float(driver_value),
+            driver_value,
         )
         phi = residual(
             mechanism,
@@ -528,16 +527,20 @@ def _build_solve_diagnostics(
             joints,
             driver,
             q,
-            float(driver_value),
+            driver_value,
         )
         residual_norms[index] = float(
             np.linalg.norm(scaling.scale_residual(phi), ord=np.inf)
         )
         matrix_hat = scaling.scale_jacobian(matrix)
-        condition, minimum, rank = _jacobian_metrics(matrix_hat)
+        condition, minimum, rank, joint_rank, issue = _rank_analysis(
+            matrix_hat, joint_row_count=2 * len(joints)
+        )
         condition_numbers[index] = condition
         min_singular_values[index] = minimum
         ranks[index] = rank
+        joint_ranks[index] = joint_rank
+        rank_issues[index] = issue
 
     return SolveDiagnostics(
         condition_numbers,
@@ -547,6 +550,8 @@ def _build_solve_diagnostics(
         strategies=strategies,
         corrector_attempts=corrector_attempts,
         residual_norms=residual_norms,
+        joint_ranks=joint_ranks,
+        rank_issues=rank_issues,
     )
 
 
@@ -635,8 +640,11 @@ def _with_recovery_context(
         str(error),
         context=SolveFailureContext(
             stage=context.stage,
-            driver_index=context.driver_index,
-            driver_position=context.driver_position,
+            sample_index=context.sample_index,
+            driver_positions=context.driver_positions,
+            failure_kind=context.failure_kind,
+            joint_rank=context.joint_rank,
+            rank_issue=context.rank_issue,
             residual_norm=context.residual_norm,
             condition_number=context.condition_number,
             min_singular_value=context.min_singular_value,
@@ -651,12 +659,12 @@ def _solve_configuration(
     mechanism: Mechanism,
     links: tuple[Link, ...],
     joints: tuple[_Joint, ...],
-    driver: KinematicDriver,
-    driver_value: float,
+    driver: KinematicDriver | Sequence[KinematicDriver],
+    driver_value: float | np.ndarray,
     initial_q: np.ndarray,
     scaling: NumericalScaling,
     *,
-    driver_index: int | None = None,
+    sample_index: int | None = None,
 ) -> np.ndarray:
     def unpack(q_hat: np.ndarray) -> np.ndarray:
         return scaling.unscale_coordinates(q_hat)
@@ -698,9 +706,9 @@ def _solve_configuration(
         return unpack(candidate_hat).copy()
 
     location = (
-        f"driver index {driver_index} (value={driver_value:.12g})"
-        if driver_index is not None
-        else f"driver value {driver_value:.12g}"
+        f"sample index {sample_index} (value={_format_driver_values(driver_value)})"
+        if sample_index is not None
+        else f"driver value {_format_driver_values(driver_value)}"
     )
     norm_text = f"{residual_norm:.12g}" if np.isfinite(residual_norm) else "unavailable"
     success = bool(getattr(result, "success", False))
@@ -720,8 +728,9 @@ def _solve_configuration(
         f"solver success={success}; solver message={message}",
         context=SolveFailureContext(
             stage="position",
-            driver_index=driver_index,
-            driver_position=driver_value,
+            sample_index=sample_index,
+            driver_positions=_driver_positions_tuple(driver_value),
+            failure_kind="nonconvergence",
             residual_norm=(
                 residual_norm if np.isfinite(residual_norm) else None
             ),
@@ -730,3 +739,19 @@ def _solve_configuration(
             rank=rank,
         ),
     )
+
+def _driver_positions_tuple(value: float | np.ndarray) -> tuple[float, ...]:
+    array = np.atleast_1d(np.asarray(value, dtype=float))
+    return tuple(float(item) for item in array)
+
+
+def _same_driver_values(a: float | np.ndarray, b: float | np.ndarray) -> bool:
+    return bool(np.array_equal(a, b))
+
+
+
+def _format_driver_values(value: float | np.ndarray) -> str:
+    values = np.asarray(value, dtype=float)
+    if values.ndim == 0:
+        return f"{float(values):.12g}"
+    return "[" + ", ".join(f"{float(item):.12g}" for item in values) + "]"

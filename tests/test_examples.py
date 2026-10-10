@@ -13,6 +13,7 @@ _EXAMPLES = [
     "slider_crank.py",
     "slider_crank_analysis.py",
     "slider_crank_analysis_comparison.py",
+    "serial_two_revolute.py",
 ]
 
 

@@ -116,7 +116,7 @@ def _control_case(scale: float) -> StudyCase:
     return StudyCase(
         name="control_revolute",
         mechanism=mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=np.linspace(0.0, 2.0 * np.pi, 361),
         ),
@@ -156,7 +156,7 @@ def _baseline_four_bar(scale: float) -> StudyCase:
     return StudyCase(
         name="baseline_four_bar",
         mechanism=mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=np.linspace(0.8, 1.3, 25),
         ),
@@ -201,7 +201,7 @@ def _problem_four_bar(scale: float) -> StudyCase:
     return StudyCase(
         name="problem_four_bar",
         mechanism=mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=np.linspace(0.0, 2.0 * np.pi, 361),
         ),
@@ -265,12 +265,13 @@ def _solve_step(
     mechanism = case.mechanism
     links = mechanism.links
     joints = mechanism.joints
+    input_driver = KinematicDriver(case.input_joint, position=input_value)
 
     def fun(q: np.ndarray) -> np.ndarray:
-        return residual(mechanism, links, joints, case.input_joint, q, input_value)
+        return residual(mechanism, links, joints, input_driver, q, input_value)
 
     def jac(q: np.ndarray) -> np.ndarray:
-        return jacobian(mechanism, links, joints, case.input_joint, q, input_value)
+        return jacobian(mechanism, links, joints, input_driver, q, input_value)
 
     result = optimize.root(fun, initial_q, jac=jac, method="hybr")
     expected_shape = initial_q.shape

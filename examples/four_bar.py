@@ -47,7 +47,7 @@ def main():
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=values,
         ),

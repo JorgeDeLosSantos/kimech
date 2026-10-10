@@ -62,3 +62,28 @@ jobs:
           /tmp/kimech-wheel-check/bin/python -m pip install --upgrade pip
           /tmp/kimech-wheel-check/bin/python -m pip install dist/*.whl
           /tmp/kimech-wheel-check/bin/python -c "from importlib.metadata import version; import kimech; assert kimech.__version__ == version('kimech'); print(kimech.__version__)"
+          /tmp/kimech-wheel-check/bin/python - <<'PY'
+          from kimech import KinematicDriver, Mechanism, solve
+
+          mechanism = Mechanism("wheel_multidof_smoke")
+          left = mechanism.ground.add_point("left", (0.0, 0.0))
+          right = mechanism.ground.add_point("right", (2.0, 0.0))
+          a = mechanism.add_link("a")
+          b = mechanism.add_link("b")
+          ja = mechanism.revolute(left, a.add_point("pivot", (0.0, 0.0)))
+          jb = mechanism.revolute(right, b.add_point("pivot", (0.0, 0.0)))
+
+          result = solve(
+              mechanism,
+              drivers=[
+                  KinematicDriver(ja, position=0.2, velocity=1.0, acceleration=0.0),
+                  KinematicDriver(jb, position=-0.3, velocity=-0.5, acceleration=0.2),
+              ],
+              initial_guess={a: (0.0, 0.0, 0.2), b: (2.0, 0.0, -0.3)},
+          )
+          assert len(result) == 1 and len(result.drivers) == 2
+          assert result.has_velocity and result.has_acceleration
+          assert abs(result.joint_coordinates(ja)[0] - 0.2) < 1e-8
+          assert abs(result.joint_coordinates(jb)[0] + 0.3) < 1e-8
+          print("Installed wheel Multi-DOF smoke test passed")
+          PY

@@ -1,12 +1,12 @@
 # Kimech — Package structure and public API
 
-> Status: public API for `0.6.0`.
+> Status: public API prepared for `0.7.0` (publication pending).
 >
-> Kimech remains a young project, and this API may evolve in future versions. [`study-0.6.0-kinematic-driver.md`](study-0.6.0-kinematic-driver.md) records the current Driver/time design decisions; earlier design documents remain available for historical context.
+> Kimech `0.7.0` intentionally breaks the older `0.6.x` `driver=` API. See [`CHANGELOG.md`](../CHANGELOG.md) for migration guidance. [`study-0.6.0-kinematic-driver.md`](study-0.6.0-kinematic-driver.md) is historical.
 
 ## 1. Overview
 
-Kimech models planar rigid-body mechanisms declaratively, solves position configurations with one prescribed joint coordinate, and optionally solves analytic velocity and acceleration kinematics for the same accepted configurations.
+Kimech models planar rigid-body mechanisms declaratively and solves position, velocity and acceleration kinematics for one or more independent prescribed joint coordinates.
 
 A differential sweep looks like:
 
@@ -28,7 +28,7 @@ driver = KinematicDriver(
 
 solution = solve(
     mechanism,
-    driver=driver,
+    drivers=driver,
     initial_guess=initial_guess,
 )
 
@@ -37,7 +37,7 @@ velocities = solution.point_velocities(point_p)
 accelerations = solution.point_accelerations(point_p)
 ```
 
-`KinematicDriver.position` parameterizes configurations; it is not interpreted as physical time. In 0.6.0 a driver targets the natural coordinate of one revolute or prismatic joint. Optional `velocity` and `acceleration` values are physical derivatives with respect to a common external time variable.
+An ordered set of `KinematicDriver.position` histories parameterizes the requested path through input-coordinate space; it is not interpreted as physical time. Each driver targets the natural coordinate of one revolute or prismatic joint. Optional `velocity` and `acceleration` values are physical derivatives with respect to a common external time variable.
 
 ## 2. Package structure
 
@@ -65,7 +65,7 @@ src/
         └── animation.py
 ```
 
-The package remains intentionally flat. Mechanism-specific solver classes, backend registries, and plugin systems are not part of `0.6.0`.
+The package remains intentionally flat. Mechanism-specific solver classes, backend registries, and plugin systems are not part of `0.7.0`.
 
 ### Module responsibilities
 
@@ -217,7 +217,7 @@ Topology objects use snapshot semantics: extending the source mechanism later do
 
 ## 5. Solving
 
-A solve receives one explicit `KinematicDriver`:
+A solve receives one or more explicit `KinematicDriver` objects. The `drivers=` parameter accepts either a single driver or an ordered sequence:
 
 ```python
 driver = KinematicDriver(
@@ -229,32 +229,34 @@ driver = KinematicDriver(
 
 solution = solve(
     mechanism,
-    *,
-    driver=driver,
+    drivers=driver,
     initial_guess=initial_guess,
     time=None,
 )
+
+# Multi-DOF uses a list/tuple with one driver per independent motion:
+# result = solve(mechanism, drivers=[driver_1, driver_2], initial_guess=guess)
 ```
 
-In 0.6.0, `KinematicDriver` targets the natural coordinate of one revolute or prismatic joint. The target joint must belong to the mechanism snapshot.
+Every prescribed joint must belong to the mechanism. Drivers cannot prescribe the same joint twice, and the number of independent drivers must agree with the structural mobility.
 
-`position` is required and may be either a finite scalar or a finite, non-empty one-dimensional sequence. Position determines the number of requested samples. `solve()` always returns a `KinematicSolution`:
+`position` is required and may be either a finite scalar or a finite, non-empty one-dimensional sequence. All driver position histories must have the same number of samples; samples are synchronized by index, without automatic interpolation or position broadcasting. `solve()` always returns a `KinematicSolution`:
 
-- scalar `position` produces a one-sample solution;
-- one-dimensional `position` produces an ordered multi-sample solution.
+- scalar positions for all drivers produce a one-sample solution;
+- one-dimensional histories of matching length produce an ordered multi-sample solution.
 
 For a scalar solve, access the configuration with `solution[0]`.
 
-The requested kinematic level is determined by optional driver differential data:
+The requested kinematic level is determined by the optional differential data, which must be available for **all** drivers at each requested level:
 
 ```text
-position only
+positions only
     -> position
 
-position + velocity
+positions + all driver velocities
     -> position + velocity
 
-position + velocity + acceleration
+positions + all driver velocities + all driver accelerations
     -> position + velocity + acceleration
 ```
 
@@ -265,11 +267,11 @@ When driver position is scalar, requested differential data must also be scalar.
 - a scalar, explicitly broadcast to every sample; or
 - a one-dimensional array with exactly the same length as `position`.
 
-General NumPy broadcasting is not part of the public contract. Prescribed driver data are validated by `KinematicDriver` before solving begins.
+General NumPy broadcasting is not part of the public contract. Individual histories are validated by `KinematicDriver`; alignment and joint ownership are validated by `solve()`.
 
 ### Position semantics
 
-For sweeps, user order is preserved and each accepted position configuration warm-starts the next position solve. Differential phases run only after the complete position history has been accepted, so requesting velocity or acceleration does not alter branch continuation.
+For sweeps, user sample order is preserved; continuation proceeds along the straight segment between successive prescribed-input vectors and each accepted configuration warm-starts the next position solve. Differential phases run only after the complete position history has been accepted, so requesting velocity or acceleration does not alter branch continuation.
 
 `initial_guess` is required because it selects the numerical starting state and, in mechanisms with multiple assembly branches, helps select the intended branch. It may be either:
 
@@ -278,7 +280,7 @@ For sweeps, user order is preserved and each accepted position configuration war
 
 Kimech internally solves the position problem in dimensionless scaled coordinates and validates accepted configurations with a dimensionless residual tolerance. Public positions and derived quantities remain in the user's original units.
 
-The current model supports one `KinematicDriver` and square mobility-one R/P solve systems.
+The current model supports fully prescribed planar R/P systems with a square constraint system: `2 * len(joints) + len(drivers) == 3 * len(links)`. Numerical rank checks additionally distinguish singular joint geometry from dependent drivers.
 
 ### Differential formulation
 
@@ -294,7 +296,7 @@ Velocity solves
 J(q)\dot q=b_v,
 \]
 
-where the geometric rows of `b_v` are zero and the driver row contains the prescribed driver velocity.
+The geometric rows of `b_v` are zero; the final rows contain all prescribed joint-coordinate velocities in driver order.
 
 Acceleration solves
 
@@ -306,13 +308,13 @@ Kimech reuses the analytic position Jacobian and computes analytic second-order 
 
 ## 6. Time semantics
 
-`KinematicDriver.position` samples remain the continuation/configuration parameters. An optional `time=` argument to `solve()` associates those requested samples with physical instants.
+Aligned `KinematicDriver.position` samples define an ordered path in prescribed-input space. An optional `time=` argument to `solve()` associates those requested samples with physical instants.
 
-For a multi-sample solve, `time` must be a finite one-dimensional array with the same length as the driver position history and must be strictly increasing. A scalar driver position may use a finite scalar time. Omitting `time` leaves the solution untimed.
+For a multi-sample solve, `time` must be a finite one-dimensional array with the common sample count and must be strictly increasing. A scalar driver position may use a finite scalar time. Omitting `time` leaves the solution untimed.
 
 Supplying time does **not**:
 
-- change the continuation parameter from driver position to time;
+- change continuation from the prescribed-input path to time;
 - alter predictor/corrector step selection;
 - trigger numerical integration;
 - numerically differentiate driver position;
@@ -347,7 +349,7 @@ driver = KinematicDriver(
 
 solution = solve(
     mechanism,
-    driver=driver,
+    drivers=driver,
     time=time,
     initial_guess=initial_guess,
 )
@@ -363,7 +365,7 @@ Important properties:
 
 ```python
 config.mechanism
-config.driver
+config.drivers
 config.time
 
 config.coordinates
@@ -419,7 +421,7 @@ Important properties:
 
 ```python
 solution.mechanism
-solution.driver
+solution.drivers
 solution.time
 
 solution.coordinates
@@ -430,18 +432,22 @@ solution.has_velocity
 solution.has_acceleration
 ```
 
-The retained `solution.driver` is the prescribed driver snapshot for the full result history. Its position and optional differential data preserve the requested sample order:
+Each `solution.drivers` entry retains the requested joint and aligned
+position/velocity/acceleration histories. For a single-driver case:
 
 ```python
-solution.driver.joint
-solution.driver.position
-solution.driver.velocity
-solution.driver.acceleration
+solution.drivers[0].joint
+solution.drivers[0].position       # shape (N,) for a sweep
+solution.drivers[0].velocity
+solution.drivers[0].acceleration
 ```
 
-For a multi-sample result, driver histories have shape `(N,)`. Indexed configurations retain a scalar driver snapshot, so `solution[i].driver.position` is a scalar. Optional `time` has shape `(N,)`.
+`solution[i].drivers` is a tuple of the corresponding single-sample
+prescriptions. Generalized state shapes do not depend on the number of drivers:
+
 - `coordinates`: `(N, 3*n)`;
-- optional generalized differential histories: `(N, 3*n)`.
+- optional generalized differential histories: `(N, 3*n)`;
+- optional `time`: `(N,)`.
 
 ### Indexing
 
@@ -482,6 +488,18 @@ for config in solution:
 
 Fancy indexing and mutation operations such as item assignment, `append`, or `extend` are not part of the public API. Empty `KinematicSolution` objects are valid containers, although `solve()` does not produce them.
 
+### D17 — Jacobian rank diagnostics
+
+`SolveDiagnostics.ranks` describes the complete dimensionless driven Jacobian.
+`SolveDiagnostics.joint_ranks` records the rank of its geometric rows, and
+`SolveDiagnostics.rank_issues` classifies each accepted sample as
+`regular`, `joint_rank_loss`, or `dependent_drivers`.
+The summary also reports `minimum_joint_rank` and counts by issue type.
+
+A position may be valid at a singularity, but Kimech does not invent
+nonunique velocities or accelerations. A nonlinear corrector failure is
+reported as `nonconvergence`, not automatically as a singularity.
+
 ## 9. Driver-coordinate sensitivity
 
 Driver-coordinate sensitivity is an explicit downstream analysis of an accepted solution:
@@ -497,7 +515,7 @@ It evaluates the local derivative
 \frac{dq}{du}
 \]
 
-at every requested configuration, where `u` is the coordinate prescribed by `solution.driver`. In 0.6.0 this is the natural coordinate of the selected revolute or prismatic joint. Sensitivity is not a time derivative and does not require driver velocity or acceleration data.
+at every requested configuration, where `u` is the coordinate prescribed by `solution.drivers[0]`. For 0.7.0, `driver_sensitivity()` remains limited to solutions with **exactly one** driver and rejects Multi-DOF solutions explicitly. Sensitivity is not a time derivative and does not require driver velocity or acceleration data.
 
 `DriverSensitivity` exposes:
 
@@ -525,7 +543,19 @@ See [`study-0.5.0-input-sensitivity.md`](study-0.5.0-input-sensitivity.md).
 
 Because Kimech remains pre-`1.0`, API cleanups are applied without compatibility aliases.
 
-For `0.6.0`:
+For `0.7.0` (breaking change):
+
+```text
+solve(mechanism, driver=...)
+    -> solve(mechanism, drivers=...)
+
+KinematicSolution.driver
+Configuration.driver
+    -> KinematicSolution.drivers
+       Configuration.drivers
+```
+
+For `0.6.0` (historical, superseded by the 0.7.0 driver tuple):
 
 ```text
 KinematicSolution.input_joint
@@ -547,8 +577,8 @@ InputSensitivity
 
 SolveFailureContext.input_index
 SolveFailureContext.input_position
-    -> SolveFailureContext.driver_index
-       SolveFailureContext.driver_position
+    -> SolveFailureContext.sample_index
+       SolveFailureContext.driver_positions
 ```
 
 For `0.3.0`:
@@ -713,7 +743,7 @@ fig, ax = plot(config)
 fig.savefig("mechanism.svg")
 ```
 
-Kimech renders a schematic rigid-body scaffold rather than physical/CAD geometry. Structural joint points define the primary scaffold. Mobile links with fewer than two structural points fall back to their declared body points so plate-like bodies remain visually coherent. Auxiliary points on an already-defined scaffold remain markers and receive lightweight visual connectors to that scaffold. Ground does not use this fallback.
+Kimech renders a schematic rigid-body scaffold rather than physical/CAD geometry. Separate grounded revolute pivots use individual triangular supports and are never connected by a ground-body scaffold; grounded prismatic joints retain their guides. Structural joint points define the primary mobile-link scaffold. Mobile links with fewer than two structural points fall back to their declared body points so plate-like bodies remain visually coherent. Auxiliary points on an already-defined scaffold remain markers and receive lightweight visual connectors to that scaffold. Ground does not use this fallback.
 
 Joint glyph sizes are scaled from effective body scaffolds rather than arbitrary remote auxiliary points. The plot bounds still include all rendered geometry.
 
@@ -759,9 +789,9 @@ animation.save("mechanism.gif", writer="pillow")
 
 Public `Configuration` and `KinematicSolution` constructors validate the structure, shape, finiteness, and entity compatibility of supplied state. They do not certify that manually supplied coordinates satisfy the mechanism constraints. Results returned by `solve()` contain states accepted by the solver.
 
-For `Configuration`, optional prescribed metadata is represented by a single-sample `KinematicDriver`. A configuration driver must contain exactly one sample; acceleration data remain subject to the driver's requirement that velocity is also present.
+For `Configuration`, optional prescribed metadata is an ordered tuple of single-sample `KinematicDriver` objects. Every configuration driver must contain exactly one sample; acceleration data require velocity data.
 
-Result objects retain the link layout captured when they are constructed or solved. Solve-generated `KinematicSolution` objects retain the complete `KinematicDriver` snapshot together with the associated joint snapshot for downstream analyses such as driver sensitivity. This keeps the mapping between entities and stored state stable even if the mechanism object is later extended. Queries require entities compatible with the retained snapshot.
+Result objects retain the link layout captured when constructed or solved. Solve-generated `KinematicSolution` objects retain the ordered driver tuple and the joint snapshot for downstream analyses such as one-driver sensitivity. This keeps the mapping between entities and stored state stable even if the mechanism object is later extended. Queries require entities compatible with the retained snapshot.
 
 ## 17. Examples and tests
 
@@ -771,12 +801,14 @@ The examples deliberately separate geometric motion/animation from quantitative 
 examples/
 ├── four_bar.py
 ├── four_bar_analysis.py
+├── serial_two_revolute.py
 ├── slider_crank.py
 ├── slider_crank_analysis.py
 └── slider_crank_analysis_comparison.py
 ```
 
 - `four_bar.py` and `slider_crank.py` focus on position solving and animation.
+- `serial_two_revolute.py` validates multi-input 2R position, velocity, and acceleration against analytical formulas.
 - `four_bar_analysis.py` plots rocker angle, angular velocity, angular acceleration, and coupler-point differential magnitudes versus prescribed crank angle.
 - `slider_crank_analysis.py` plots slider displacement, velocity, and acceleration versus crank angle and demonstrates equivalent prismatic-input reconstruction.
 - `slider_crank_analysis_comparison.py` compares position, velocity, and acceleration with an independent closed-form slider-crank solution.
@@ -785,4 +817,4 @@ The test suite covers model/constraint behavior, position solving, differential 
 
 ## 18. Deliberately absent API
 
-`0.6.0` currently provides one `KinematicDriver` and optional explicit solve-time histories, but not multiple simultaneous drivers, general multi-DOF solving, motion laws, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. The release adds structural topology introspection, structured solve observability, and explicit one-driver sensitivity without defining a universal near-singularity policy.
+The unreleased `0.7.0` API supports multiple simultaneous independent R/P drivers and general fully prescribed Multi-DOF kinematics. Motion laws, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, and mechanism-specific solver classes remain outside scope. `driver_sensitivity()` remains intentionally restricted to a single driver.

@@ -79,7 +79,7 @@ def test_four_bar_full_cycle_is_direction_consistent_with_valid_process_diagnost
 
     forward = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=values,
         ),
@@ -87,7 +87,7 @@ def test_four_bar_full_cycle_is_direction_consistent_with_valid_process_diagnost
     )
     reverse = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=values[::-1],
         ),
@@ -99,7 +99,7 @@ def test_four_bar_full_cycle_is_direction_consistent_with_valid_process_diagnost
     assert forward_diagnostics is not None
     assert reverse_diagnostics is not None
 
-    np.testing.assert_array_equal(forward.driver.position, reverse.driver.position)
+    np.testing.assert_array_equal(forward.drivers[0].position, reverse.drivers[0].position)
     assert np.all(forward_diagnostics.ranks == 9)
     assert np.all(reverse_diagnostics.ranks == 9)
     assert np.all(forward_diagnostics.residual_norms <= 1e-9)
@@ -134,7 +134,7 @@ def test_slider_crank_dead_center_diagnostics_depend_on_selected_driver():
 
     approach = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             crank_joint,
             position=np.linspace(0.7, 0.0, 40),
         ),
@@ -144,7 +144,7 @@ def test_slider_crank_dead_center_diagnostics_depend_on_selected_driver():
 
     crank_driven = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             crank_joint,
             position=0.0,
         ),
@@ -153,7 +153,7 @@ def test_slider_crank_dead_center_diagnostics_depend_on_selected_driver():
     slider_position = dead_center.joint_coordinate(slider_joint)
     slider_driven = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             slider_joint,
             position=slider_position,
         ),

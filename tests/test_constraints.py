@@ -337,8 +337,14 @@ def test_constraints_validate_inputs_and_snapshot_membership():
         residual(mechanism, links, joints, KinematicDriver(input_joint, position=0.0), q[:-1], 0.0)
     with pytest.raises(ValueError, match="finite"):
         residual(mechanism, links, joints, KinematicDriver(input_joint, position=0.0), q * np.nan, 0.0)
-    with pytest.raises(ValueError, match="scalar"):
-        residual(mechanism, links, joints, KinematicDriver(input_joint, position=0.0), q, [0.0])
+    # A single prescribed input may be represented by a length-one vector
+    # after the multi-driver constraint assembly normalization.
+    np.testing.assert_allclose(
+        residual(mechanism, links, joints, KinematicDriver(input_joint, position=0.0), q, [0.0]),
+        residual(mechanism, links, joints, KinematicDriver(input_joint, position=0.0), q, 0.0),
+    )
+    with pytest.raises(ValueError, match="shape"):
+        residual(mechanism, links, joints, KinematicDriver(input_joint, position=0.0), q, [0.0, 0.1])
     with pytest.raises(ValueError, match="finite"):
         residual(mechanism, links, joints, KinematicDriver(input_joint, position=0.0), q, np.inf)
 

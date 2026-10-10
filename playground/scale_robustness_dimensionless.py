@@ -28,6 +28,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import optimize
 
+from kimech import KinematicDriver
 from kimech._constraints import jacobian, residual
 from kimech.joints import PrismaticJoint, RevoluteJoint
 from kimech.solver import _RESIDUAL_TOL
@@ -119,18 +120,19 @@ def _solve_scaled_step(
     mechanism = case.mechanism
     links = mechanism.links
     joints = mechanism.joints
+    input_driver = KinematicDriver(case.input_joint, position=input_value)
 
     def unpack(q_hat: np.ndarray) -> np.ndarray:
         return q_scale * q_hat
 
     def fun(q_hat: np.ndarray) -> np.ndarray:
         q = unpack(q_hat)
-        phi = residual(mechanism, links, joints, case.input_joint, q, input_value)
+        phi = residual(mechanism, links, joints, input_driver, q, input_value)
         return phi / phi_scale
 
     def jac(q_hat: np.ndarray) -> np.ndarray:
         q = unpack(q_hat)
-        matrix = jacobian(mechanism, links, joints, case.input_joint, q, input_value)
+        matrix = jacobian(mechanism, links, joints, input_driver, q, input_value)
         return (matrix * q_scale[np.newaxis, :]) / phi_scale[:, np.newaxis]
 
     result = optimize.root(fun, initial_q_hat, jac=jac, method="hybr")
@@ -168,7 +170,7 @@ def _solve_scaled_step(
         mechanism,
         links,
         joints,
-        case.input_joint,
+        input_driver,
         candidate_q,
         input_value,
     )

@@ -51,7 +51,7 @@ def _four_bar_solution():
     mechanism.revolute(rocker_d, ground_d)
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=np.linspace(0.8, 1.3, 4),
         ),
@@ -90,7 +90,7 @@ def _slider_crank_solution():
     )
     return solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             input_joint,
             position=np.linspace(0.7, 1.2, 4),
         ),
@@ -189,7 +189,7 @@ def test_animate_rejects_invalid_solution_and_empty_solution():
     solution, _ = _four_bar_solution()
     empty = KinematicSolution(
         solution.mechanism,
-        KinematicDriver._from_history(solution.driver.joint, np.empty(0)),
+        KinematicDriver._from_history(solution.drivers[0].joint, np.empty(0)),
         np.empty((0, solution.coordinates.shape[1])),
     )
     with pytest.raises(ValueError, match="at least one"):
@@ -421,4 +421,22 @@ def test_trace_artists_and_viewport_remain_fixed_while_data_updates():
         assert ax.get_xlim() == xlim
         assert ax.get_ylim() == ylim
 
+    _finish(animation)
+
+
+def test_animation_ground_supports_are_static_across_frames():
+    solution, _ = _four_bar_solution()
+    animation = animate(solution)
+    ax = animation._fig.axes[0]
+    supports = _artists_with_gid(ax, "kimech-ground:revolute-support")
+    assert len(supports) == 2
+    assert not _artists_with_gid(ax, "kimech-body:ground")
+    reference_vertices = [support.get_xy().copy() for support in supports]
+    initial_counts = (len(ax.lines), len(ax.collections), len(ax.patches))
+    for index in range(len(solution)):
+        animation._func(index)
+        assert _artists_with_gid(ax, "kimech-ground:revolute-support") == supports
+        for patch, vertices in zip(supports, reference_vertices):
+            np.testing.assert_allclose(patch.get_xy(), vertices)
+        assert (len(ax.lines), len(ax.collections), len(ax.patches)) == initial_counts
     _finish(animation)

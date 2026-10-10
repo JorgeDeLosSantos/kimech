@@ -10,6 +10,7 @@ import numpy as np
 from ._geometry import perpendicular, rotation_matrix
 from .diagnostics import SolveDiagnostics
 from .driver import KinematicDriver
+from ._drivers import normalize_drivers, sampled_driver
 from .joints import PrismaticJoint, RevoluteJoint
 from .model import Ground, Link, Mechanism, Point
 
@@ -24,7 +25,7 @@ class Configuration:
         "_coordinate_accelerations",
         "_coordinate_velocities",
         "_coordinates",
-        "_driver",
+        "_drivers",
         "_links",
         "_mechanism",
         "_time",
@@ -37,7 +38,7 @@ class Configuration:
         *,
         coordinate_velocities: Sequence[float] | np.ndarray | None = None,
         coordinate_accelerations: Sequence[float] | np.ndarray | None = None,
-        driver: KinematicDriver | None = None,
+        drivers: KinematicDriver | Sequence[KinematicDriver] | None = None,
         time: float | None = None,
     ) -> None:
         _validate_mechanism(mechanism)
@@ -47,7 +48,7 @@ class Configuration:
             coordinates,
             coordinate_velocities=coordinate_velocities,
             coordinate_accelerations=coordinate_accelerations,
-            driver=driver,
+            drivers=drivers,
             time=time,
         )
 
@@ -60,7 +61,7 @@ class Configuration:
         *,
         coordinate_velocities: Sequence[float] | np.ndarray | None = None,
         coordinate_accelerations: Sequence[float] | np.ndarray | None = None,
-        driver: KinematicDriver | None = None,
+        drivers: KinematicDriver | Sequence[KinematicDriver] | None = None,
         time: float | None = None,
     ) -> Configuration:
         configuration = cls.__new__(cls)
@@ -70,7 +71,7 @@ class Configuration:
             coordinates,
             coordinate_velocities=coordinate_velocities,
             coordinate_accelerations=coordinate_accelerations,
-            driver=driver,
+            drivers=drivers,
             time=time,
         )
         return configuration
@@ -83,15 +84,12 @@ class Configuration:
         *,
         coordinate_velocities: Sequence[float] | np.ndarray | None,
         coordinate_accelerations: Sequence[float] | np.ndarray | None,
-        driver: KinematicDriver | None,
+        drivers: KinematicDriver | Sequence[KinematicDriver] | None,
         time: float | None,
     ) -> None:
-        if driver is not None:
-            if not isinstance(driver, KinematicDriver):
-                raise TypeError("driver must be a KinematicDriver or None")
+        normalized_drivers = normalize_drivers(drivers, allow_empty=True, single_sample=True)
+        for driver in normalized_drivers:
             _validate_joint(mechanism, links, driver.joint)
-            if driver.sample_count != 1:
-                raise ValueError("configuration driver must contain exactly one sample")
         if coordinate_accelerations is not None and coordinate_velocities is None:
             raise ValueError("coordinate_accelerations requires coordinate_velocities")
 
@@ -113,7 +111,7 @@ class Configuration:
             name="coordinate_accelerations",
             shape=state_shape,
         )
-        self._driver = driver
+        self._drivers = normalized_drivers
         self._time = _optional_finite_scalar(time, name="time")
 
     @property
@@ -122,9 +120,9 @@ class Configuration:
         return self._mechanism
 
     @property
-    def driver(self) -> KinematicDriver | None:
-        """Return the prescribed kinematic driver for this configuration."""
-        return self._driver
+    def drivers(self) -> tuple[KinematicDriver, ...]:
+        """Return ordered single-sample kinematic prescriptions."""
+        return self._drivers
 
     @property
     def time(self) -> float | None:
@@ -279,7 +277,7 @@ class KinematicSolution:
         "_coordinate_velocities",
         "_coordinates",
         "_diagnostics",
-        "_driver",
+        "_drivers",
         "_joints",
         "_links",
         "_mechanism",
@@ -289,7 +287,7 @@ class KinematicSolution:
     def __init__(
         self,
         mechanism: Mechanism,
-        driver: KinematicDriver,
+        drivers: KinematicDriver | Sequence[KinematicDriver],
         coordinates: Sequence[Sequence[float]] | np.ndarray,
         *,
         coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None = None,
@@ -302,7 +300,7 @@ class KinematicSolution:
             mechanism,
             mechanism.links,
             mechanism.joints,
-            driver,
+            drivers,
             coordinates,
             coordinate_velocities=coordinate_velocities,
             coordinate_accelerations=coordinate_accelerations,
@@ -316,7 +314,7 @@ class KinematicSolution:
         mechanism: Mechanism,
         links: tuple[Link, ...],
         joints: tuple[_Joint, ...],
-        driver: KinematicDriver,
+        drivers: KinematicDriver | Sequence[KinematicDriver],
         coordinates: Sequence[Sequence[float]] | np.ndarray,
         *,
         coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None = None,
@@ -329,7 +327,7 @@ class KinematicSolution:
             mechanism,
             links,
             joints,
-            driver,
+            drivers,
             coordinates,
             coordinate_velocities=coordinate_velocities,
             coordinate_accelerations=coordinate_accelerations,
@@ -343,7 +341,7 @@ class KinematicSolution:
         mechanism: Mechanism,
         links: tuple[Link, ...],
         joints: tuple[_Joint, ...],
-        driver: KinematicDriver,
+        drivers: KinematicDriver | Sequence[KinematicDriver],
         coordinates: Sequence[Sequence[float]] | np.ndarray,
         *,
         coordinate_velocities: Sequence[Sequence[float]] | np.ndarray | None,
@@ -352,13 +350,13 @@ class KinematicSolution:
         diagnostics: SolveDiagnostics | None,
     ) -> None:
         _validate_mechanism(mechanism)
-        if not isinstance(driver, KinematicDriver):
-            raise TypeError("driver must be a KinematicDriver")
-        _validate_joint(mechanism, links, driver.joint)
+        normalized_drivers = normalize_drivers(drivers)
+        for driver in normalized_drivers:
+            _validate_joint(mechanism, links, driver.joint)
         if coordinate_accelerations is not None and coordinate_velocities is None:
             raise ValueError("coordinate_accelerations requires coordinate_velocities")
 
-        values = driver._position_history()
+        values = normalized_drivers[0]._position_history()
         coordinate_array = _finite_float_array(coordinates, name="coordinates", ndim=2)
         state_shape = (len(values), 3 * len(links))
         if coordinate_array.shape != state_shape:
@@ -388,7 +386,7 @@ class KinematicSolution:
         self._mechanism = mechanism
         self._links = links
         self._joints = joints
-        self._driver = driver
+        self._drivers = normalized_drivers
         self._time = time_array
         self._coordinates = coordinate_array
         self._coordinate_velocities = velocity_array
@@ -401,9 +399,9 @@ class KinematicSolution:
         return self._mechanism
 
     @property
-    def driver(self) -> KinematicDriver:
-        """Return the prescribed kinematic driver snapshot."""
-        return self._driver
+    def drivers(self) -> tuple[KinematicDriver, ...]:
+        """Return the ordered prescribed kinematic driver snapshots."""
+        return self._drivers
 
     @property
     def time(self) -> np.ndarray | None:
@@ -447,26 +445,16 @@ class KinematicSolution:
         return self._coordinate_accelerations is not None
 
     def __len__(self) -> int:
-        return len(self._driver)
+        return len(self._drivers[0])
 
     def __getitem__(self, index: int | slice) -> Configuration | KinematicSolution:
         """Return one configuration or a sliced kinematic solution."""
-        positions = self._driver._position_history()
-        velocities = self._driver._velocity_history()
-        accelerations = self._driver._acceleration_history()
-
         if isinstance(index, slice):
-            sliced_driver = KinematicDriver._from_history(
-                self._driver.joint,
-                positions[index],
-                None if velocities is None else velocities[index],
-                None if accelerations is None else accelerations[index],
-            )
             return KinematicSolution._from_snapshot(
                 self._mechanism,
                 self._links,
                 self._joints,
-                sliced_driver,
+                tuple(sampled_driver(driver, index) for driver in self._drivers),
                 self._coordinates[index],
                 coordinate_velocities=(
                     None if self._coordinate_velocities is None
@@ -476,17 +464,11 @@ class KinematicSolution:
                     None if self._coordinate_accelerations is None
                     else self._coordinate_accelerations[index]
                 ),
-                time=(None if self._time is None else self._time[index]),
-                diagnostics=(None if self._diagnostics is None else self._diagnostics._slice(index)),
+                time=None if self._time is None else self._time[index],
+                diagnostics=None if self._diagnostics is None else self._diagnostics._slice(index),
             )
 
         item = operator.index(index)
-        sample_driver = KinematicDriver(
-            self._driver.joint,
-            position=float(positions[item]),
-            velocity=(None if velocities is None else float(velocities[item])),
-            acceleration=(None if accelerations is None else float(accelerations[item])),
-        )
         return Configuration._from_snapshot(
             self._mechanism,
             self._links,
@@ -498,8 +480,8 @@ class KinematicSolution:
                 None if self._coordinate_accelerations is None
                 else self._coordinate_accelerations[item]
             ),
-            driver=sample_driver,
-            time=(None if self._time is None else self._time[item]),
+            drivers=tuple(sampled_driver(driver, item) for driver in self._drivers),
+            time=None if self._time is None else self._time[item],
         )
 
     def __iter__(self) -> Iterator[Configuration]:

@@ -3,13 +3,13 @@
 **Planar mechanism kinematics for Python.**
 
 Kimech models planar rigid-body mechanisms declaratively and solves position,
-velocity, and acceleration kinematics for one-DOF mechanisms with revolute and
-prismatic joints.
+velocity, and acceleration kinematics for fully prescribed planar mechanisms
+with revolute and prismatic joints, including Multi-DOF systems.
 
 The public workflow is centered on four concepts:
 
 1. build a {py:class}`~kimech.Mechanism`;
-2. prescribe one coordinate with a {py:class}`~kimech.KinematicDriver`;
+2. prescribe independent coordinates with one or more {py:class}`~kimech.KinematicDriver` objects;
 3. call {py:func}`~kimech.solve`;
 4. inspect the resulting {py:class}`~kimech.KinematicSolution`.
 
@@ -26,14 +26,15 @@ driver = KinematicDriver(
 
 solution = solve(
     mechanism,
-    driver=driver,
+    drivers=driver,
     initial_guess=initial_guess,
 )
 ```
 
-Kimech is currently a **one-DOF planar R/P kinematics library**. Dynamics,
-multiple simultaneous Drivers, branch enumeration, pseudo-arclength
-continuation, and motion-law objects are outside the 0.6.0 scope.
+The **unreleased 0.7.0 development branch** supports multiple simultaneous
+independent drivers for planar R/P mechanisms. Dynamics, automatic driver
+selection, branch enumeration, pseudo-arclength continuation and continuous
+motion-law objects remain outside this release.
 
 ```{toctree}
 :maxdepth: 2
@@ -47,6 +48,8 @@ getting-started
 :caption: User guide
 
 concepts
+kinematic-analysis
+visualization
 time-aware-kinematics
 examples
 ```

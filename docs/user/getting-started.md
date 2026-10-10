@@ -2,7 +2,7 @@
 
 ## Installation
 
-Install Kimech from PyPI:
+Install the packaged Kimech release from PyPI:
 
 ```bash
 pip install kimech
@@ -14,7 +14,7 @@ For plotting, animation, and GIF support:
 pip install "kimech[viz]"
 ```
 
-For a local development checkout instead:
+To test an unreleased development checkout (including the 0.7.0 branch before publication), install locally:
 
 ```bash
 pip install -e ".[dev,viz,docs]"
@@ -63,7 +63,7 @@ initial_guess = {
 
 solution = solve(
     mechanism,
-    driver=driver,
+    drivers=driver,
     initial_guess=initial_guess,
 )
 

@@ -35,15 +35,15 @@ force, inertia, numerical integration, or solver settings.
 sweeps use predictor-corrector continuation, warm-start fallback, and bounded
 adaptive subdivision when recovery is required.
 
-The continuation parameter is the Driver coordinate itself.
+With multiple drivers, continuation follows the ordered vector of prescribed coordinates rather than a separate time variable.
 
 ## KinematicSolution
 
-A {py:class}`~kimech.KinematicSolution` stores the accepted state history and a
-snapshot of the Driver used to obtain it.
+A {py:class}`~kimech.KinematicSolution` stores the accepted state history and
+an ordered tuple of driver prescriptions used to obtain it.
 
 ```python
-solution.driver
+solution.drivers
 solution.coordinates
 solution.coordinate_velocities
 solution.coordinate_accelerations
@@ -58,8 +58,8 @@ Indexing returns a {py:class}`~kimech.Configuration`; slicing returns another
 
 Solve-generated solutions expose {py:class}`~kimech.SolveDiagnostics`.
 Condition numbers, ranks, singular values, residuals, accepted strategies, and
-subdivision counts describe the **selected driven formulation**. They are not a
-universal classification of mechanism singularity.
+subdivision counts describe the selected formulation. `joint_ranks` and
+`rank_issues` distinguish geometric rank loss from dependent drivers.
 
 ## Driver-coordinate sensitivity
 
@@ -72,5 +72,11 @@ sensitivity = driver_sensitivity(solution)
 dq_du = sensitivity.coordinate_derivatives
 ```
 
-This computes local derivatives with respect to the prescribed Driver
-coordinate, not derivatives with respect to time.
+For now, this analysis requires a solution with exactly one driver. It computes
+local derivatives with respect to that driver coordinate, not time.
+
+An ordered list of drivers passed as `solve(mechanism, drivers=[d1, d2], ...)`
+allows fully prescribed mechanisms with two or more independent degrees of
+freedom. Every driver must have the same number of position samples; velocity
+and acceleration are computed only if all drivers provide the corresponding
+physical derivatives.

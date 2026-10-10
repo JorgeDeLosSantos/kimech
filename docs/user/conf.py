@@ -8,6 +8,7 @@ release = kimech.__version__
 
 extensions = [
     "myst_parser",
+    "sphinxcontrib.mermaid",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
@@ -16,6 +17,7 @@ extensions = [
 autosummary_generate = True
 autodoc_typehints = "description"
 myst_enable_extensions = ["colon_fence", "deflist"]
+myst_fence_as_directive = ["mermaid"]
 
 html_theme = "furo"
 html_title = f"Kimech {release}"

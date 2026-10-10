@@ -3,7 +3,7 @@
 Kimech separates the **coordinate used to parameterize configurations** from
 the optional **physical time associated with requested samples**.
 
-For one Driver coordinate (u), a geometric sweep represents
+For one prescribed Driver coordinate (u), a geometric sweep represents
 
 [
 q = q(u).
@@ -39,7 +39,7 @@ driver = KinematicDriver(
 
 solution = solve(
     mechanism,
-    driver=driver,
+    drivers=driver,
     time=time,
     initial_guess=initial_guess,
 )
@@ -70,3 +70,8 @@ Supplying `time` does **not**:
 
 A timed and untimed solve evaluated at the same Driver samples therefore have
 the same kinematic state. Time adds physical sample association only.
+
+For Multi-DOF, the same distinction applies to an input vector
+`u = (u1, ..., um)`. Samples from each driver are aligned by index:
+`q = q(u1, ..., um)`. A shared `time=` history labels samples but neither
+synthesizes nor interpolates driver histories.

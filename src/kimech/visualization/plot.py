@@ -39,9 +39,8 @@ def plot(config: Configuration, *, ax=None):
     scale = _plot_scale(config, specs)
     body_colors: dict[_Body, str] = {mechanism.ground: "0.4"}
 
-    ground_spec = specs[mechanism.ground]
-    _draw_body(config, mechanism.ground, ground_spec.scaffold_points, "0.4", ax)
-    _draw_auxiliary_connectors(config, mechanism.ground, ground_spec, "0.4", ax)
+    # Ground is an inertial reference body, not a drawable connecting bar.
+    # Its fixed revolute anchors receive individual supports below.
 
     color_cycle = _link_color_cycle()
     for link in mechanism.links:
@@ -66,6 +65,7 @@ def plot(config: Configuration, *, ax=None):
 
     for joint in mechanism.joints:
         if isinstance(joint, RevoluteJoint):
+            _draw_ground_revolute_support(config, joint, scale, ax)
             _draw_revolute_joint(config, joint, ax)
 
     ax.set_aspect("equal", adjustable="datalim")
@@ -342,6 +342,63 @@ def _draw_revolute_joint(config: Configuration, joint: RevoluteJoint, ax):
     )
     artist.set_gid("kimech-joint:revolute")
     return artist
+
+
+def _ground_revolute_support_vertices(
+    config: Configuration,
+    joint: RevoluteJoint,
+    scale: float,
+) -> np.ndarray | None:
+    """Return a small fixed-pivot triangle or None for mobile revolutes."""
+    if not (
+        isinstance(joint.point_a.body, Ground)
+        or isinstance(joint.point_b.body, Ground)
+    ):
+        return None
+    center = _revolute_center(config, joint)
+    # Keep neighboring fixed supports distinct even when other geometry
+    # makes the global mechanism scale much larger than their spacing.
+    nearby = [
+        float(np.linalg.norm(_revolute_center(config, other) - center))
+        for other in config.mechanism.joints
+        if isinstance(other, RevoluteJoint)
+        and other is not joint
+        and (
+            isinstance(other.point_a.body, Ground)
+            or isinstance(other.point_b.body, Ground)
+        )
+    ]
+    positive = [distance for distance in nearby if distance > 1e-10 * scale]
+    half_width = min(0.028 * scale, 0.22 * min(positive)) if positive else 0.028 * scale
+    height = half_width * (0.048 / 0.028)
+    return np.asarray([
+        center,
+        center + (-half_width, -height),
+        center + (half_width, -height),
+    ], dtype=float)
+
+
+def _draw_ground_revolute_support(
+    config: Configuration,
+    joint: RevoluteJoint,
+    scale: float,
+    ax,
+):
+    """Mark a revolute attachment to ground without joining ground anchors."""
+    vertices = _ground_revolute_support_vertices(config, joint, scale)
+    if vertices is None:
+        return None
+    patch = Polygon(
+        vertices,
+        closed=True,
+        facecolor="0.91",
+        edgecolor="0.4",
+        linewidth=1.1,
+        zorder=3.5,
+    )
+    patch.set_gid("kimech-ground:revolute-support")
+    ax.add_patch(patch)
+    return patch
 
 
 def _draw_prismatic_joint(

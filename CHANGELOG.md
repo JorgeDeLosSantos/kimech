@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.7.0
+
+Kimech `0.7.0` introduces fully prescribed Multi-DOF kinematics for planar
+revolute/prismatic mechanisms. This release intentionally breaks parts of the
+pre-1.0 public API; users of `0.6.x` must update solver calls and result
+metadata access.
+
+### Added
+
+- multiple independent `KinematicDriver` inputs to a single mechanism, with
+  index-aligned position, velocity and acceleration histories;
+- a unified scaled position/velocity/acceleration solver for 1-DOF and
+  Multi-DOF mechanisms, including multidimensional predictor continuation,
+  warm-start recovery and adaptive subdivision;
+- per-sample geometric and full-Jacobian rank diagnostics:
+  `SolveDiagnostics.joint_ranks`, `rank_issues`, and corresponding summary
+  statistics to distinguish joint rank loss from dependent drivers;
+- analytic acceptance tests for a serial 2R chain, mixed R–P mechanism and
+  closed-loop five-bar, plus cross-scale and near-singularity regressions;
+- discrete ground-revolute support glyphs in plotting and animation, without
+  gray connecting ground-scaffold bars, while preserving prismatic guides;
+- an executable two-driver 2R example and theory-to-API documentation with
+  Mermaid diagrams in the Sphinx site and GitHub.
+
+### Changed — breaking API
+
+- `solve(mechanism, driver=...)` is now
+  `solve(mechanism, drivers=...)`. Pass either one
+  `KinematicDriver` or a sequence of distinct drivers.
+- `KinematicSolution.driver` and `Configuration.driver` are now
+  `.drivers` tuples, including for 1-DOF mechanisms.
+- `SolveFailureContext.driver_index` is now `.sample_index` (the
+  history sample index), and `.driver_position` is now
+  `.driver_positions` (the prescribed input vector in driver order).
+- incomplete differential inputs across multiple drivers are rejected;
+  all drivers must supply velocity for velocity states, and velocity plus
+  acceleration for acceleration states.
+- numerical failures separate position nonconvergence from Jacobian rank loss;
+  feasible singular positions can be retained, but ambiguous differential
+  states are not returned.
+
+### Design limits
+
+- one prescribed natural coordinate per revolute/prismatic joint; no generic
+  point-pose drivers or automatic selection of independent drivers;
+- sample histories are aligned by index, not interpolated or differentiated;
+  `time=` remains optional external metadata;
+- the system must have a square constraint formulation and sufficient local
+  rank for unique differential kinematics;
+- driver-coordinate sensitivity remains intentionally limited to one driver;
+- no pseudo-arclength continuation, global branch enumeration, dynamics, new
+  joint families, or motion-law abstraction.
+
 ## 0.6.1
 
 Kimech `0.6.1` is a packaging and distribution release. It does not change solver behavior or the public kinematics API introduced in `0.6.0`.

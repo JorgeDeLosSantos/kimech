@@ -37,7 +37,7 @@ def test_scalar_revolute_velocity_is_exact_relative_angular_rate():
 
     config = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=0.7,
             velocity=2.5,
@@ -47,7 +47,7 @@ def test_scalar_revolute_velocity_is_exact_relative_angular_rate():
 
     assert isinstance(config, Configuration)
     assert config.has_velocity
-    assert config.driver.velocity == pytest.approx(2.5)
+    assert config.drivers[0].velocity == pytest.approx(2.5)
     np.testing.assert_allclose(config.body_velocity(link), [0.0, 0.0, 2.5])
     assert config.joint_velocity(joint) == pytest.approx(2.5)
 
@@ -57,7 +57,7 @@ def test_scalar_prismatic_velocity_is_exact_translation_along_axis():
 
     config = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=1.2,
             velocity=-0.4,
@@ -76,7 +76,7 @@ def test_sweep_scalar_input_velocity_broadcasts_and_preserves_result_shape():
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=values,
             velocity=3.0,
@@ -86,7 +86,7 @@ def test_sweep_scalar_input_velocity_broadcasts_and_preserves_result_shape():
 
     assert isinstance(solution, KinematicSolution)
     assert solution.has_velocity
-    np.testing.assert_allclose(solution.driver.velocity, [3.0, 3.0, 3.0])
+    np.testing.assert_allclose(solution.drivers[0].velocity, [3.0, 3.0, 3.0])
     np.testing.assert_allclose(
         solution.body_velocities(link),
         [[0.0, 0.0, 3.0], [0.0, 0.0, 3.0], [0.0, 0.0, 3.0]],
@@ -100,7 +100,7 @@ def test_sweep_accepts_elementwise_input_velocity_history():
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=values,
             velocity=velocities,
@@ -108,9 +108,9 @@ def test_sweep_accepts_elementwise_input_velocity_history():
         initial_guess=guess,
     )
 
-    np.testing.assert_array_equal(solution.driver.velocity, velocities)
+    np.testing.assert_array_equal(solution.drivers[0].velocity, velocities)
     np.testing.assert_allclose(solution.body_velocities(link)[:, 2], velocities)
-    assert solution[1].driver.velocity == pytest.approx(-2.0)
+    assert solution[1].drivers[0].velocity == pytest.approx(-2.0)
 
 
 def test_zero_input_velocity_requests_and_returns_zero_velocity_state():
@@ -118,7 +118,7 @@ def test_zero_input_velocity_requests_and_returns_zero_velocity_state():
 
     config = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=0.5,
             velocity=0.0,
@@ -137,7 +137,7 @@ def test_velocity_request_does_not_change_position_solution():
 
     position_only = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=values,
         ),
@@ -145,7 +145,7 @@ def test_velocity_request_does_not_change_position_solution():
     )
     with_velocity = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=values,
             velocity=4.0,
@@ -163,7 +163,7 @@ def test_length_one_values_sequence_still_returns_solution_with_scalar_velocity(
 
     solution = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=[0.5],
             velocity=2.0,
@@ -173,7 +173,7 @@ def test_length_one_values_sequence_still_returns_solution_with_scalar_velocity(
 
     assert isinstance(solution, KinematicSolution)
     assert solution.coordinate_velocities.shape == (1, 3)
-    np.testing.assert_allclose(solution.driver.velocity, [2.0])
+    np.testing.assert_allclose(solution.drivers[0].velocity, [2.0])
 
 
 @pytest.mark.parametrize(
@@ -192,7 +192,7 @@ def test_input_velocity_shape_and_finiteness_validation(values, velocity, messag
     with pytest.raises((TypeError, ValueError), match=message):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=values,
                 velocity=velocity,
@@ -215,7 +215,7 @@ def test_linear_algebra_failure_is_translated_to_kinematic_solve_error(monkeypat
     ):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=0.5,
                 velocity=1.0,
@@ -238,7 +238,7 @@ def test_inaccurate_linear_solution_is_rejected_by_independent_residual(monkeypa
     ):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=0.5,
                 velocity=1.0,
@@ -265,7 +265,7 @@ def test_malformed_or_nonfinite_linear_candidates_are_rejected(monkeypatch, cand
     ):
         solve(
             mechanism,
-            driver=KinematicDriver(
+            drivers=KinematicDriver(
                 joint,
                 position=0.5,
                 velocity=1.0,
@@ -278,7 +278,7 @@ def test_input_tangent_is_derivative_with_respect_to_driver_coordinate():
     mechanism, link, joint, guess = _single_revolute()
     config = solve(
         mechanism,
-        driver=KinematicDriver(
+        drivers=KinematicDriver(
             joint,
             position=0.7,
         ),

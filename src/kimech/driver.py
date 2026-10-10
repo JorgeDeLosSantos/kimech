@@ -12,9 +12,10 @@ _Joint = RevoluteJoint | PrismaticJoint
 class KinematicDriver:
     """Prescribe one joint natural coordinate and optional time derivatives.
 
-    Kimech 0.6.0 initially supports the natural coordinate of one revolute or
-    prismatic joint.  The driver stores kinematic data only; physical sample
-    times, numerical continuation, and solver configuration belong elsewhere.
+    A driver targets one revolute or prismatic joint coordinate. Independent
+    drivers can be supplied together to solve fully prescribed planar Multi-DOF
+    mechanisms. Physical sample times, numerical continuation, and solver
+    configuration belong to the solver, not to the driver.
     """
 
     __slots__ = (

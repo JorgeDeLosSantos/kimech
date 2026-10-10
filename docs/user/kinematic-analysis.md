@@ -6,7 +6,7 @@ prescribed Multi-DOF mechanisms in the **unreleased 0.7.0 branch**.
 
 ## Concept map
 
-The diagram is Mermaid source, viewable in GitHub/compatible Markdown viewers:
+The diagram renders as Mermaid in both GitHub and the Sphinx documentation site:
 
 ```mermaid
 flowchart TD

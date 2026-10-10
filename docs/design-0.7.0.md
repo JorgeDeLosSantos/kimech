@@ -1,6 +1,6 @@
 # Kimech 0.7.0 — Multi-DOF implementation design (draft)
 
-Status: implementation underway; API and numerical changes are **not yet released**.
+Status: implementation and stabilization; **unreleased**, PR #48.
 
 ## Scope
 
@@ -26,7 +26,7 @@ machinery.
 - Dynamics and time-function-based driver laws are outside this release;
   the internal solver must not depend permanently on sampling.
 
-## Numerics to follow
+## Numerical formulation
 
 Use a combined residual `[Phi_joints(q); h(q)-u]` and stacked Jacobian.
 Require a regular square determined system in this release.
@@ -36,7 +36,7 @@ keeping scaling and adaptive bisection.
 Separate ranks of the geometric constraint Jacobian and the full driver-augmented
 Jacobian; do not misdiagnose ordinary nonlinear nonconvergence as a singularity.
 
-## Incremental implementation
+## Implementation sequence
 
 1. Normalization, ownership, sample validation, result slicing.
 2. Position solver, input-scaled residual and Jacobian.
@@ -122,9 +122,9 @@ an unconverged candidate does not establish a feasible singular
 configuration. Differential failures distinguish
 `joint_rank_loss`, `dependent_drivers`, and other
 `linear_failure` cases in the structured failure context. That
-context also provides `sample_index` and an ordered tuple of
-`driver_positions`; legacy singular-driver context field names
-remain temporarily available until the final API cleanup.
+context provides `sample_index` and an ordered tuple of
+`driver_positions`. Ambiguous legacy `driver_index` and `driver_position`
+error-context fields have been removed in this pre-1.0 API.
 
 ## Ground and documentation (0.7.0)
 
@@ -133,8 +133,9 @@ body scaffold. A revolute pivot anchored to ground gets its own small triangular
 support; prismatic guide/slider glyphs remain unchanged. Auxiliary ground
 reference points remain visible, with no implicit physical connection drawn.
 
-The user guide now contains a theory-to-API workflow (concept diagram,
-input-history workflow, theory/API table, and minimal cheat sheet) and a
-separate explanation of the kinematic versus structural-topology views.
+The user guide now contains a theory-to-API workflow (Mermaid concept and
+input-history workflow diagrams rendered on GitHub and by Sphinx, a theory/API
+table, and a minimal cheat sheet), plus a separate explanation of kinematic
+versus structural-topology views.
 Ground symbols are only visualization; they do not change equations, body
 geometry, topology, or solved states.

@@ -577,8 +577,8 @@ InputSensitivity
 
 SolveFailureContext.input_index
 SolveFailureContext.input_position
-    -> SolveFailureContext.driver_index
-       SolveFailureContext.driver_position
+    -> SolveFailureContext.sample_index
+       SolveFailureContext.driver_positions
 ```
 
 For `0.3.0`:
@@ -743,7 +743,7 @@ fig, ax = plot(config)
 fig.savefig("mechanism.svg")
 ```
 
-Kimech renders a schematic rigid-body scaffold rather than physical/CAD geometry. Structural joint points define the primary scaffold. Mobile links with fewer than two structural points fall back to their declared body points so plate-like bodies remain visually coherent. Auxiliary points on an already-defined scaffold remain markers and receive lightweight visual connectors to that scaffold. Ground does not use this fallback.
+Kimech renders a schematic rigid-body scaffold rather than physical/CAD geometry. Separate grounded revolute pivots use individual triangular supports and are never connected by a ground-body scaffold; grounded prismatic joints retain their guides. Structural joint points define the primary mobile-link scaffold. Mobile links with fewer than two structural points fall back to their declared body points so plate-like bodies remain visually coherent. Auxiliary points on an already-defined scaffold remain markers and receive lightweight visual connectors to that scaffold. Ground does not use this fallback.
 
 Joint glyph sizes are scaled from effective body scaffolds rather than arbitrary remote auxiliary points. The plot bounds still include all rendered geometry.
 
@@ -789,9 +789,9 @@ animation.save("mechanism.gif", writer="pillow")
 
 Public `Configuration` and `KinematicSolution` constructors validate the structure, shape, finiteness, and entity compatibility of supplied state. They do not certify that manually supplied coordinates satisfy the mechanism constraints. Results returned by `solve()` contain states accepted by the solver.
 
-For `Configuration`, optional prescribed metadata is represented by a single-sample `KinematicDriver`. A configuration driver must contain exactly one sample; acceleration data remain subject to the driver's requirement that velocity is also present.
+For `Configuration`, optional prescribed metadata is an ordered tuple of single-sample `KinematicDriver` objects. Every configuration driver must contain exactly one sample; acceleration data require velocity data.
 
-Result objects retain the link layout captured when they are constructed or solved. Solve-generated `KinematicSolution` objects retain the complete `KinematicDriver` snapshot together with the associated joint snapshot for downstream analyses such as driver sensitivity. This keeps the mapping between entities and stored state stable even if the mechanism object is later extended. Queries require entities compatible with the retained snapshot.
+Result objects retain the link layout captured when constructed or solved. Solve-generated `KinematicSolution` objects retain the ordered driver tuple and the joint snapshot for downstream analyses such as one-driver sensitivity. This keeps the mapping between entities and stored state stable even if the mechanism object is later extended. Queries require entities compatible with the retained snapshot.
 
 ## 17. Examples and tests
 
@@ -801,12 +801,14 @@ The examples deliberately separate geometric motion/animation from quantitative 
 examples/
 ├── four_bar.py
 ├── four_bar_analysis.py
+├── serial_two_revolute.py
 ├── slider_crank.py
 ├── slider_crank_analysis.py
 └── slider_crank_analysis_comparison.py
 ```
 
 - `four_bar.py` and `slider_crank.py` focus on position solving and animation.
+- `serial_two_revolute.py` validates multi-input 2R position, velocity, and acceleration against analytical formulas.
 - `four_bar_analysis.py` plots rocker angle, angular velocity, angular acceleration, and coupler-point differential magnitudes versus prescribed crank angle.
 - `slider_crank_analysis.py` plots slider displacement, velocity, and acceleration versus crank angle and demonstrates equivalent prismatic-input reconstruction.
 - `slider_crank_analysis_comparison.py` compares position, velocity, and acceleration with an independent closed-form slider-crank solution.
@@ -815,4 +817,4 @@ The test suite covers model/constraint behavior, position solving, differential 
 
 ## 18. Deliberately absent API
 
-`0.6.0` currently provides one `KinematicDriver` and optional explicit solve-time histories, but not multiple simultaneous drivers, general multi-DOF solving, motion laws, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, or mechanism-specific solver classes. The release adds structural topology introspection, structured solve observability, and explicit one-driver sensitivity without defining a universal near-singularity policy.
+The unreleased `0.7.0` API supports multiple simultaneous independent R/P drivers and general fully prescribed Multi-DOF kinematics. Motion laws, dynamics, forces, masses/inertias, pseudo-arclength continuation, branch enumeration, renderer/backend registries, and mechanism-specific solver classes remain outside scope. `driver_sensitivity()` remains intentionally restricted to a single driver.

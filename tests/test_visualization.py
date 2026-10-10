@@ -441,3 +441,36 @@ def test_nearby_ground_pivots_do_not_overlap_supports_when_extent_is_large():
         assert not _artists_with_gid(ax, "kimech-body:ground")
     finally:
         plt.close(fig)
+
+
+def test_ground_supports_survive_actual_svg_and_png_rendering(tmp_path):
+    """Check both artists and the exported image, not only Matplotlib metadata."""
+    from xml.etree import ElementTree
+
+    from PIL import Image
+
+    mechanism, joint, auxiliary, guess = _four_bar()
+    config = solve(
+        mechanism, drivers=KinematicDriver(joint, position=0.8),
+        initial_guess=guess,
+    )[0]
+    fig, ax = plot(config)
+    try:
+        svg_path = tmp_path / "supports.svg"
+        png_path = tmp_path / "supports.png"
+        fig.savefig(svg_path)
+        fig.savefig(png_path, dpi=150)
+        root = ElementTree.parse(svg_path).getroot()
+        svg_ids = [
+            element.attrib["id"]
+            for element in root.iter()
+            if "id" in element.attrib
+        ]
+        assert svg_ids.count("kimech-ground:revolute-support") == 2
+        assert "kimech-body:ground" not in svg_ids
+        with Image.open(png_path) as png:
+            pixels = np.asarray(png.convert("RGB"))
+            assert png.width > 100 and png.height > 100
+            assert np.ptp(pixels.astype(float), axis=(0, 1)).max() > 100
+    finally:
+        plt.close(fig)
